@@ -182,10 +182,16 @@ export const setScheduleTool = (
               : new ToolFailed({ message: scheduleNotSetMessage })
           )
         );
+        const openLoopIds = [...new Set(input.openLoopIds)];
+        yield* noteTexts(
+          input.noteId === undefined
+            ? openLoopIds
+            : [input.noteId, ...openLoopIds]
+        );
         const about = yield* noteTexts(
           input.noteId === undefined ? [] : [input.noteId]
         );
-        const followedUp = yield* openLoopTexts(input.openLoopIds ?? []);
+        const followedUp = yield* openLoopTexts(openLoopIds);
         return setScheduleSummaryText({
           action: input.action,
           due: scheduleDueText(

@@ -605,6 +605,16 @@ describe("Checks before a draft", () => {
           { tool: setTimeZoneToolName, input: { timeZone: "Mars/Olympus" } },
           { tool: updateNoteToolName, input: { noteId: "note-1" } },
           {
+            tool: setScheduleToolName,
+            input: {
+              action: { _tag: "SendText", text: "Call Ana" },
+              localDueTime: "2030-11-26T09:00",
+              noteId: "note-2",
+              openLoopIds: ["note-3"],
+              ownerAskedForSchedule: true,
+            },
+          },
+          {
             tool: closeOpenLoopToolName,
             input: { noteId: "note-1", reason: "done" },
           },
@@ -644,6 +654,7 @@ describe("Checks before a draft", () => {
       "is not an IANA time zone name",
       nothingToUpdateMessage,
       "No Note of the Owner has the id note-1",
+      "No Note of the Owner has the id note-2, note-3",
       noActiveScheduleMessage("schedule-1"),
       profileEntryMissingFieldMessage.add,
       "The Profile has no entry with the id entry-1",
