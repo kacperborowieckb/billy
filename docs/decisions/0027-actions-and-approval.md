@@ -34,8 +34,8 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
   - `change` in an `untrusted` Turn: needs Approval. One exception: `capture_note` of a new Note runs, because code marks that Note `untrusted`. An edit of an existing Note needs Approval.
   - `approve`: always needs Approval.
   - `blocked`: the gate denies the call. The model gets the reason as the tool result, and the call counts as a failed changing call for the outcome-refusal rules. The stored history keeps the tool call and its `execution-denied` result, and code removes the native `tool-approval-request` and `tool-approval-response` parts.
-- Between the code rules and the Owner, the gate has one empty step. A later change puts Auto-review into that step. This decision does not build Auto-review.
-- The SDK calls the gate only for a call whose input matches the input schema of the tool. For any other call, the SDK gives the model the validation error, and the tool does not run. So a malformed call to a `blocked` tool gets the validation error, and the model gets the denial reason when it calls the tool again with a valid input.
+- Auto-review, when it exists, runs in the gate after the code rules and before the Owner sees the call. This decision does not build Auto-review.
+- The SDK calls the gate only for a call whose input matches the input schema of the tool. A tool declared `blocked` never runs, so it accepts any input, and the model always gets the denial reason. For a tool of another declared class, the SDK gives the model the validation error for a malformed input, and the tool does not run.
 - A run that the gate allows maps to `not-applicable`, so the Conversation gets no approval parts for it.
 - Code does not continue the model history with `tool-approval-response`. When the SDK stops for Approval, code writes the frozen call as a draft Pending Approval, and writes a tool result for that call into the Conversation: "waiting for the Owner's Approval, id X". The history stays valid when other Owner messages or a reset come before the answer. Each call of a step that needs Approval becomes its own draft.
 

@@ -1,4 +1,4 @@
-import { jsonSchema, tool } from "ai";
+import { asSchema, jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
 import { Data, Effect, Result, Schema } from "effect";
 
@@ -58,6 +58,11 @@ interface AgentToolDefinition<Input, Output> {
   ) => Effect.Effect<Output, ToolFailed>;
 }
 
+const anyInputWithSchemaOf = <Input>(
+  schema: FlexibleSchema<Input>
+): FlexibleSchema<Input> =>
+  jsonSchema<Input>(() => asSchema(schema).jsonSchema);
+
 export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
 ): AgentTool => ({
@@ -65,7 +70,10 @@ export const agentTool = <Input, Output>(
   toAiSdkTool: (runEffect) =>
     tool<Input, unknown, Record<string, unknown>>({
       description: definition.description,
-      inputSchema: definition.inputSchema,
+      inputSchema:
+        definition.riskClass === "blocked"
+          ? anyInputWithSchemaOf(definition.inputSchema)
+          : definition.inputSchema,
       execute: (input: Input, { toolCallId, messages }) =>
         runEffect(
           definition.execute(input, {

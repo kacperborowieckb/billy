@@ -277,7 +277,7 @@ describe("The gate in the Model Gateway", () => {
     }
   );
 
-  it("never runs a blocked tool with a malformed input, and gives the model the validation error", async () => {
+  it("never runs a blocked tool with a malformed input, and gives the model the reason", async () => {
     resetFakes();
     scriptModel([
       { callTool: "keep_word", input: { term: "secret" } },
@@ -303,7 +303,7 @@ describe("The gate in the Model Gateway", () => {
 
     expect(kept).toEqual([]);
     expect(toolOutputsSentToModel()).toEqual([
-      expect.objectContaining({ type: "error-text" }),
+      { type: "execution-denied", reason: blockedCallReason },
     ]);
   });
 
