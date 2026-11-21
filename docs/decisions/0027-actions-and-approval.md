@@ -50,7 +50,8 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 - States: `draft`, then `pending`, then `approved`, `rejected`, or `expired`, then for an approved one `executed`, `failed`, or `unconfirmed`. Every change after `draft` is a Journal Entry.
 - A draft becomes `pending` only when its Delivery is `Sent` or `Unconfirmed`. When the Delivery is `Unconfirmed`, the Pending Approval is `pending` and expires at its expiry instant like any other. A Restart or a failed send deletes the drafts.
-- Storage: a new table in the Personal Agent SQLite. Code reads it only through an Effect `Schema`. A versioned migration adds the table. It has the id, the Turn Event id, the tool name, the frozen input (the Redactor redacts it as it redacts other recorded tool input), the summary, the state, the expiry instant, the Channel message id, and the result.
+- Storage: a new table in the Personal Agent SQLite. Code reads it only through an Effect `Schema`. A versioned migration adds the table. It has the id, the Turn Event id, the tool name, the frozen input, the summary, the state, the expiry instant, the Channel message id, and the result.
+- Frozen input: the frozen input is the decoded input of the tool call, not the output of `recordedInput`. The Redactor replaces only the Operator secrets of the Instance (the values that it gets at start). Before code writes a draft, it checks the input with the Redactor. When the Redactor would change the input, code does not write the draft and gives the model a refusal as the tool result. So the stored input is both redacted and exact, and the run of an approved call reads only that stored input.
 - Expiry: each tool can set its own. The default is a new Behavior Config value of 24 hours. The alarm of the Schedules store expires Pending Approvals at their instant, with no model call.
 
 ### Answering
