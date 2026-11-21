@@ -10,11 +10,15 @@ import type {
   ModelRequest,
 } from "../model-gateway/model-gateway.ts";
 import type { ModelStep } from "../model-gateway/model-step.ts";
-import { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
-import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import { answerApprovalRequests } from "./approval-step.ts";
 import type { ApprovalAsking } from "./approval-step.ts";
+import {
+  approvalsWithoutModelText,
+  stepLimitReached,
+  withEarlierSteps,
+} from "./decided-outcome.ts";
+import type { DecidedOutcome } from "./decided-outcome.ts";
 import {
   defaultReactionAllowed,
   outcomeWhileApprovalWaitsMessage,
@@ -28,37 +32,7 @@ import {
 import { silenceAcceptedOutput } from "./stay-silent-tool.ts";
 import { closeLastStep, sameOutputFor } from "./step-closing.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import type {
-  ModelFailure,
-  ModelOutcome,
-  ReactionOutcome,
-} from "./turn-record.ts";
-
-export interface DecidedOutcome {
-  readonly outcome: ModelOutcome;
-  readonly kind: OutcomeKind | undefined;
-  readonly reaction?: ReactionOutcome;
-  readonly refusedOutcomeTools: readonly string[];
-  readonly drafts: readonly DraftApproval[];
-}
-
-const withEarlierSteps = (
-  error: ModelFailure,
-  earlier: readonly ModelStep[]
-): ModelFailure =>
-  error._tag === "StepLimitReached"
-    ? new StepLimitReached({
-        modelId: error.modelId,
-        reasoningEffort: error.reasoningEffort,
-        stepLimit: error.stepLimit,
-        steps: [...earlier, ...error.steps],
-      })
-    : new ModelUnavailable({
-        modelId: error.modelId,
-        reasoningEffort: error.reasoningEffort,
-        cause: error.cause,
-        steps: [...earlier, ...error.steps],
-      });
+import type { ReactionOutcome } from "./turn-record.ts";
 
 interface OutcomeGeneration {
   readonly eventId: string;
@@ -83,23 +57,22 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     let earlier: readonly ModelStep[] = [];
     const refused: string[] = [];
     const drafts: DraftApproval[] = [];
+    let lastReply: ModelReply | undefined;
+    const settled = () => ({ refusedOutcomeTools: refused, drafts });
+    const approvalsWithoutText = (
+      reply: ModelReply,
+      steps: readonly ModelStep[]
+    ) => approvalsWithoutModelText(reply, steps, settled());
     const stepLimitFailure = (
       reply: ModelReply,
       steps: readonly ModelStep[]
-    ): DecidedOutcome => ({
-      outcome: {
-        _tag: "ModelFailed",
-        error: new StepLimitReached({
-          modelId: reply.modelId,
-          reasoningEffort: reply.reasoningEffort,
-          stepLimit: request.stepLimit,
-          steps,
-        }),
-      },
-      kind: undefined,
-      refusedOutcomeTools: refused,
-      drafts,
-    });
+    ): DecidedOutcome =>
+      drafts.length > 0
+        ? approvalsWithoutText(reply, steps)
+        : stepLimitReached(reply, steps, {
+            ...settled(),
+            stepLimit: request.stepLimit,
+          });
 
     for (;;) {
       const stepLimit = request.stepLimit - earlier.length;
@@ -121,6 +94,16 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
               Effect.succeed({ _tag: "ModelFailed", error } as const),
           })
         );
+      if (
+        generated._tag === "ModelFailed" &&
+        lastReply !== undefined &&
+        drafts.length > 0
+      ) {
+        return approvalsWithoutText(lastReply, [
+          ...earlier,
+          ...generated.error.steps,
+        ]);
+      }
       if (generated._tag === "ModelFailed") {
         return {
           outcome: {
@@ -133,6 +116,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         } satisfies DecidedOutcome;
       }
       const { reply } = generated;
+      lastReply = reply;
       const steps = [...earlier, ...reply.steps];
       const replied = (
         finalSteps: readonly ModelStep[],
@@ -155,7 +139,12 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
       const calls = reply.endedWith;
       if (reply.awaitingApproval.length > 0) {
         const answered = yield* answerApprovalRequests(
-          { asking: approvalAsking, turnEventId: eventId, tools },
+          {
+            asking: approvalAsking,
+            turnEventId: eventId,
+            tools,
+            draftsSoFar: drafts.length,
+          },
           reply.awaitingApproval
         );
         drafts.push(...answered.drafts);

@@ -1,10 +1,14 @@
 import { Effect, Schema } from "effect";
 
-import { countOf, quoted } from "../approval/approval-summary.ts";
+import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { noteIdListSchema } from "./note-id-list-schema.ts";
-import { openLoopText, storedNoteText } from "./note-summary.ts";
+import {
+  openLoopText,
+  storedNoteText,
+  storedNoteTexts,
+} from "./note-summary.ts";
 import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import { OpenLoopInputSchema, openLoopRequestOf } from "./open-loop-input.ts";
@@ -66,25 +70,23 @@ export const updateNoteTool = (
       approvalSummary: ({
         noteId,
         text,
-        linkedNoteIds,
-        unlinkedNoteIds,
+        linkedNoteIds = [],
+        unlinkedNoteIds = [],
         openLoop,
       }) =>
-        storedNoteText(notes, noteId).pipe(
-          Effect.map((note) =>
+        Effect.all([
+          storedNoteText(notes, noteId),
+          storedNoteTexts(notes, linkedNoteIds),
+          storedNoteTexts(notes, unlinkedNoteIds),
+        ]).pipe(
+          Effect.map(([note, linked, unlinked]) =>
             [
               `Change ${note}`,
               ...(text === undefined ? [] : [`new text ${quoted(text)}`]),
-              ...((linkedNoteIds ?? []).length === 0
+              ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
+              ...(unlinked.length === 0
                 ? []
-                : [
-                    `link ${countOf(linkedNoteIds?.length ?? 0, "Note", "Notes")}`,
-                  ]),
-              ...((unlinkedNoteIds ?? []).length === 0
-                ? []
-                : [
-                    `unlink ${countOf(unlinkedNoteIds?.length ?? 0, "Note", "Notes")}`,
-                  ]),
+                : [`unlink from ${unlinked.join(", ")}`]),
               ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
             ].join(", ")
           )

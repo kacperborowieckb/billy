@@ -1,7 +1,8 @@
 import { env, runInDurableObject } from "cloudflare:test";
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PendingApprovals } from "../src/approval/pending-approvals.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
@@ -439,5 +440,89 @@ describe("An Owner message Turn with Trust Level owner", () => {
     expect(await pendingApprovalsOf(ownerId)).toEqual([]);
     expect(fakeTelegram.sent[0]?.body).toMatchObject({ text: "Added." });
     expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
+  });
+});
+
+describe("Drafts at the limits of a Turn", () => {
+  it("refuses a gated call after the most Pending Approvals of one Turn", async () => {
+    const ownerId = await addOwner(9109);
+    scriptModel([
+      { callTool: setScheduleToolName, times: 13, input: reminderInput },
+      { say: "These wait for your Approval." },
+    ]);
+
+    await forward(9109);
+    await waitForSends(2);
+    await waitForPendingApprovals(ownerId, 12);
+
+    expect(toolResultsOfLastModelCall()).toContain(
+      "already has 12 calls that wait"
+    );
+    expect(
+      fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard
+    ).toHaveLength(12);
+  });
+
+  it("still sends the Approval message when the model reaches the step limit after drafting", async () => {
+    const ownerId = await addOwner(9110);
+    scriptModel(
+      Array.from({ length: defaultBehaviorConfig.maxToolSteps }, () => ({
+        callTool: setScheduleToolName,
+        input: reminderInput,
+      }))
+    );
+
+    await forward(9110);
+    await waitForSends(1);
+    await waitForPendingApprovals(ownerId, defaultBehaviorConfig.maxToolSteps);
+
+    expect(fakeTelegram.sent[0]?.body.text).toContain(
+      "These wait for your Approval:"
+    );
+    const journal = await journalKindsOf(ownerId);
+    expect(journal.map((entry) => entry.kind)).not.toContain("TurnFailed");
+  });
+
+  it("opens only the drafts that the sent message shows", async () => {
+    const ownerId = await addOwner(9111);
+    const states = await runInDurableObject(
+      await agentOf(ownerId),
+      (instance, state) =>
+        instance.runtime
+          .runPromise(
+            Effect.gen(function* openOnlySentEffect() {
+              const pendingApprovals = yield* PendingApprovals;
+              const request = {
+                turnEventId: "turn-1",
+                toolName: setScheduleToolName,
+                frozenInput: reminderInput,
+                summary: reminderSummary,
+                expiresAt: DateTime.makeUnsafe("2026-11-22T09:00:00Z"),
+              };
+              yield* pendingApprovals.draft({ ...request, toolCallId: "a" });
+              const shown = yield* pendingApprovals.draft({
+                ...request,
+                toolCallId: "b",
+              });
+              yield* pendingApprovals.openDrafts({
+                turnEventId: "turn-1",
+                pendingApprovalIds: [shown.pendingApprovalId],
+                channelMessageId: "500",
+              });
+            })
+          )
+          .then(() =>
+            state.storage.sql
+              .exec<{ tool_call_id: string; state: string }>(
+                "SELECT tool_call_id, state FROM pending_approvals ORDER BY rowid"
+              )
+              .toArray()
+          )
+    );
+
+    expect(states).toEqual([
+      { tool_call_id: "a", state: "draft" },
+      { tool_call_id: "b", state: "pending" },
+    ]);
   });
 });

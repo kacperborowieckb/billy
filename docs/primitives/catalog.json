@@ -206,7 +206,8 @@
         "docs/decisions/0019-proactivity.md",
         "docs/decisions/0023-reaction-outcome.md",
         "docs/decisions/0024-reaction-plan-on-reply-planned.md",
-        "docs/decisions/0025-restart-mid-turn.md"
+        "docs/decisions/0025-restart-mid-turn.md",
+        "docs/decisions/0027-actions-and-approval.md"
       ]
     },
     {

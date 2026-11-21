@@ -1,34 +1,34 @@
-import { localDueTimePattern } from "./local-due-time.ts";
-import { weekdayNames } from "./recurrence-rule.ts";
+import { DateTime, Option } from "effect";
+
+import { realLocalDueTimeOf } from "./local-due-time.ts";
 import type { RecurrenceRule } from "./recurrence-rule.ts";
 
-const monthNames = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
+const localDueTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "UTC",
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
-export const localDueTimeText = (localDueTime: string) => {
-  const parts = localDueTimePattern.exec(localDueTime)?.groups;
-  if (parts === undefined) {
-    return localDueTime;
-  }
-  const year = Number(parts["year"]);
-  const month = Number(parts["month"]);
-  const day = Number(parts["day"]);
-  const weekday =
-    weekdayNames[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-  return `${weekday?.slice(0, 3)} ${day} ${monthNames[month - 1]} ${year}, ${parts["hour"]}:${parts["minute"]}`;
-};
+const partOf = (
+  parts: readonly Intl.DateTimeFormatPart[],
+  type: Intl.DateTimeFormatPartTypes
+) => parts.find((part) => part.type === type)?.value ?? "";
+
+export const localDueTimeText = (localDueTime: string) =>
+  Option.match(realLocalDueTimeOf(localDueTime), {
+    onNone: () => `${localDueTime} (not a real date and time)`,
+    onSome: (dueTime) => {
+      const parts = localDueTimeFormat.formatToParts(
+        DateTime.toEpochMillis(dueTime)
+      );
+      return `${partOf(parts, "weekday")} ${partOf(parts, "day")} ${partOf(parts, "month")} ${partOf(parts, "year")}, ${partOf(parts, "hour")}:${partOf(parts, "minute")}`;
+    },
+  });
 
 const listText = (items: readonly string[]) =>
   items.length <= 1

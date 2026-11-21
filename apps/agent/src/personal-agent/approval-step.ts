@@ -19,15 +19,16 @@ interface ApprovalStep {
   readonly asking: ApprovalAsking;
   readonly turnEventId: string;
   readonly tools: AgentTools;
+  readonly draftsSoFar: number;
 }
 
 const draftOrRefusal = (
-  { asking, turnEventId, tools }: ApprovalStep,
+  { asking, turnEventId, tools, draftsSoFar }: ApprovalStep,
   call: ApprovalRequestedCall
 ) =>
   asking._tag === "AskOwner"
     ? draftApproval(
-        { turnEventId, tools, expiryMillis: asking.expiryMillis },
+        { turnEventId, tools, expiryMillis: asking.expiryMillis, draftsSoFar },
         call
       )
     : Effect.succeed<DraftOutcome>({
@@ -43,7 +44,10 @@ export const answerApprovalRequests = Effect.fnUntraced(
     const drafts: DraftApproval[] = [];
     const results: ClosingResult[] = [];
     for (const call of calls) {
-      const drafted = yield* draftOrRefusal(step, call);
+      const drafted = yield* draftOrRefusal(
+        { ...step, draftsSoFar: step.draftsSoFar + drafts.length },
+        call
+      );
       if (drafted._tag === "Drafted") {
         drafts.push(drafted.draft);
       }

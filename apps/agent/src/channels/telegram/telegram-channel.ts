@@ -123,26 +123,28 @@ const sendPart = (config: TelegramConfig, message: TelegramPart) =>
     })
   );
 
-const sendParts = (config: TelegramConfig, parts: readonly TelegramPart[]) =>
-  Effect.gen(function* sendPartsEffect() {
-    const [first, ...rest] = parts;
-    if (first === undefined) {
-      return failed("The reply has no text");
+const sendParts = Effect.fnUntraced(function* sendParts(
+  config: TelegramConfig,
+  parts: readonly TelegramPart[]
+) {
+  const [first, ...rest] = parts;
+  if (first === undefined) {
+    return failed("The reply has no text");
+  }
+  let delivery = yield* sendPart(config, first);
+  let sentParts = 1;
+  for (const part of rest) {
+    if (delivery._tag === "Failed") {
+      break;
     }
-    let delivery = yield* sendPart(config, first);
-    let sentParts = 1;
-    for (const part of rest) {
-      if (delivery._tag === "Failed") {
-        break;
-      }
-      delivery = yield* sendPart(config, part);
-      sentParts += 1;
-    }
-    if (delivery._tag === "Failed" && parts.length > 1) {
-      return failed(`Part ${sentParts} of ${parts.length}: ${delivery.reason}`);
-    }
-    return delivery;
-  });
+    delivery = yield* sendPart(config, part);
+    sentParts += 1;
+  }
+  if (delivery._tag === "Failed" && parts.length > 1) {
+    return failed(`Part ${sentParts} of ${parts.length}: ${delivery.reason}`);
+  }
+  return delivery;
+});
 
 const textPartsOf = (message: OutgoingMessage): TelegramPart[] =>
   telegramParts(message.text).map((text) => ({ ...message, text }));

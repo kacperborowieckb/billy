@@ -49,10 +49,13 @@ const sendWithDrafts = Effect.fnUntraced(function* sendWithDrafts(
     replyTo,
   });
   if (delivery._tag === "Confirmed") {
-    yield* pendingApprovals.openDrafts(
-      event.eventId,
-      delivery.channelMessageId
-    );
+    yield* pendingApprovals.openDrafts({
+      turnEventId: event.eventId,
+      pendingApprovalIds: approvals.map(
+        ({ pendingApprovalId }) => pendingApprovalId
+      ),
+      channelMessageId: delivery.channelMessageId,
+    });
   }
   return delivery;
 });

@@ -10,6 +10,9 @@ describe("Plain words for an Approval summary", () => {
   it("writes a local due time with its weekday", () => {
     expect(localDueTimeText("2026-11-26T09:00")).toBe("Thu 26 Nov 2026, 09:00");
     expect(localDueTimeText("2027-02-28T23:59")).toBe("Sun 28 Feb 2027, 23:59");
+    expect(localDueTimeText("2026-02-30T09:00")).toBe(
+      "2026-02-30T09:00 (not a real date and time)"
+    );
   });
 
   it("writes each repeat rule", () => {
@@ -34,7 +37,7 @@ describe("Plain words for an Approval summary", () => {
   it("quotes text on one line and cuts it at the limit", () => {
     expect(quoted("Call\n  Ana")).toBe('"Call Ana"');
     const cut = quoted("a".repeat(400));
-    expect([...cut]).toHaveLength(302);
+    expect([...cut]).toHaveLength(202);
     expect(cut.endsWith('…"')).toBe(true);
   });
 });
