@@ -3,6 +3,7 @@ import { Effect } from "effect";
 
 import { Journal } from "../journal/journal.ts";
 import type { JournalRecord } from "../journal/journal.ts";
+import { toolNamed } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ModelStep } from "../model-gateway/model-step.ts";
 import { reactToolName, reactionAfterFailureMessage } from "./react-tool.ts";
@@ -39,18 +40,61 @@ interface OutcomeToolCall {
   readonly tools: AgentTools;
 }
 
-const failedToolNamesOf = (messages: readonly ModelMessage[]) =>
+const failedOutputTypes: ReadonlySet<string> = new Set([
+  "error-text",
+  "error-json",
+  "execution-denied",
+]);
+
+const failedCallIdsOf = (messages: readonly ModelMessage[]) =>
+  new Set(
+    messages.flatMap((message) =>
+      message.role === "tool"
+        ? message.content.flatMap((part) =>
+            part.type === "tool-result" &&
+            failedOutputTypes.has(part.output.type)
+              ? [part.toolCallId]
+              : []
+          )
+        : []
+    )
+  );
+
+const toolCallsOf = (messages: readonly ModelMessage[]) =>
   messages.flatMap((message) =>
-    message.role === "tool"
+    message.role === "assistant" && typeof message.content !== "string"
       ? message.content.flatMap((part) =>
-          part.type === "tool-result" &&
-          (part.output.type === "error-text" ||
-            part.output.type === "error-json")
-            ? [part.toolName]
-            : []
+          part.type === "tool-call" ? [part] : []
         )
       : []
   );
+
+type CallInput = "exact" | "recorded";
+
+const isReadCall = (
+  tools: AgentTools,
+  call: { readonly toolName: string; readonly input: unknown },
+  callInput: CallInput
+) => {
+  const tool = toolNamed(tools, call.toolName);
+  if (tool === undefined) {
+    return false;
+  }
+  return callInput === "exact"
+    ? tool.riskClassOf(call.input) === "read"
+    : tool.readsForEveryInput;
+};
+
+const aChangingCallFailed = (
+  tools: AgentTools,
+  messages: readonly ModelMessage[],
+  callInput: CallInput
+) => {
+  const failed = failedCallIdsOf(messages);
+  return toolCallsOf(messages).some(
+    (call) => failed.has(call.toolCallId) && !isReadCall(tools, call, callInput)
+  );
+};
 
 export const refusalOfOutcomeTool = Effect.fnUntraced(
   function* refusalOfOutcomeTool({
@@ -66,16 +110,13 @@ export const refusalOfOutcomeTool = Effect.fnUntraced(
     ) {
       return unknownOutcomeToolMessage;
     }
-    const failedNames = [
-      ...steps
-        .flatMap((step) => step.toolCalls)
-        .filter((call) => call.failed)
-        .map((call) => call.name),
-      ...failedToolNamesOf(earlierMessages),
-    ];
-    const changeFailed = failedNames.some(
-      (failedName) => tools[failedName]?.readsOnly !== true
-    );
+    const changeFailed =
+      aChangingCallFailed(tools, earlierMessages, "recorded") ||
+      aChangingCallFailed(
+        tools,
+        steps.flatMap((step) => step.responseMessages),
+        "exact"
+      );
     if (changeFailed) {
       return name === reactToolName
         ? reactionAfterFailureMessage

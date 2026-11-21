@@ -84,6 +84,7 @@ export const captureNoteTool = (
     { eventId: turnEventOf(burst).eventId, progress, redactor },
     {
       name: captureNoteToolName,
+      riskClass: "change",
       description:
         "Keep a Note for the Owner at once: a task, a text, a link, or a text with a link. Call it without asking the Owner first. Does not open the link. Give openLoop when the Note is something to do or to come back to; give none for a fact. Fails with a message when a due time is given and the time zone of the Owner is not known.",
       inputSchema: CaptureNoteInput,

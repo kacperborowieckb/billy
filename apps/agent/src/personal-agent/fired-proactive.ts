@@ -203,6 +203,7 @@ export const runProactiveMessage = Effect.fnUntraced(
           scheduledTaskInputMessage(mergedPromptOf(action.prompt, merged)),
         ],
         tools: proactiveTools(event.eventId, { ...toolServices, behavior }),
+        trustLevel: "owner",
         prepare: proactivePreparation(behavior, event, merged),
         tracesSendFailure: true,
         traceOf: (model) =>

@@ -87,6 +87,7 @@ export const judgeExchanges = Effect.fnUntraced(function* judgeExchanges(
     Effect.flatMap((gateway) =>
       gateway.generate({
         task: "eval_judge",
+        trustLevel: "owner",
         system: judgeInstructions(request.rubric),
         messages: [
           {

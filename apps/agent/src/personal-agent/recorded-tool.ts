@@ -1,7 +1,7 @@
 import type { JSONValue } from "ai";
-import { Cause, Effect, Option } from "effect";
-import type { Schema } from "effect";
+import { Cause, Effect, Option, Schema } from "effect";
 
+import type { RiskClass } from "../approval/risk-class.ts";
 import {
   agentTool,
   effectInputSchema,
@@ -27,7 +27,8 @@ export interface RecordedToolDefinition<
   readonly inputSchema: Schema.Codec<Input, unknown>;
   readonly failureMessage: string | ((cause: Cause.Cause<unknown>) => string);
   readonly recordedInput?: (input: Input) => JSONValue;
-  readonly readsOnly?: boolean;
+  readonly riskClass: RiskClass;
+  readonly riskClassOfInput?: (input: Input) => RiskClass;
   readonly work: (input: Input) => Effect.Effect<Output, Failure>;
 }
 
@@ -63,7 +64,15 @@ export const recordedTool = <
 ): AgentTool =>
   agentTool({
     description: definition.description,
-    ...(definition.readsOnly === true ? { readsOnly: true } : {}),
+    riskClass: definition.riskClass,
+    ...(definition.riskClassOfInput === undefined
+      ? {}
+      : {
+          riskClassOfInput: {
+            isInput: Schema.is(definition.inputSchema),
+            of: definition.riskClassOfInput,
+          },
+        }),
     inputSchema: effectInputSchema(definition.inputSchema),
     execute: Effect.fnUntraced(
       function* recordedToolEffect(input, { toolCallId, modelStepKey }) {

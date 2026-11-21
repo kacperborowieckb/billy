@@ -143,6 +143,7 @@ export const muteProactiveMessageTool = (
     { eventId, progress, redactor },
     {
       name: muteProactiveMessageToolName,
+      riskClass: "change",
       description:
         'Save, undo, or list the Owner\'s request for less of a kind of Proactive Message. Call it with action mute when the Owner says "less of this", "stop nagging me about this", or similar, as a message right after a Proactive Message. The default scope is the Open Loops of that message. When it is not clear whether the Owner means these Open Loops or all Open Loops of their kind, save the default now and ask one short question; call it again with scope kind and the openLoopIds from the first result only if the Owner says all, because a later message is not connected to the Proactive Message. An undo with scope kind also removes the Open Loop mutes of those kinds. A muted Open Loop or kind gets no follow-up of its own and appears only in the Brief. This means less often, not never. When the Owner wants it to stop for good, close the Open Loop or cancel the Schedule with the other tools instead. Call it with action undo when the Owner wants the mute removed. Say that you changed a mute only after the tool succeeded.',
       inputSchema: MuteInput,

@@ -27,6 +27,7 @@ export const cancelScheduleTool = (
     { eventId, progress, redactor },
     {
       name: cancelScheduleToolName,
+      riskClass: "change",
       description:
         "Cancel an active Schedule of the Owner. A cancelled Schedule never fires. Fails with a message, and changes nothing, when no active Schedule has the id. Say that the Schedule is cancelled only after this succeeded.",
       inputSchema: CancelScheduleInput,

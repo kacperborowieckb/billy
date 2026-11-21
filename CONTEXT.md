@@ -32,7 +32,7 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 
 - **Channel**: an adapter between the agent and the Owner (for example Telegram). It receives messages and turns them into Events. It shows the agent's one send action in its own way (a text or a reaction), and the typing signal (Acknowledge) while a Turn for an Owner message runs. The Channel keeps the list of reactions that it allows, and a close match for some emoji that are not on it.
 - **Channel Identity**: the Owner's identity inside a Channel, for example a Telegram user id. The Directory maps it to an Owner Id.
-- **Event**: a signal that wakes the agent: an Owner message, a fired Schedule, a finished Helper, or a webhook. Every Event enters the Inbox.
+- **Event**: a signal that wakes the agent: an Owner message, a fired Schedule, an `ApprovalAnswered` Event, a finished Helper, or a webhook. Every Event enters the Inbox. An `ApprovalAnswered` Event carries the Owner's answer to a Pending Approval from a Channel button. Code handles it with no model call; it is not an Owner message, so it does not join a Burst and does not cause a Restart.
 - **Inbox**: the queue of Events for one Owner. The router drops duplicates, merges the pending Owner messages into one Burst once the Quiet Gap passes, and puts Owner messages first.
 - **Quiet Gap**: the time with no new Owner message (`burstQuietMillis`, default 2500 ms) after which a waiting Burst is answered. It is not Quiet Hours.
 - **Owner Channel Conversation**: the Channel and the conversation id where the Owner last wrote. The agent sends there when it has no message to reply to. The Personal Agent keeps it from the Owner's messages.
@@ -68,9 +68,11 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 
 ## Safety and quality
 
-- **Approval**: the Owner's explicit yes before an irreversible action, money, or a message sent in the Owner's name. Not needed in the MVP, because the MVP has no write tools.
-- **Auto-review**: a separate reviewer model that checks each action before it runs. Comes with the first write tool.
-- **Trust Level**: the mark on a Note and on an Event that says where its text came from: `owner` for the Owner's own words, `untrusted` for Untrusted Content. Code sets it from the Event, never from the model.
+- **Risk Class**: the class that code gives to a tool call: `read` (it never changes Owner data), `change`, `approve` (it always needs Approval), or `blocked` (it never runs, and the model gets the reason). Each tool declares one. A tool can also give a function from its input to a Risk Class, which can only raise the declared class. The model never sets it. The gate decides each call from its Risk Class and the Trust Level of the Turn (decision 0027).
+- **Pending Approval**: one frozen tool call that waits for the Owner's answer, with its summary, its state, and its expiry. Code writes the summary; the model never writes it. A call whose input contains an Operator secret never becomes a Pending Approval; the model gets a refusal, so the stored frozen input is always the exact input.
+- **Approval**: the Owner's answer to a Pending Approval: approved or rejected. The Owner gives it only with a Channel button; a text message never answers a Pending Approval. Code runs an approved call once, with the exact input that code froze.
+- **Auto-review**: a separate reviewer model that checks each call that needs Approval before the Owner sees it. It comes after the first `approve`-class tool ([#140](https://github.com/kacperborowieckb/billy/issues/140)).
+- **Trust Level**: the mark on a Note, an Event, and a Turn that says where its text came from: `owner` for the Owner's own words, `untrusted` for Untrusted Content. Code sets it from the Event and from the stored data, never from the model. A Turn is `untrusted` when its Burst has Untrusted Content or a tool result in the Turn returned Untrusted Content; it never goes back to `owner` in the same Turn.
 - **Untrusted Content**: text from outside the Owner's own messages (forwarded messages, web pages, mail, webhooks, tool output). It is data and never an instruction.
 - **Trace**: the full record of a Turn: the prompt, injected state, tool calls, results, cost, latency, and cache hits. Enough to replay the Turn.
 - **Eval**: a repeatable case that scores the full sequence of steps of a Turn. Measured as pass^k: it passes on every one of k runs.

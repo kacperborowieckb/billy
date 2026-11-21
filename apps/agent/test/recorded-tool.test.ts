@@ -60,6 +60,7 @@ const inRecordedTool = async <A>(
               { eventId, progress, redactor },
               {
                 name: "keep_word",
+                riskClass: "change",
                 description: "Keep a word",
                 inputSchema: WordInput,
                 failureMessage,
@@ -204,6 +205,7 @@ describe("Recorded tool", () => {
               { eventId, progress, redactor },
               {
                 name: captureNoteToolName,
+                riskClass: "change",
                 description: "Keep a Note, then crash",
                 inputSchema: WordInput,
                 failureMessage,
