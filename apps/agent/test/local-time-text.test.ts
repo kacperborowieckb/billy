@@ -45,6 +45,9 @@ describe("Plain words for an Approval summary", () => {
     expect(recurrenceText({ _tag: "Monthly", day: 5, time: "18:00" })).toBe(
       "on day 5 of each month at 18:00"
     );
+    expect(recurrenceText({ _tag: "Monthly", day: 31, time: "18:00" })).toBe(
+      "on day 31 of each month, or on the last day of a shorter month at 18:00"
+    );
     expect(
       recurrenceText({ _tag: "Monthly", day: "last", time: "18:00" })
     ).toBe("on the last day of each month at 18:00");

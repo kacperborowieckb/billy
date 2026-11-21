@@ -63,10 +63,14 @@ const listText = (items: readonly string[]) =>
     ? items.join("")
     : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 
-const dayOfMonthText = (day: number | "last") =>
-  day === "last"
-    ? "on the last day of each month"
+const dayOfMonthText = (day: number | "last") => {
+  if (day === "last") {
+    return "on the last day of each month";
+  }
+  return day > 28
+    ? `on day ${day} of each month, or on the last day of a shorter month`
     : `on day ${day} of each month`;
+};
 
 export const recurrenceText = (rule: RecurrenceRule) => {
   if (rule._tag === "Daily") {

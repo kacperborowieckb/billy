@@ -101,7 +101,9 @@ export const updateNoteTool = (
           [input.noteId],
           consequence
         );
-        const linkedIds = [...new Set(input.linkedNoteIds)];
+        const linkedIds = [...new Set(input.linkedNoteIds)].filter(
+          (linkedId) => linkedId !== input.noteId
+        );
         const unlinkedIds = [...new Set(input.unlinkedNoteIds)];
         yield* storedNoteTexts(
           notes,

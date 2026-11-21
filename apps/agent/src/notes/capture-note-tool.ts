@@ -123,7 +123,7 @@ export const captureNoteTool = (
         const timeZone = yield* ownerTimeZone;
         return [
           `Keep Note ${quoted(keptText)}`,
-          ...(url === undefined ? [] : [`with link ${url}`]),
+          ...(url === undefined ? [] : [`with link ${quoted(url)}`]),
           ...(openLoop === undefined ? [] : [openLoopText(openLoop, timeZone)]),
           ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
         ].join(", ");
