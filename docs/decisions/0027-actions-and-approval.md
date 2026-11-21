@@ -6,7 +6,7 @@ Date: 2026-11-21
 
 Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. This decision replaces that flag with the Risk Class `read`, and the outcome-refusal rules read the Risk Class of each failed call. For a call in the current model run, the class comes from its tool and its exact input. A call from Turn progress (after a Restart or a reset) has its recorded input. The `recordedInput` function of a tool and the Redactor can change that input, so code counts the call as a read call only when its tool is `read` for every input. All other rules of 0021 stay in force. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
 
-Each ticket of #139 adds one part of this decision. Ticket [#143](https://github.com/kacperborowieckb/billy/issues/143) adds the Risk Class and the gate, with no change in behavior for the Owner: the gate denies only a `blocked` call, and no tool is `blocked` yet. The later tickets of #139 add the Trust Level of a Turn, Pending Approvals, the Telegram buttons, and the typed yes.
+Each ticket of #139 adds one part of this decision. Ticket [#143](https://github.com/kacperborowieckb/billy/issues/143) adds the Risk Class and the gate, with no change in behavior for the Owner: the gate denies only a `blocked` call, and no tool is `blocked` yet. The later tickets of #139 add the Trust Level of a Turn, Pending Approvals, and the Telegram buttons. The repository owner decided two rules that differ from #139: a call whose input contains an Operator secret gets no Pending Approval, and the Owner answers only with the buttons (the typed yes ticket, [#149](https://github.com/kacperborowieckb/billy/issues/149), is closed as not planned).
 
 This feature does not use the word "Action". In `CONTEXT.md`, an Action stays the Action of a Schedule (`SendText` or `RunPrompt`).
 
@@ -51,13 +51,14 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 - States: `draft`, then `pending`, then `approved`, `rejected`, or `expired`, then for an approved one `executed`, `failed`, or `unconfirmed`. Every change after `draft` is a Journal Entry.
 - A draft becomes `pending` only when its Delivery is `Sent` or `Unconfirmed`. When the Delivery is `Unconfirmed`, the Pending Approval is `pending` and expires at its expiry instant like any other. A Restart or a failed send deletes the drafts.
 - Storage: a new table in the Personal Agent SQLite. Code reads it only through an Effect `Schema`. A versioned migration adds the table. It has the id, the Turn Event id, the tool name, the frozen input, the summary, the state, the expiry instant, the Channel message id, and the result.
-- Frozen input: it is the decoded input of the tool call, not the output of `recordedInput`. The run of an approved call reads only the stored frozen input. See the open question on the frozen input below.
+- Frozen input: it is the decoded input of the tool call, not the output of `recordedInput`. The run of an approved call reads only the stored frozen input.
+- Operator secrets: the Redactor replaces only the Operator secrets of the Instance. Before code writes a draft, it checks the input with the Redactor. When the Redactor would change the input, code creates no Pending Approval and gives the model a refusal as the tool result. So the stored frozen input is always the exact decoded input, and no stored input contains an Operator secret.
 - Expiry: each tool can set its own. The default is a new Behavior Config value of 24 hours. The alarm of the Schedules store expires Pending Approvals at their instant, with no model call.
 
 ### Answering
 
 - Button press: the Edge accepts a Telegram `callback_query` only from the Owner's Channel Identity in the Directory, with data that is a short Pending Approval id and an answer. It forwards an `ApprovalAnswered` Event. The Inbox gives it Owner priority and drops a duplicate by the callback query id. Code answers the press at once.
-- Typed yes: the outcome tool `answer_approval` takes two inputs: the Pending Approval id and the answer (approved or rejected). It exists only in a Turn whose Trust Level is `owner` and when exactly one Pending Approval is `pending`. Code checks both again when the tool runs. See the open question on the typed yes below.
+- Buttons only: the Owner answers a Pending Approval only with its Approve or Reject button. There is no typed yes and no `answer_approval` tool. A text message from the Owner never answers a Pending Approval.
 - Code handles an `ApprovalAnswered` Event with no model call. It does not join a Burst and does not cause a Restart.
 - An answer to a Pending Approval that is not `pending` changes nothing. A late press gets "This expired" or "This was already answered".
 
@@ -77,13 +78,6 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 - No Eval Cases for Approval. They come with the Eval work, as in [0019](0019-proactivity.md).
 - No Auto-review. Issue [#140](https://github.com/kacperborowieckb/billy/issues/140) tracks it. Work on #140 starts only after the first `approve`-class tool exists.
 
-### Open questions
-
-The ticket that builds each part settles its question with the repository owner and updates this record. Until then, nothing in this record allows the alternative.
-
-- Frozen input: #139 asks for a stored input that the Redactor redacts and for a run with the exact input. The Redactor replaces only the Operator secrets of the Instance, so the two rules conflict only for a call whose input contains an Operator secret. Recommended answer: code does not write a draft for such a call and gives the model a refusal, so the stored input is the exact input. The other answer: store the exact input in a protected column for the run, and a redacted copy for the Journal and the display.
-- Typed yes: the code checks above (Trust Level `owner`, exactly one `pending`) do not tie the answer of `answer_approval` to a yes in the Owner's own words. The model could answer `approved` after an Owner message that is not a yes, for example a question about the status. Recommended answer: code accepts `approved` only when the newest Owner message of the Burst is a short yes that code recognizes, with no other content. The other answers: keep the model's reading of the yes, or remove the typed yes and keep only the buttons.
-
 ## Why
 
 Before this decision, the only protection was to remove tools by Trust Level. That protection had two problems. It was too strict: a forwarded invitation could not become a Reminder. It was incomplete: in an Owner message Turn, the model can read an untrusted Note. That Note can contain an instruction, and the model can follow it and call a tool that changes the Owner's data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
@@ -93,3 +87,4 @@ Before this decision, the only protection was to remove tools by Trust Level. Th
 - A result needs a model summary, for example MCP output.
 - Scheduled Turns get a tool that needs Approval.
 - The Channel is not Telegram.
+- The Owner needs to answer a Pending Approval in text, for example from a Channel with no buttons. Issue [#162](https://github.com/kacperborowieckb/billy/issues/162) tracks a typed yes.
