@@ -66,6 +66,12 @@ export const newPendingApprovalId = () =>
     .replaceAll("+", "-")
     .replaceAll("/", "_");
 
+const draftsOfTurn = (turnEventId: string) =>
+  and(
+    eq(pendingApprovals.turnEventId, turnEventId),
+    eq(pendingApprovals.state, "draft")
+  );
+
 const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
   const { database } = yield* AgentStorage;
   const journal = yield* Journal;
@@ -97,6 +103,20 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       .orderBy(sql`rowid`)
       .pipe(Effect.map((rows) => rows.map((row) => decodeRow(row))));
 
+  const journalOpened = Effect.fnUntraced(function* journalOpened(
+    turnEventId: string,
+    opened: readonly unknown[]
+  ) {
+    for (const row of opened.map((returned) => decodeOpened(returned))) {
+      yield* journal.append({
+        _tag: "ApprovalPending",
+        eventId: turnEventId,
+        pendingApprovalId: row.pendingApprovalId,
+        toolName: row.toolName,
+      });
+    }
+  });
+
   const openSentDraft = Effect.fnUntraced(function* openSentDraft(
     turnEventId: string,
     { pendingApprovalId, channelMessageId }: ApprovalMessage
@@ -115,14 +135,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
         pendingApprovalId: pendingApprovals.pendingApprovalId,
         toolName: pendingApprovals.toolName,
       });
-    for (const row of opened.map((returned) => decodeOpened(returned))) {
-      yield* journal.append({
-        _tag: "ApprovalPending",
-        eventId: turnEventId,
-        pendingApprovalId: row.pendingApprovalId,
-        toolName: row.toolName,
-      });
-    }
+    yield* journalOpened(turnEventId, opened);
   });
 
   const openSentDrafts = ({ turnEventId, approvalMessages }: SentDrafts) =>
@@ -135,7 +148,28 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
   const openDrafts = (sent: SentDrafts) =>
     database.transaction(() => openSentDrafts(sent));
 
-  return { draft, forTurn, openDrafts };
+  const dropDrafts = (turnEventId: string) =>
+    database
+      .delete(pendingApprovals)
+      .where(draftsOfTurn(turnEventId))
+      .pipe(Effect.asVoid);
+
+  const openUnconfirmedDrafts = (turnEventId: string) =>
+    database.transaction(() =>
+      Effect.gen(function* openUnconfirmedDraftsEffect() {
+        const opened = yield* database
+          .update(pendingApprovals)
+          .set({ state: "pending" })
+          .where(draftsOfTurn(turnEventId))
+          .returning({
+            pendingApprovalId: pendingApprovals.pendingApprovalId,
+            toolName: pendingApprovals.toolName,
+          });
+        yield* journalOpened(turnEventId, opened);
+      })
+    );
+
+  return { draft, forTurn, openDrafts, dropDrafts, openUnconfirmedDrafts };
 });
 
 export class PendingApprovals extends Context.Service<
@@ -144,3 +178,8 @@ export class PendingApprovals extends Context.Service<
 >()("PendingApprovals") {
   static readonly layer = Layer.effect(PendingApprovals, makePendingApprovals);
 }
+
+export const dropDraftsOf = (turnEventId: string) =>
+  PendingApprovals.pipe(
+    Effect.flatMap((store) => store.dropDrafts(turnEventId))
+  );

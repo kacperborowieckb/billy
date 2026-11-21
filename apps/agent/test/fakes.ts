@@ -53,6 +53,8 @@ const fakeTelegramState = {
   chatActionsAtSends: [] as number[],
   sendDelayMillis: 0,
   sendHold: Promise.resolve() as Promise<undefined>,
+  refusedFromSend: Number.POSITIVE_INFINITY,
+  edits: [] as SentTelegramMessage[],
 };
 
 const answerChatAction = async (request: Request) => {
@@ -124,6 +126,12 @@ export const fakeTelegram = {
   get chatActionsAtSends(): readonly number[] {
     return fakeTelegramState.chatActionsAtSends;
   },
+  get edits(): readonly SentTelegramMessage[] {
+    return fakeTelegramState.edits;
+  },
+  refuseFromSend: (count: number) => {
+    fakeTelegramState.refusedFromSend = count;
+  },
   answerWith: (answer: TelegramAnswer) => {
     fakeTelegramState.answer = answer;
   },
@@ -146,6 +154,13 @@ export const fakeTelegram = {
     if (request.url.endsWith("/setMessageReaction")) {
       return answerReaction(request);
     }
+    if (request.url.endsWith("/editMessageText")) {
+      fakeTelegramState.edits.push({
+        url: request.url,
+        body: await request.json(),
+      });
+      return Response.json({ ok: true, result: true });
+    }
     fakeTelegramState.chatActionsAtSends.push(
       fakeTelegramState.chatActions.length
     );
@@ -160,7 +175,10 @@ export const fakeTelegram = {
     if (fakeTelegramState.answer === "lose-confirmation") {
       throw new TypeError("The connection dropped before Telegram answered");
     }
-    if (fakeTelegramState.answer === "refuse") {
+    if (
+      fakeTelegramState.answer === "refuse" ||
+      fakeTelegramState.sent.length >= fakeTelegramState.refusedFromSend
+    ) {
       return Response.json(
         { ok: false, description: "Bad Request: chat not found" },
         { status: 400 }
@@ -376,6 +394,8 @@ export const resetFakes = () => {
   fakeTelegramState.chatActionsAtSends = [];
   fakeTelegramState.sendDelayMillis = 0;
   fakeTelegramState.sendHold = Promise.resolve(undefined);
+  fakeTelegramState.refusedFromSend = Number.POSITIVE_INFINITY;
+  fakeTelegramState.edits = [];
   fakeModel.doGenerateCalls.length = 0;
   releaseModel = Promise.resolve();
   callsBeforeHold = 0;

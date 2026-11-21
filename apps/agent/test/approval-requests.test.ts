@@ -1,9 +1,14 @@
-import { env, runInDurableObject } from "cloudflare:test";
+import {
+  abortAllDurableObjects,
+  env,
+  runInDurableObject,
+} from "cloudflare:test";
 import { DateTime, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PendingApprovals } from "../src/approval/pending-approvals.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
+import { approvalNotSentStatus } from "../src/channels/telegram/telegram-send.ts";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
 import { updateNoteToolName } from "../src/notes/update-note-tool.ts";
@@ -23,7 +28,14 @@ import { cancelScheduleToolName } from "../src/schedule/cancel-schedule-tool.ts"
 import { changeScheduleToolName } from "../src/schedule/change-schedule-tool.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeBurstWait,
+  fakeModel,
+  fakeTelegram,
+  holdModel,
+  resetFakes,
+  scriptModel,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 interface PendingApprovalRow extends Record<string, SqlStorageValue> {
@@ -570,5 +582,154 @@ describe("Approval messages", () => {
       { tool_call_id: "a", state: "draft" },
       { tool_call_id: "b", state: "pending" },
     ]);
+  });
+});
+
+const waitForDrafts = (ownerId: string, count: number) =>
+  vi.waitFor(
+    async () => {
+      const rows = await pendingApprovalsOf(ownerId);
+      expect(rows.filter((row) => row.state === "draft")).toHaveLength(count);
+    },
+    { timeout: 10_000 }
+  );
+
+const waitForEventStates = (ownerId: string, states: readonly string[]) =>
+  vi.waitFor(
+    async () => {
+      const rows = await rowsOf<{ state: string }>(
+        ownerId,
+        "SELECT state FROM inbox_events ORDER BY sequence"
+      );
+      expect(rows.map((row) => row.state)).toEqual(states);
+    },
+    { timeout: 12_000 }
+  );
+
+const runTurnAfterReset = async (ownerId: string) => {
+  await abortAllDurableObjects();
+  await runInDurableObject(await agentOf(ownerId), (instance) =>
+    instance.runTurn()
+  );
+};
+
+describe("Drafts of a Turn whose Delivery does not show them", () => {
+  it("are deleted by a Restart, so the dropped answer leaves no Pending Approval", async () => {
+    const ownerId = await addOwner(9120);
+    fakeBurstWait.quietMillis = 1500;
+    fakeBurstWait.maxWaitMillis = 60_000;
+    scriptModel([
+      { callTool: setScheduleToolName, input: reminderInput },
+      { say: "This waits for you." },
+      { say: "Noted both messages." },
+    ]);
+    const releaseModel = holdModel(1);
+
+    await telegramWebhook(
+      textUpdate({
+        fromUserId: 9120,
+        text: forwardedInvitation,
+        messageId: 1,
+        forwardOrigin: forwardedFromAna,
+      })
+    );
+    await waitForDrafts(ownerId, 1);
+    await telegramWebhook(
+      textUpdate({ fromUserId: 9120, text: "never mind", messageId: 2 })
+    );
+    releaseModel();
+    await waitForSends(1);
+    await waitForEventStates(ownerId, ["done", "done"]);
+
+    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+    expect(fakeTelegram.sent[0]?.body).toMatchObject({
+      text: "Noted both messages.",
+    });
+    expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
+  });
+
+  it("are deleted by a failed send", async () => {
+    const ownerId = await addOwner(9121);
+    fakeTelegram.answerWith("refuse");
+    scriptModel([
+      { callTool: setScheduleToolName, input: reminderInput },
+      { say: "This waits for you." },
+    ]);
+
+    await forward(9121);
+    await waitForEventStates(ownerId, ["failed"]);
+
+    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+    expect(fakeTelegram.edits).toEqual([]);
+  });
+
+  it("are deleted when a later Approval message fails, and the sent Approval message loses its buttons", async () => {
+    const ownerId = await addOwner(9122);
+    fakeTelegram.refuseFromSend(3);
+    scriptModel([
+      {
+        callTool: setScheduleToolName,
+        times: 13,
+        input: {
+          ...reminderInput,
+          action: { _tag: "SendText", text: "Call Ana ".repeat(40) },
+        },
+      },
+      { say: "These wait for your Approval." },
+    ]);
+
+    await forward(9122);
+    await waitForEventStates(ownerId, ["failed"]);
+
+    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+    const [, shown] = fakeTelegram.sent;
+    expect(fakeTelegram.edits.map((edit) => edit.body)).toEqual([
+      {
+        chat_id: 9122,
+        message_id: 9002,
+        text: `${shown?.body.text}\n\n${approvalNotSentStatus}`,
+      },
+    ]);
+  });
+
+  it("become pending after a reset when the send started and Telegram did not confirm it", async () => {
+    const ownerId = await addOwner(9123);
+    scriptModel([
+      { callTool: setScheduleToolName, input: reminderInput },
+      { say: "This waits for you." },
+    ]);
+    const releaseSends = fakeTelegram.holdSends();
+
+    await forward(9123);
+    await waitForSends(1);
+    await runTurnAfterReset(ownerId);
+    releaseSends();
+
+    const approvals = await pendingApprovalsOf(ownerId);
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]).toMatchObject({
+      state: "pending",
+      channel_message_id: null,
+    });
+    const journal = await journalKindsOf(ownerId);
+    expect(journal.map((entry) => entry.kind)).toContain("ApprovalPending");
+  });
+
+  it("are deleted after a reset before the send, and the new answer makes its own", async () => {
+    const ownerId = await addOwner(9124);
+    scriptModel([
+      { callTool: setScheduleToolName, input: reminderInput },
+      { say: "I could not finish." },
+    ]);
+    holdModel(1);
+
+    await forward(9124);
+    await waitForDrafts(ownerId, 1);
+    holdModel(Number.POSITIVE_INFINITY);
+    await runTurnAfterReset(ownerId);
+    await waitForSends(1);
+
+    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+    expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
   });
 });

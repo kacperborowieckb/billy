@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
+import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { Journal } from "../journal/journal.ts";
 import type { JournalEntry } from "../journal/journal.ts";
 import { Redactor } from "../tracing/redactor.ts";
@@ -157,6 +158,18 @@ const settleState = Effect.fnUntraced(function* settleState<
   }
 });
 
+const settleDrafts = Effect.fnUntraced(function* settleDrafts(
+  event: InboxEvent,
+  state: DeliveryState
+) {
+  const pendingApprovals = yield* PendingApprovals;
+  const ownerMaySeeDrafts =
+    state._tag === "Sent" || state._tag === "Unconfirmed";
+  yield* ownerMaySeeDrafts
+    ? pendingApprovals.openUnconfirmedDrafts(event.eventId)
+    : pendingApprovals.dropDrafts(event.eventId);
+});
+
 export const settleFromJournal = Effect.fnUntraced(function* settleFromJournal<
   UnsentRequirements,
   NoticeRequirements,
@@ -168,6 +181,7 @@ export const settleFromJournal = Effect.fnUntraced(function* settleFromJournal<
   const entries = yield* journal.readForEvent(event.eventId);
   const state = deliveryStateOfEntries(entries);
 
+  yield* settleDrafts(event, state);
   if (state._tag !== "Unsent") {
     yield* recordConversation(event, state, recovery.inputs);
   }

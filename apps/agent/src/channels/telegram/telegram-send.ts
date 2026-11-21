@@ -146,6 +146,37 @@ const textPartsOf = (message: OutgoingMessage): TelegramPart[] =>
 export const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
   sendParts(config, textPartsOf(message));
 
+export const approvalNotSentStatus =
+  "Cancelled: the reply did not send in full, so nothing waits for your Approval.";
+
+interface SentApprovalMessage {
+  readonly conversationId: string;
+  readonly channelMessageId: string;
+  readonly text: string;
+}
+
+const editMessageTextRequest = (
+  config: TelegramConfig,
+  message: SentApprovalMessage
+) =>
+  new Request(`${config.apiUrl}/bot${config.botToken}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: Number(message.conversationId),
+      message_id: Number(message.channelMessageId),
+      text: `${message.text}\n\n${approvalNotSentStatus}`,
+    }),
+  });
+
+const cancelApprovalMessage = (
+  config: TelegramConfig,
+  message: SentApprovalMessage
+) =>
+  Effect.tryPromise(() =>
+    (config.fetch ?? fetch)(editMessageTextRequest(config, message))
+  ).pipe(Effect.ignore);
+
 export const sendWithApprovals = (config: TelegramConfig) =>
   Effect.fnUntraced(function* sendWithApprovalsEffect(
     message: OutgoingApprovalMessage
@@ -159,6 +190,7 @@ export const sendWithApprovals = (config: TelegramConfig) =>
     }
     const blocks = approvalBlocksOf(message.approvals, telegramTextLimit);
     const approvalMessages: ApprovalMessage[] = [];
+    const sentMessages: SentApprovalMessage[] = [];
     let channelMessageId = "";
     for (const [index, block] of blocks.entries()) {
       const sent = yield* sendPart(config, {
@@ -170,11 +202,21 @@ export const sendWithApprovals = (config: TelegramConfig) =>
         keyboard: block.keyboard,
       });
       if (sent._tag === "Failed") {
+        yield* Effect.forEach(
+          sentMessages,
+          (sentMessage) => cancelApprovalMessage(config, sentMessage),
+          { discard: true }
+        );
         return approvalsNotSent(
           `Approval message ${index + 1} of ${blocks.length}: ${sent.reason}`
         );
       }
       ({ channelMessageId } = sent);
+      sentMessages.push({
+        conversationId: message.conversationId,
+        channelMessageId,
+        text: block.text,
+      });
       approvalMessages.push(
         ...block.pendingApprovalIds.map((pendingApprovalId) => ({
           pendingApprovalId,
