@@ -54,6 +54,7 @@ const activeScheduleTextOf = (
     ...(schedule.repeat === undefined
       ? []
       : [recurrenceText(schedule.repeat.rule)]),
+    `id ${schedule.scheduleId}`,
   ].join(", ");
 };
 

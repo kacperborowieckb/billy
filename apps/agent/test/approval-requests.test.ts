@@ -775,7 +775,7 @@ describe("Checks before a draft", () => {
     const approvals = await pendingApprovalsOf(ownerId);
     expect(approvals.map((row) => row.summary)).toEqual([
       'Set a follow-up of the agent, Scheduled Task "Ask about the rent", Tue 26 Nov 2030, 09:00, to follow up Note "pay rent"',
-      'Cancel Reminder "Call Ana about dinner", next due Tue 26 Nov 2030, 09:00',
+      `Cancel Reminder "Call Ana about dinner", next due Tue 26 Nov 2030, 09:00, id ${schedule?.schedule_id}`,
     ]);
   });
 });
