@@ -3,6 +3,7 @@ import { Effect } from "effect";
 
 import { Journal } from "../journal/journal.ts";
 import type { JournalRecord } from "../journal/journal.ts";
+import { toolNamed } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ModelStep } from "../model-gateway/model-step.ts";
 import { reactToolName, reactionAfterFailureMessage } from "./react-tool.ts";
@@ -75,9 +76,7 @@ const isReadCall = (
   call: { readonly toolName: string; readonly input: unknown },
   callInput: CallInput
 ) => {
-  const tool = Object.hasOwn(tools, call.toolName)
-    ? tools[call.toolName]
-    : undefined;
+  const tool = toolNamed(tools, call.toolName);
   if (tool === undefined) {
     return false;
   }

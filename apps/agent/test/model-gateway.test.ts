@@ -277,6 +277,36 @@ describe("The gate in the Model Gateway", () => {
     }
   );
 
+  it("never runs a blocked tool with a malformed input, and gives the model the validation error", async () => {
+    resetFakes();
+    scriptModel([
+      { callTool: "keep_word", input: { term: "secret" } },
+      { say: "I cannot keep that word." },
+    ]);
+    const kept: string[] = [];
+
+    await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Keep secret" }],
+            tools: { keep_word: keepWordTool(kept, "blocked") },
+            trustLevel: "owner",
+            stepLimit: 4,
+          })
+        ),
+        Effect.provide(fakeModelGateway)
+      )
+    );
+
+    expect(kept).toEqual([]);
+    expect(toolOutputsSentToModel()).toEqual([
+      expect.objectContaining({ type: "error-text" }),
+    ]);
+  });
+
   it("runs a change tool as before", async () => {
     resetFakes();
     scriptModel([

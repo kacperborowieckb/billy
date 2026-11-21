@@ -41,6 +41,12 @@ export const effectInputSchema = <Input>(
 
 export const noTools: AgentTools = {};
 
+export const toolNamed = (
+  tools: AgentTools,
+  name: string
+): AgentTool | undefined =>
+  Object.hasOwn(tools, name) ? tools[name] : undefined;
+
 interface AgentToolDefinition<Input, Output> {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;

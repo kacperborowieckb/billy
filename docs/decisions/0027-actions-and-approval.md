@@ -4,7 +4,7 @@ Status: accepted
 
 Date: 2026-11-21
 
-Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. The Risk Class `read` takes its place, and the outcome-refusal rules read the Risk Class of each failed call. For a call in the current model run, the class comes from its tool and its exact input. A call from Turn progress (after a Restart or a reset) has its recorded input. The `recordedInput` function of a tool and the Redactor can change that input, so code counts the call as a read call only when its tool is `read` for every input. The rest of 0021 stands. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
+Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. This decision replaces that flag with the Risk Class `read`, and the outcome-refusal rules read the Risk Class of each failed call. For a call in the current model run, the class comes from its tool and its exact input. A call from Turn progress (after a Restart or a reset) has its recorded input. The `recordedInput` function of a tool and the Redactor can change that input, so code counts the call as a read call only when its tool is `read` for every input. All other rules of 0021 stay in force. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
 
 Each ticket of #139 adds one part of this decision. Ticket [#143](https://github.com/kacperborowieckb/billy/issues/143) adds the Risk Class and the gate, with no change in behavior for the Owner: the gate denies only a `blocked` call, and no tool is `blocked` yet. The later tickets of #139 add the Trust Level of a Turn, Pending Approvals, the Telegram buttons, and the typed yes.
 
@@ -33,8 +33,9 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
   - `change` in an `owner` Turn: runs.
   - `change` in an `untrusted` Turn: needs Approval. One exception: `capture_note` of a new Note runs, because code marks that Note `untrusted`. An edit of an existing Note needs Approval.
   - `approve`: always needs Approval.
-  - `blocked`: denied. The model gets the reason as the tool result, and the call counts as a failed changing call for the outcome-refusal rules. The stored history keeps the tool call and its `execution-denied` result, and code removes the native `tool-approval-request` and `tool-approval-response` parts.
-- The gate keeps one step free between the code rules and the Owner. Auto-review goes into that step later. This decision does not build it.
+  - `blocked`: the gate denies the call. The model gets the reason as the tool result, and the call counts as a failed changing call for the outcome-refusal rules. The stored history keeps the tool call and its `execution-denied` result, and code removes the native `tool-approval-request` and `tool-approval-response` parts.
+- Between the code rules and the Owner, the gate has one empty step. A later change puts Auto-review into that step. This decision does not build Auto-review.
+- The SDK calls the gate only for a call whose input matches the input schema of the tool. For any other call, the SDK gives the model the validation error, and the tool does not run. So a malformed call to a `blocked` tool gets the validation error, and the model gets the denial reason when it calls the tool again with a valid input.
 - A run that the gate allows maps to `not-applicable`, so the Conversation gets no approval parts for it.
 - Code does not continue the model history with `tool-approval-response`. When the SDK stops for Approval, code writes the frozen call as a draft Pending Approval, and writes a tool result for that call into the Conversation: "waiting for the Owner's Approval, id X". The history stays valid when other Owner messages or a reset come before the answer. Each call of a step that needs Approval becomes its own draft.
 
@@ -43,13 +44,13 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 - Each tool that can need Approval gives a code function that writes its frozen input in plain words (the summary). The model's text is never the summary.
 - A Turn with drafts sends one Delivery: the model's reply text, if any, then for each draft its summary and one row of Approve and Reject buttons. There is no "Approve all".
 - A Turn with drafts cannot end with `stay_silent` or with a reaction only. Code refuses them.
-- The Channel gets: send with Approval buttons, edit the Approval message with a status line and no buttons, and answer a button press. Telegram uses inline keyboards, `editMessageText` or `editMessageReplyMarkup`, and `answerCallbackQuery`. The webhook setup receives `callback_query` updates.
+- The Channel interface adds three operations: send with Approval buttons, edit the Approval message with a status line and no buttons, and answer a button press. Telegram uses inline keyboards, `editMessageText` or `editMessageReplyMarkup`, and `answerCallbackQuery`. The webhook setup receives `callback_query` updates.
 
 ### Pending Approval
 
 - States: `draft`, then `pending`, then `approved`, `rejected`, or `expired`, then for an approved one `executed`, `failed`, or `unconfirmed`. Every change after `draft` is a Journal Entry.
-- A draft becomes `pending` only when its Delivery is `Sent` or `Unconfirmed`. An `Unconfirmed` Pending Approval expires as usual. A Restart or a failed send deletes the drafts.
-- Storage: a new table in the Personal Agent SQLite, read only through an Effect `Schema`. A versioned migration adds the table. It has the id, the Turn Event id, the tool name, the frozen input (redacted like other recorded tool input), the summary, the state, the expiry instant, the Channel message id, and the result.
+- A draft becomes `pending` only when its Delivery is `Sent` or `Unconfirmed`. When the Delivery is `Unconfirmed`, the Pending Approval is `pending` and expires at its expiry instant like any other. A Restart or a failed send deletes the drafts.
+- Storage: a new table in the Personal Agent SQLite. Code reads it only through an Effect `Schema`. A versioned migration adds the table. It has the id, the Turn Event id, the tool name, the frozen input (the Redactor redacts it as it redacts other recorded tool input), the summary, the state, the expiry instant, the Channel message id, and the result.
 - Expiry: each tool can set its own. The default is a new Behavior Config value of 24 hours. The alarm of the Schedules store expires Pending Approvals at their instant, with no model call.
 
 ### Answering
@@ -61,7 +62,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 ### Running an approved call
 
-- Code runs the exact frozen input through the tool's own execute once. The recorded tool call uses the Pending Approval id as its key. A reset during the run recovers from that record and does not run the call again.
+- Code runs the exact frozen input through the tool's own execute once. The recorded tool call uses the Pending Approval id as its key. After a reset during the run, code recovers from that record and does not run the call again.
 - The result sets the state to `executed`, `failed` (with the tool's failure message), or `unconfirmed`.
 - Code edits the Approval message: code keeps the summary, removes the buttons, and adds one status line: "Approved, done", "Approved, but it failed: <reason>", "Rejected", or "Expired". No new message and no model call.
 - Code adds a short Conversation entry, for example "Approval for <summary>: approved, done", and the Journal Entry records the same answer and result.
@@ -73,7 +74,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 ### Temporary paths
 
 - No Eval Cases for Approval. They come with the Eval work, as in [0019](0019-proactivity.md).
-- No Auto-review. Issue [#140](https://github.com/kacperborowieckb/billy/issues/140) tracks it, blocked until the first `approve`-class tool.
+- No Auto-review. Issue [#140](https://github.com/kacperborowieckb/billy/issues/140) tracks it. Work on #140 starts only after the first `approve`-class tool exists.
 
 ## Why
 

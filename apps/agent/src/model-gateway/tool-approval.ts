@@ -2,6 +2,7 @@ import type { ToolApprovalStatus } from "ai";
 
 import { gateDecisionOf } from "../approval/tool-gate.ts";
 import type { TrustLevel } from "../notes/note.ts";
+import { toolNamed } from "./agent-tool.ts";
 import type { AgentTools } from "./agent-tool.ts";
 
 export const approvalStatusOf =
@@ -11,9 +12,7 @@ export const approvalStatusOf =
   }: {
     readonly toolCall: { readonly toolName: string; readonly input: unknown };
   }): ToolApprovalStatus => {
-    const tool = Object.hasOwn(tools, toolCall.toolName)
-      ? tools[toolCall.toolName]
-      : undefined;
+    const tool = toolNamed(tools, toolCall.toolName);
     if (tool === undefined) {
       return "not-applicable";
     }
