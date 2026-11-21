@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm";
 import { DateTime, Effect, Option } from "effect";
 
+import { earliestApprovalExpiryAt } from "../approval/approval-expiry.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { inboxEvents, schedules } from "../personal-agent/storage-schema.ts";
@@ -166,7 +167,12 @@ export const makeScheduleQueries = Effect.fnUntraced(
     const earliestAlarmAt = Effect.all([
       earliestUnfiredDueAt,
       earliestOutcomeAlarmAt,
-    ]).pipe(Effect.map(([dueAt, outcomeAt]) => earlierOf(dueAt, outcomeAt)));
+      earliestApprovalExpiryAt(database),
+    ]).pipe(
+      Effect.map(([dueAt, outcomeAt, expiryAt]) =>
+        earlierOf(earlierOf(dueAt, outcomeAt), expiryAt)
+      )
+    );
 
     const unfiredDueBy = (now: DateTime.Utc) =>
       database

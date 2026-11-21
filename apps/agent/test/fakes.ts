@@ -397,6 +397,8 @@ export const failModel = (
   modelFailure.message = message;
 };
 
+export const fakeToolApprovalExpiryMillis = 60 * 60 * 1000;
+
 export const fakeTool = {
   name: "keep_note",
   kept: [] as string[],

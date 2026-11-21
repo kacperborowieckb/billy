@@ -19,6 +19,10 @@ import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { agentToolServices } from "./agent-tool-services.ts";
+import {
+  channelAnswerTimeoutMillis,
+  editApprovalMessage,
+} from "./approval-message-edit.ts";
 import type { Burst } from "./burst.ts";
 import { Conversation } from "./conversation.ts";
 import { Inbox } from "./inbox.ts";
@@ -29,8 +33,6 @@ export interface ApprovalAnswerSettings {
   readonly behavior: BehaviorConfig;
   readonly tools: AgentTools;
 }
-
-export const channelAnswerTimeoutMillis = 3000;
 
 export const turnGoneReason = "The Turn of this Approval is no longer stored";
 
@@ -140,53 +142,6 @@ const answerAndRun = Effect.fnUntraced(function* answerAndRun(
   }
 });
 
-const editApprovalMessage = Effect.fnUntraced(function* editApprovalMessage(
-  event: ApprovalAnsweredEvent
-) {
-  const pendingApprovals = yield* PendingApprovals;
-  const channel = yield* Channel;
-  const approval = yield* pendingApprovals.byId(event.pendingApprovalId);
-  if (Option.isNone(approval) || approval.value.channelMessageId === null) {
-    return;
-  }
-  const turnApprovals = (yield* pendingApprovals.forTurn(
-    approval.value.turnEventId
-  )).flatMap((row) => {
-    const status = statusOfApproval(row);
-    return row.channelMessageId === null
-      ? []
-      : [
-          {
-            pendingApprovalId: row.pendingApprovalId,
-            summary: row.summary,
-            channelMessageId: row.channelMessageId,
-            ...(status === undefined ? {} : { status }),
-          },
-        ];
-  });
-  const edited = yield* channel
-    .editApprovalMessage({
-      conversationId: event.conversationId,
-      channelMessageId: approval.value.channelMessageId,
-      turnApprovals,
-    })
-    .pipe(
-      Effect.timeoutOption(channelAnswerTimeoutMillis),
-      Effect.map(
-        Option.getOrElse(() => ({
-          _tag: "Failed" as const,
-          reason: "Telegram did not answer the edit in time",
-        }))
-      )
-    );
-  if (edited._tag === "Failed") {
-    yield* Effect.logWarning("The Approval message was not edited", {
-      pendingApprovalId: event.pendingApprovalId,
-      reason: edited.reason,
-    });
-  }
-});
-
 const answeredByEvent = Effect.fnUntraced(function* answeredByEvent(
   event: ApprovalAnsweredEvent
 ) {
@@ -235,7 +190,10 @@ export const handleApprovalAnswered = Effect.fnUntraced(
       (yield* answeredByEvent(event)) ||
       (yield* answerPress(settings, event))
     ) {
-      yield* editApprovalMessage(event);
+      yield* editApprovalMessage({
+        conversationId: event.conversationId,
+        pendingApprovalId: event.pendingApprovalId,
+      });
     }
     yield* inbox.markDone([event]);
   }

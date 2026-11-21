@@ -27,7 +27,9 @@ export const PendingApprovalSchema = Schema.Struct({
 
 export type PendingApproval = typeof PendingApprovalSchema.Type;
 
-const decodeRow = Schema.decodeUnknownSync(PendingApprovalSchema);
+export const decodePendingApproval = Schema.decodeUnknownSync(
+  PendingApprovalSchema
+);
 
 const decodeOpened = Schema.decodeUnknownSync(
   PendingApprovalSchema.mapFields((fields) => ({
@@ -105,7 +107,9 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       .from(pendingApprovals)
       .where(eq(pendingApprovals.turnEventId, turnEventId))
       .orderBy(sql`rowid`)
-      .pipe(Effect.map((rows) => rows.map((row) => decodeRow(row))));
+      .pipe(
+        Effect.map((rows) => rows.map((row) => decodePendingApproval(row)))
+      );
 
   const journalOpened = Effect.fnUntraced(function* journalOpened(
     turnEventId: string,
@@ -181,7 +185,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       .pipe(
         Effect.map((rows) =>
           Option.fromNullishOr(rows.at(0)).pipe(
-            Option.map((row) => decodeRow(row))
+            Option.map((row) => decodePendingApproval(row))
           )
         )
       );

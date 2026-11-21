@@ -28,6 +28,7 @@ export type RunToolEffect = <Output>(
 
 export interface AgentTool extends GatedTool {
   readonly approvalSummaryOf: ApprovalSummaryOf;
+  readonly approvalExpiryMillis?: number;
   readonly executeApproved: (
     frozenInput: unknown,
     toolCallId: string
@@ -74,11 +75,13 @@ export type ToolApproval<Input> =
       readonly riskClass: "read";
       readonly riskClassOfInput?: undefined;
       readonly approvalSummary?: undefined;
+      readonly approvalExpiryMillis?: undefined;
     }
   | {
       readonly riskClass: RiskClass;
       readonly riskClassOfInput?: InputRiskClass<Input>;
       readonly approvalSummary: InputApprovalSummary<Input>;
+      readonly approvalExpiryMillis?: number;
     };
 
 type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
@@ -151,6 +154,9 @@ export const agentTool = <Input, Output>(
     ...classified,
     marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
     approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
+    ...(definition.approvalExpiryMillis === undefined
+      ? {}
+      : { approvalExpiryMillis: definition.approvalExpiryMillis }),
     toAiSdkTool: (runEffect) =>
       definition.riskClass === "blocked"
         ? blockedAiSdkTool(definition, runEffect)

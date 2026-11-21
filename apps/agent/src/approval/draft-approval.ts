@@ -83,7 +83,10 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
     toolName: call.name,
     frozenInput: call.input,
     summary: shownSummary,
-    expiresAt: DateTime.addDuration(now, Duration.millis(expiryMillis)),
+    expiresAt: DateTime.addDuration(
+      now,
+      Duration.millis(tool.approvalExpiryMillis ?? expiryMillis)
+    ),
   });
   return { _tag: "Drafted", draft } satisfies DraftOutcome;
 });

@@ -48,6 +48,9 @@ const hasExpired = (approval: PendingApproval, now: DateTime.Utc) =>
   (approval.state === "pending" &&
     DateTime.isLessThanOrEqualTo(DateTime.makeUnsafe(approval.expiresAt), now));
 
+export const shownStatusOf = (approval: PendingApproval, now: DateTime.Utc) =>
+  hasExpired(approval, now) ? expiredStatus : statusOfApproval(approval);
+
 export const lateNoticeOf = (
   approval: Option.Option<PendingApproval>,
   now: DateTime.Utc
