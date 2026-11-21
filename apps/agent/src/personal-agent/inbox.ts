@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import {
@@ -165,27 +165,29 @@ const makeInbox = Effect.gen(function* makeInboxEffect() {
     .orderBy(asc(inboxEvents.sequence))
     .pipe(Effect.map((rows) => ownerEventsFirst(rows.map(toInboxEvent))));
 
-  const ownerMessagesWithIds = (eventIds: readonly string[]) =>
+  const ownerMessageRowsWithId = (eventId: string) =>
     database
       .select()
       .from(inboxEvents)
       .where(
         and(
           eq(inboxEvents.kind, "OwnerMessage"),
-          inArray(inboxEvents.eventId, [...eventIds])
-        )
-      )
-      .orderBy(asc(inboxEvents.sequence))
-      .pipe(
-        Effect.map((rows) =>
-          rows
-            .map(toInboxEvent)
-            .filter(
-              (event): event is OwnerMessageEvent =>
-                event._tag === "OwnerMessage"
-            )
+          eq(inboxEvents.eventId, eventId)
         )
       );
+
+  const ownerMessagesWithIds = (eventIds: readonly string[]) =>
+    Effect.all(eventIds.map((eventId) => ownerMessageRowsWithId(eventId))).pipe(
+      Effect.map((rows) =>
+        rows
+          .flat()
+          .toSorted((left, right) => left.sequence - right.sequence)
+          .map(toInboxEvent)
+          .filter(
+            (event): event is OwnerMessageEvent => event._tag === "OwnerMessage"
+          )
+      )
+    );
 
   const settle =
     (state: "done" | "failed") => (events: readonly InboxEvent[]) =>

@@ -8,7 +8,11 @@ import type {
   InputApprovalSummary,
 } from "../approval/approval-summary.ts";
 import { riskClassified } from "../approval/risk-class.ts";
-import type { InputRiskClass, RiskClass } from "../approval/risk-class.ts";
+import type {
+  InputRiskClass,
+  RiskClass,
+  RiskClassified,
+} from "../approval/risk-class.ts";
 import { blockedCallReason } from "../approval/tool-gate.ts";
 import type { GatedTool } from "../approval/tool-gate.ts";
 
@@ -122,9 +126,12 @@ const validatedInput = <Input>(schema: FlexibleSchema<Input>, input: unknown) =>
   );
 
 const executeApprovedOf =
-  <Input, Output>(definition: AgentToolDefinition<Input, Output>) =>
+  <Input, Output>(
+    definition: AgentToolDefinition<Input, Output>,
+    { riskClassOf }: RiskClassified
+  ) =>
   (frozenInput: unknown, toolCallId: string) =>
-    definition.riskClass === "blocked"
+    riskClassOf(frozenInput) === "blocked"
       ? Effect.fail(new ToolFailed({ message: blockedCallReason }))
       : validatedInput(definition.inputSchema, frozenInput).pipe(
           Effect.flatMap((input) =>
@@ -134,26 +141,32 @@ const executeApprovedOf =
 
 export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
-): AgentTool => ({
-  executeApproved: executeApprovedOf(definition),
-  ...riskClassified(definition.riskClass, definition.riskClassOfInput),
-  marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
-  approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
-  toAiSdkTool: (runEffect) =>
-    definition.riskClass === "blocked"
-      ? blockedAiSdkTool(definition, runEffect)
-      : tool<Input, unknown, Record<string, unknown>>({
-          description: definition.description,
-          inputSchema: definition.inputSchema,
-          execute: (input: Input, { toolCallId, messages }) =>
-            runEffect(
-              definition.execute(input, {
-                toolCallId,
-                modelStepKey: messages.length,
-              })
-            ),
-        }),
-});
+): AgentTool => {
+  const classified = riskClassified(
+    definition.riskClass,
+    definition.riskClassOfInput
+  );
+  return {
+    executeApproved: executeApprovedOf(definition, classified),
+    ...classified,
+    marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
+    approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
+    toAiSdkTool: (runEffect) =>
+      definition.riskClass === "blocked"
+        ? blockedAiSdkTool(definition, runEffect)
+        : tool<Input, unknown, Record<string, unknown>>({
+            description: definition.description,
+            inputSchema: definition.inputSchema,
+            execute: (input: Input, { toolCallId, messages }) =>
+              runEffect(
+                definition.execute(input, {
+                  toolCallId,
+                  modelStepKey: messages.length,
+                })
+              ),
+          }),
+  };
+};
 
 export const runToolEffect =
   (
