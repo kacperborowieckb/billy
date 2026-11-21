@@ -1,6 +1,6 @@
 import type { ModelMessage, ToolResultPart } from "ai";
 import { env, runInDurableObject } from "cloudflare:test";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -121,7 +121,7 @@ describe("Risk Class", () => {
 
   it("is never lowered by the input function", () => {
     const tool = riskClassified("blocked", {
-      isInput: (value): value is unknown => value !== undefined,
+      isInput: Predicate.isNotUndefined,
       of: () => "read",
     });
 
