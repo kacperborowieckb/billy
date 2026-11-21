@@ -20,7 +20,7 @@ const partOf = (
   type: Intl.DateTimeFormatPartTypes
 ) => parts.find((part) => part.type === type)?.value ?? "";
 
-const instantText = (instant: DateTime.DateTime, timeZone: string) => {
+export const instantText = (instant: DateTime.DateTime, timeZone: string) => {
   const parts = formatIn(timeZone).formatToParts(
     DateTime.toEpochMillis(instant)
   );

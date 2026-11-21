@@ -1,8 +1,10 @@
 import { Cause, Effect, Option, Schema } from "effect";
 
+import { quoted } from "../approval/approval-summary.ts";
+import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { NoOpenLoop } from "./no-open-loop.ts";
-import { storedNoteText } from "./note-summary.ts";
+import { storedNotes } from "./note-summary.ts";
 import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import { OpenLoopClosedReasonSchema } from "./open-loop.ts";
@@ -52,8 +54,16 @@ export const closeOpenLoopTool = (
       name: closeOpenLoopToolName,
       riskClass: "change",
       approvalSummary: ({ noteId, reason }) =>
-        storedNoteText(notes, noteId).pipe(
-          Effect.map((note) => `Close the Open Loop of ${note} as ${reason}`)
+        storedNotes(notes, [noteId], "Nothing was closed.").pipe(
+          Effect.flatMap(([note]) =>
+            note?.openLoop?._tag === "Open"
+              ? Effect.succeed(
+                  `Close the Open Loop of Note ${quoted(note.text)} as ${reason}`
+                )
+              : Effect.fail(
+                  new ToolFailed({ message: noOpenLoopMessage(noteId) })
+                )
+          )
         ),
       description:
         "Close the open Open Loop of one Note when the Owner says that it is done, dropped, or replaced. The Note stays. Fails with a message when no Note has the id or the Note has no open Open Loop. Say that it is closed only after it succeeded.",

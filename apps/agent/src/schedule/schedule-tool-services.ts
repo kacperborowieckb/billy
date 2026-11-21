@@ -1,5 +1,6 @@
 import type { DateTime, Effect, Option } from "effect";
 
+import type { ToolFailed } from "../model-gateway/agent-tool.ts";
 import type { TurnProgress } from "../personal-agent/turn-progress.ts";
 import type { MutedLookupFailed } from "../proactive/muted-open-loops.ts";
 import type { Redactor } from "../tracing/redactor.ts";
@@ -10,7 +11,7 @@ export interface ScheduleToolServices {
   readonly ownerTimeZone: Effect.Effect<Option.Option<DateTime.TimeZone.Named>>;
   readonly noteTexts: (
     noteIds: readonly string[]
-  ) => Effect.Effect<readonly string[]>;
+  ) => Effect.Effect<readonly string[], ToolFailed>;
   readonly mutedAmong: (
     noteIds: readonly string[]
   ) => Effect.Effect<readonly string[], MutedLookupFailed>;

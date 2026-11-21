@@ -154,7 +154,11 @@ export const muteProactiveMessageTool = (
     kinds,
     openLoopIds,
   }: ProactiveMutes) {
-    const loops = yield* storedNoteTexts(notes, openLoopIds);
+    const loops = yield* storedNoteTexts(
+      notes,
+      openLoopIds,
+      "Nothing was muted."
+    );
     return [
       ...kinds.map((kind) => `all Open Loops of kind ${quoted(kind)}`),
       ...loops,
@@ -169,8 +173,10 @@ export const muteProactiveMessageTool = (
     return callTargetsOf(input).pipe(
       Effect.flatMap(targetsText),
       Effect.map((targets) => `${verb} ${targets}`),
-      Effect.orElseSucceed(
-        () => `${verb} nothing: this call fails and changes nothing`
+      Effect.mapError((failure) =>
+        failure instanceof ToolFailed
+          ? failure
+          : new ToolFailed({ message: muteNotChangedMessage })
       )
     );
   };

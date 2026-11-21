@@ -4,11 +4,7 @@ import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { noteIdListSchema } from "./note-id-list-schema.ts";
-import {
-  openLoopText,
-  storedNoteText,
-  storedNoteTexts,
-} from "./note-summary.ts";
+import { openLoopText, storedNoteTexts } from "./note-summary.ts";
 import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import { OpenLoopInputSchema, openLoopRequestOf } from "./open-loop-input.ts";
@@ -58,42 +54,78 @@ const UpdateNoteInput = Schema.Struct({
   ),
 });
 
+type UpdateNoteRequest = typeof UpdateNoteInput.Type;
+
 export const updateNoteTool = (
   { notes, ownerTimeZone, progress, redactor }: NoteToolServices,
   eventId: string
-) =>
-  recordedTool(
+) => {
+  const checkedUpdate = Effect.fnUntraced(function* checkedUpdate({
+    text,
+    linkedNoteIds = [],
+    unlinkedNoteIds = [],
+    openLoop,
+  }: UpdateNoteRequest) {
+    if (
+      text === undefined &&
+      linkedNoteIds.length === 0 &&
+      unlinkedNoteIds.length === 0 &&
+      openLoop === undefined
+    ) {
+      return yield* new ToolFailed({ message: nothingToUpdateMessage });
+    }
+    const linkedAndUnlinked = linkedNoteIds.filter((linkedId) =>
+      unlinkedNoteIds.includes(linkedId)
+    );
+    if (linkedAndUnlinked.length > 0) {
+      return yield* new ToolFailed({
+        message: linkedAndUnlinkedMessage(linkedAndUnlinked),
+      });
+    }
+    return yield* openLoopRequestOf(openLoop, ownerTimeZone, {
+      toolName: updateNoteToolName,
+      consequence: "Nothing was changed.",
+    });
+  });
+
+  return recordedTool(
     { eventId, progress, redactor },
     {
       name: updateNoteToolName,
       riskClass: "change",
-      approvalSummary: ({
-        noteId,
-        text,
-        linkedNoteIds = [],
-        unlinkedNoteIds = [],
-        openLoop,
-      }) =>
-        Effect.all([
-          storedNoteText(notes, noteId),
-          storedNoteTexts(notes, linkedNoteIds),
-          storedNoteTexts(notes, unlinkedNoteIds),
-          ownerTimeZone,
-        ]).pipe(
-          Effect.map(([note, linked, unlinked, timeZone]) =>
-            [
-              `Change ${note}`,
-              ...(text === undefined ? [] : [`new text ${quoted(text)}`]),
-              ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
-              ...(unlinked.length === 0
-                ? []
-                : [`unlink from ${unlinked.join(", ")}`]),
-              ...(openLoop === undefined
-                ? []
-                : [openLoopText(openLoop, timeZone)]),
-            ].join(", ")
-          )
-        ),
+      approvalSummary: Effect.fnUntraced(function* updateSummaryEffect(input) {
+        yield* checkedUpdate(input);
+        const consequence = "Nothing was changed.";
+        const [note] = yield* storedNoteTexts(
+          notes,
+          [input.noteId],
+          consequence
+        );
+        const linked = yield* storedNoteTexts(
+          notes,
+          input.linkedNoteIds ?? [],
+          consequence
+        );
+        const unlinked = yield* storedNoteTexts(
+          notes,
+          input.unlinkedNoteIds ?? [],
+          consequence
+        );
+        const timeZone = yield* ownerTimeZone;
+        return [
+          `Change ${note ?? `Note ${input.noteId}`}`,
+          ...(input.text === undefined
+            ? []
+            : [`new text ${quoted(input.text)}`]),
+          ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
+          ...(unlinked.length === 0
+            ? []
+            : [`unlink from ${unlinked.join(", ")}`]),
+          ...(input.openLoop === undefined
+            ? []
+            : [openLoopText(input.openLoop, timeZone)]),
+        ].join(", ");
+      }),
       description:
         "Change one existing Note after a follow-up of the Owner: replace its text, link or unlink other Notes, or open or change its Open Loop. Creates no new Note. Search for the Note first when you do not know its id.",
       inputSchema: UpdateNoteInput,
@@ -102,34 +134,9 @@ export const updateNoteTool = (
           unknownNotesConsequence: "Nothing was changed.",
           otherwise: noteNotUpdatedMessage,
         }),
-      work: Effect.fnUntraced(function* updateNoteEffect({
-        noteId,
-        text,
-        linkedNoteIds,
-        unlinkedNoteIds,
-        openLoop,
-      }) {
-        if (
-          text === undefined &&
-          (linkedNoteIds ?? []).length === 0 &&
-          (unlinkedNoteIds ?? []).length === 0 &&
-          openLoop === undefined
-        ) {
-          return yield* new ToolFailed({ message: nothingToUpdateMessage });
-        }
-        const linkedAndUnlinked = (linkedNoteIds ?? []).filter((linkedId) =>
-          (unlinkedNoteIds ?? []).includes(linkedId)
-        );
-        if (linkedAndUnlinked.length > 0) {
-          return yield* new ToolFailed({
-            message: linkedAndUnlinkedMessage(linkedAndUnlinked),
-          });
-        }
-        const openLoopRequest = yield* openLoopRequestOf(
-          openLoop,
-          ownerTimeZone,
-          { toolName: updateNoteToolName, consequence: "Nothing was changed." }
-        );
+      work: Effect.fnUntraced(function* updateNoteEffect(input) {
+        const openLoopRequest = yield* checkedUpdate(input);
+        const { noteId, text, linkedNoteIds, unlinkedNoteIds } = input;
         const { note, linkedNoteIds: linked } = yield* notes.update({
           noteId,
           eventId,
@@ -149,3 +156,4 @@ export const updateNoteTool = (
       }),
     }
   );
+};

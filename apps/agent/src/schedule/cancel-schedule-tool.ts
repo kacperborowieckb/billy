@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { noActiveScheduleMessage } from "./schedule-presentation.ts";
-import { storedScheduleText } from "./schedule-summary.ts";
+import { activeScheduleText } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
 
 export const cancelScheduleToolName = "cancel_schedule";
@@ -21,7 +21,7 @@ const CancelScheduleInput = Schema.Struct({
 });
 
 export const cancelScheduleTool = (
-  { schedules, progress, redactor }: ScheduleToolServices,
+  { schedules, ownerTimeZone, progress, redactor }: ScheduleToolServices,
   eventId: string
 ) =>
   recordedTool(
@@ -30,7 +30,10 @@ export const cancelScheduleTool = (
       name: cancelScheduleToolName,
       riskClass: "change",
       approvalSummary: ({ scheduleId }) =>
-        storedScheduleText(schedules, scheduleId).pipe(
+        ownerTimeZone.pipe(
+          Effect.flatMap((timeZone) =>
+            activeScheduleText(schedules, scheduleId, timeZone)
+          ),
           Effect.map((schedule) => `Cancel ${schedule}`)
         ),
       description:

@@ -84,7 +84,8 @@ export const scheduleToolServicesOf = (
     Effect.provideService(OwnerPreferences, preferences),
     Effect.orDie
   ),
-  noteTexts: (noteIds) => storedNoteTexts(notes, noteIds),
+  noteTexts: (noteIds) =>
+    storedNoteTexts(notes, noteIds, "No Schedule was set."),
   mutedAmong: (noteIds) => mutedAmong({ preferences, notes }, noteIds),
   progress,
   redactor,

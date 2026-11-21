@@ -63,15 +63,6 @@ const CaptureNoteInput = Schema.Struct({
 const keptTextOf = (source: NoteSource, text: string) =>
   source.forwardedText ?? text;
 
-const keptTextOfCall = (
-  burst: Burst,
-  text: string,
-  message: number | undefined
-) => {
-  const chosen = noteSourceOfBurst(burst, message);
-  return chosen._tag === "Named" ? keptTextOf(chosen.source, text) : text;
-};
-
 const sourceOrRefusal = (
   chosen: BurstNoteSource,
   message: number | undefined
@@ -98,19 +89,34 @@ export const captureNoteTool = (
       riskClass: "change",
       marksItsWorkUntrusted: ({ linkedNoteIds }) =>
         (linkedNoteIds ?? []).length === 0,
-      approvalSummary: ({ text, url, message, openLoop, linkedNoteIds = [] }) =>
-        Effect.all([storedNoteTexts(notes, linkedNoteIds), ownerTimeZone]).pipe(
-          Effect.map(([linked, timeZone]) =>
-            [
-              `Keep Note ${quoted(keptTextOfCall(burst, text, message))}`,
-              ...(url === undefined ? [] : [`with link ${url}`]),
-              ...(openLoop === undefined
-                ? []
-                : [openLoopText(openLoop, timeZone)]),
-              ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
-            ].join(", ")
-          )
-        ),
+      approvalSummary: Effect.fnUntraced(function* captureSummaryEffect({
+        text,
+        url,
+        message,
+        openLoop,
+        linkedNoteIds = [],
+      }) {
+        const source = yield* sourceOrRefusal(
+          noteSourceOfBurst(burst, message),
+          message
+        );
+        yield* openLoopRequestOf(openLoop, ownerTimeZone, {
+          toolName: captureNoteToolName,
+          consequence: "Nothing was kept.",
+        });
+        const linked = yield* storedNoteTexts(
+          notes,
+          linkedNoteIds,
+          "Nothing was kept."
+        );
+        const timeZone = yield* ownerTimeZone;
+        return [
+          `Keep Note ${quoted(keptTextOf(source, text))}`,
+          ...(url === undefined ? [] : [`with link ${url}`]),
+          ...(openLoop === undefined ? [] : [openLoopText(openLoop, timeZone)]),
+          ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
+        ].join(", ");
+      }),
       description:
         "Keep a Note for the Owner at once: a task, a text, a link, or a text with a link. Call it without asking the Owner first. Does not open the link. Give openLoop when the Note is something to do or to come back to; give none for a fact. Fails with a message when a due time is given and the time zone of the Owner is not known.",
       inputSchema: CaptureNoteInput,
