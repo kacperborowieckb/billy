@@ -273,7 +273,9 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     expect(fakeTelegram.edits[0]?.body.text).toBe(
       `This waits for your Approval:\n${reminderSummary}\n${rejectedStatus}`
     );
-    expect(fakeTelegram.edits[0]?.body.reply_markup?.inline_keyboard).toEqual([]);
+    expect(fakeTelegram.edits[0]?.body.reply_markup?.inline_keyboard).toEqual(
+      []
+    );
     const [approval] = await pendingApprovalsOf(ownerId);
     expect(approval?.state).toBe("rejected");
     expect(await journalOf(ownerId, "ApprovalRun")).toEqual([]);
