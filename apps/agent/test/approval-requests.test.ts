@@ -12,7 +12,10 @@ import {
 } from "../src/notes/update-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { agentToolServices } from "../src/personal-agent/agent-tool-services.ts";
-import { outcomeWhileApprovalWaitsMessage } from "../src/personal-agent/outcome-refusal.ts";
+import {
+  outcomeAfterRefusedCallMessage,
+  outcomeWhileApprovalWaitsMessage,
+} from "../src/personal-agent/outcome-refusal.ts";
 import { ownerMessageTools } from "../src/personal-agent/owner-message-tools.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { reactToolName } from "../src/personal-agent/react-tool.ts";
@@ -502,6 +505,27 @@ describe("Approval for a forwarded message", () => {
     expect(await pendingApprovalsOf(ownerId)).toEqual([]);
     expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
     expect(toolResultsSentToModel()).toContain("too long to show to the Owner");
+  });
+
+  it("does not tell the model that Approval waits when code refused every gated call of the step", async () => {
+    const ownerId = await ownerInWarsaw(9116);
+    scriptModel([
+      {
+        callTools: [
+          { tool: quietHoursToolName, input: { end: "09:00" } },
+          { tool: reactToolName, input: { emoji: "👍" } },
+        ],
+      },
+      { say: "I could not change your Quiet Hours." },
+    ]);
+
+    await forward(9116);
+    await waitForSends(1);
+
+    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+    const results = toolResultsOfLastModelCall();
+    expect(results).toContain(outcomeAfterRefusedCallMessage);
+    expect(results).not.toContain(outcomeWhileApprovalWaitsMessage);
   });
 
   it("creates no Pending Approval for a call whose input holds an Operator secret, and tells the model", async () => {

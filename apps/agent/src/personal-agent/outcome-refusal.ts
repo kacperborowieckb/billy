@@ -16,6 +16,9 @@ import {
 export const unknownOutcomeToolMessage =
   "This tool is not available. Answer the Owner with a text.";
 
+export const outcomeAfterRefusedCallMessage =
+  "Another call in this step did not run. Answer the Owner with a short text that says what you could not do.";
+
 export const outcomeWhileApprovalWaitsMessage =
   "A call in this Turn waits for the Owner's Approval, so the Owner must get a text reply with the Approval buttons. Answer the Owner with a short text that says what waits for their Approval.";
 

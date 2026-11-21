@@ -22,6 +22,7 @@ import {
 import type { DecidedOutcome } from "./decided-outcome.ts";
 import {
   defaultReactionAllowed,
+  outcomeAfterRefusedCallMessage,
   outcomeWhileApprovalWaitsMessage,
   refusalOfOutcomeTool,
 } from "./outcome-refusal.ts";
@@ -131,7 +132,13 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         refused.push(...calls.map((call) => call.name));
         earlier = closeLastStep(steps, [
           ...answered.results,
-          ...sameOutputFor(calls, outcomeWhileApprovalWaitsMessage, true),
+          ...sameOutputFor(
+            calls,
+            drafts.length > 0
+              ? outcomeWhileApprovalWaitsMessage
+              : outcomeAfterRefusedCallMessage,
+            true
+          ),
         ]);
         if (earlier.length >= request.stepLimit) {
           return stepLimitFailure(reply, earlier);
