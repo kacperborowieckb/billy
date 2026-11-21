@@ -64,7 +64,9 @@ export const setTimeZoneTool = (
       riskClass: "change",
       approvalSummary: ({ timeZone }) =>
         Option.isSome(namedTimeZone(timeZone))
-          ? Effect.succeed(`Set the time zone to ${timeZone}`)
+          ? Effect.succeed(
+              `Set the time zone to ${timeZone}. Repeating Schedules keep their local time in the new time zone, and the daily Brief is set when there is none`
+            )
           : Effect.fail(
               new ToolFailed({ message: invalidTimeZoneMessage(timeZone) })
             ),

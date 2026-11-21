@@ -64,7 +64,9 @@ const quietHoursSummaryOf = (input: typeof QuietHoursInput.Type) => {
     onNone: () =>
       Effect.fail(new ToolFailed({ message: invalidQuietHoursMessage })),
     onSome: ({ start, end }) =>
-      Effect.succeed(`Set the Quiet Hours from ${start} to ${end}`),
+      Effect.succeed(
+        `Set the Quiet Hours from ${start} to ${end}. A daily Brief at the old end of Quiet Hours moves to the new end`
+      ),
   });
 };
 
