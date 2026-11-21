@@ -68,7 +68,7 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 
 ## Safety and quality
 
-- **Risk Class**: the class that code gives to a tool call: `read` (it never changes Owner data), `change`, `approve` (it always needs Approval), or `blocked` (it never runs, and the model gets the reason). Each tool declares one. A tool can also give a function from its input to a Risk Class, which can only raise the declared class. The model never sets it. The gate decides each call from its Risk Class and the Trust Level of the Turn (decision 0027).
+- **Risk Class**: the class that code gives to a tool call: `read` (it never changes Owner data), `change`, `approve` (it always needs Approval), or `blocked` (it never runs; for a call with valid JSON input, the model gets the reason). Each tool declares one. A tool can also give a function from its input to a Risk Class, which can only raise the declared class. The model never sets it. The gate decides each call from its Risk Class and the Trust Level of the Turn (decision 0027).
 - **Pending Approval**: one frozen tool call that waits for the Owner's answer, with its summary, its state, and its expiry. Code writes the summary; the model never writes it.
 - **Approval**: the Owner's answer to a Pending Approval: approved or rejected. The Owner gives it with a Channel button, or with a typed yes when the Trust Level of the Turn is `owner` and exactly one Pending Approval is `pending`. Code runs an approved call once, with the exact input that code froze.
 - **Auto-review**: a separate reviewer model that checks each call that needs Approval before the Owner sees it. It comes after the first `approve`-class tool ([#140](https://github.com/kacperborowieckb/billy/issues/140)).
