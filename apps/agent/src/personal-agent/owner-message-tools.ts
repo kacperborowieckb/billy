@@ -47,7 +47,7 @@ import {
   setScheduleToolName,
 } from "../schedule/set-schedule-tool.ts";
 import { ownerTimeZone } from "../time/owner-current-time.ts";
-import { trustLevelOfBurst, turnEventOf } from "./burst.ts";
+import { turnEventOf } from "./burst.ts";
 import type { Burst } from "./burst.ts";
 import { reactTool, reactToolName } from "./react-tool.ts";
 import { staySilentTool, staySilentToolName } from "./stay-silent-tool.ts";
@@ -121,72 +121,62 @@ export const ownerMessageTools = (
       { ...noteServices, ownerTimeZone: scheduleServices.ownerTimeZone },
       burst
     ),
-    ...(trustLevelOfBurst(burst) === "owner"
-      ? {
-          [updateProfileToolName]: updateProfileTool(
-            {
-              profile,
-              progress,
-              redactor,
-              characterLimit: behavior.maxProfileCharacters,
-            },
-            eventId
-          ),
-          [setTimeZoneToolName]: setTimeZoneTool(
-            {
-              preferences,
-              schedules,
-              journal,
-              progress,
-              redactor,
-              defaultQuietHours: behavior.quietHours,
-            },
-            eventId
-          ),
-          [quietHoursToolName]: quietHoursTool(
-            {
-              preferences,
-              schedules,
-              journal,
-              progress,
-              redactor,
-              defaultQuietHours: behavior.quietHours,
-            },
-            eventId
-          ),
-          [proactiveMessageBudgetToolName]: proactiveMessageBudgetTool(
-            {
-              preferences,
-              progress,
-              redactor,
-              defaultSends: behavior.proactiveMessageBudget,
-            },
-            eventId
-          ),
-          [muteProactiveMessageToolName]: muteProactiveMessageTool(
-            {
-              preferences,
-              notes: noteServices.notes,
-              proactiveMessages,
-              progress,
-              redactor,
-            },
-            eventId,
-            burst.map((event) => event.eventId)
-          ),
-          [setScheduleToolName]: setScheduleTool(scheduleServices, eventId),
-          [listSchedulesToolName]: listSchedulesTool(scheduleServices, eventId),
-          [changeScheduleToolName]: changeScheduleTool(
-            scheduleServices,
-            eventId
-          ),
-          [cancelScheduleToolName]: cancelScheduleTool(
-            scheduleServices,
-            eventId
-          ),
-          [staySilentToolName]: staySilentTool,
-          [reactToolName]: reactTool,
-        }
-      : {}),
+    [updateProfileToolName]: updateProfileTool(
+      {
+        profile,
+        progress,
+        redactor,
+        characterLimit: behavior.maxProfileCharacters,
+      },
+      eventId
+    ),
+    [setTimeZoneToolName]: setTimeZoneTool(
+      {
+        preferences,
+        schedules,
+        journal,
+        progress,
+        redactor,
+        defaultQuietHours: behavior.quietHours,
+      },
+      eventId
+    ),
+    [quietHoursToolName]: quietHoursTool(
+      {
+        preferences,
+        schedules,
+        journal,
+        progress,
+        redactor,
+        defaultQuietHours: behavior.quietHours,
+      },
+      eventId
+    ),
+    [proactiveMessageBudgetToolName]: proactiveMessageBudgetTool(
+      {
+        preferences,
+        progress,
+        redactor,
+        defaultSends: behavior.proactiveMessageBudget,
+      },
+      eventId
+    ),
+    [muteProactiveMessageToolName]: muteProactiveMessageTool(
+      {
+        preferences,
+        notes: noteServices.notes,
+        proactiveMessages,
+        progress,
+        redactor,
+      },
+      eventId,
+      burst.map((event) => event.eventId)
+    ),
+    [setScheduleToolName]: setScheduleTool(scheduleServices, eventId),
+    [listSchedulesToolName]: listSchedulesTool(scheduleServices, eventId),
+    [changeScheduleToolName]: changeScheduleTool(scheduleServices, eventId),
+    [cancelScheduleToolName]: cancelScheduleTool(scheduleServices, eventId),
+    [staySilentToolName]: staySilentTool,
+    [reactToolName]: reactTool,
   };
 };

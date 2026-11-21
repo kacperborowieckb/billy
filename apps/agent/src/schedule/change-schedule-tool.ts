@@ -15,6 +15,11 @@ import {
   noActiveScheduleMessage,
   scheduleOf,
 } from "./schedule-presentation.ts";
+import {
+  scheduleActionText,
+  scheduleDueText,
+  storedScheduleText,
+} from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
 
 export const changeScheduleToolName = "change_schedule";
@@ -81,6 +86,21 @@ export const changeScheduleTool = (
     {
       name: changeScheduleToolName,
       riskClass: "change",
+      approvalSummary: ({ scheduleId, action, localDueTime, repeat }) =>
+        storedScheduleText(schedules, scheduleId).pipe(
+          Effect.map((schedule) => {
+            const due = scheduleDueText({ localDueTime, repeat });
+            const changes = [
+              ...(action === undefined
+                ? []
+                : [`to ${scheduleActionText(action)}`]),
+              ...(due === "" ? [] : [`due ${due}`]),
+            ];
+            return changes.length === 0
+              ? `Change ${schedule} with no new value`
+              : `Change ${schedule} ${changes.join(", ")}`;
+          })
+        ),
       description:
         "Change the Action, the local due time or the repeat rule, or both the Action and one of those, of an active Schedule of the Owner. The Action can change between SendText and RunPrompt, or keep its kind with new text or a new prompt. The Schedule fires at the new time and not at the old time. Fails with a message, and changes nothing, in these cases. No active Schedule has the id. The time zone is not known. The new time is in the past or is not real. The change would make a new Scheduled Task, and the limit of active Scheduled Tasks is reached. Say that the Schedule is changed only after this succeeded, and give the local date, weekday, and time that it returns.",
       inputSchema: ChangeScheduleInput,

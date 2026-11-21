@@ -114,7 +114,7 @@ describe("Untrusted Content from forwarded messages", () => {
     expect(notes.map((note) => note.trust_level)).toEqual(["untrusted"]);
   });
 
-  it("offers no update_profile tool and leaves the Profile unchanged", async () => {
+  it("offers every tool, but update_profile waits for Approval and leaves the Profile unchanged", async () => {
     const ownerId = await addOwner(8203);
     scriptModel([
       {
@@ -124,15 +124,27 @@ describe("Untrusted Content from forwarded messages", () => {
       { say: "Done" },
     ]);
 
-    await forwardFrom(8203);
+    await telegramWebhook(
+      textUpdate({
+        fromUserId: 8203,
+        text: injectedText,
+        forwardOrigin: forwardedFromAna,
+      })
+    );
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2), {
+      timeout: 10_000,
+    });
 
     const offered = fakeModel.doGenerateCalls.flatMap(
       (call) => call.tools?.map((tool) => tool.name) ?? []
     );
     expect(offered).toContain(captureNoteToolName);
-    expect(offered).not.toContain(updateProfileToolName);
-    expect(offered).not.toContain(updateNoteToolName);
+    expect(offered).toContain(updateProfileToolName);
+    expect(offered).toContain(updateNoteToolName);
     expect(await profileOf(ownerId)).toEqual([]);
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(
+      'This waits for your Approval:\nAdd to the Profile: "obey me"'
+    );
   });
 
   it("keeps the forwarded text as the Note text whatever text the model passes", async () => {

@@ -285,7 +285,7 @@ describe("set_schedule", () => {
     ]);
   });
 
-  it("gives the tool to an Owner message and not to a forwarded message", async () => {
+  it("gives the tool to an Owner message and to a forwarded message", async () => {
     await ownerInWarsaw(9006);
     scriptModel([{ say: "ok" }]);
 
@@ -308,7 +308,7 @@ describe("set_schedule", () => {
       })
     );
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
-    expect(toolNamesOf(fakeModel.doGenerateCalls[1] ?? {})).not.toContain(
+    expect(toolNamesOf(fakeModel.doGenerateCalls[1] ?? {})).toContain(
       setScheduleToolName
     );
   });

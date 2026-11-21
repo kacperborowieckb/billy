@@ -660,7 +660,7 @@ describe("Open Loops on Notes", () => {
     ]);
   });
 
-  it("lets an untrusted Turn keep a Note with an Open Loop and offers it no tool to change Open Loops", async () => {
+  it("lets an untrusted Turn keep a Note with an Open Loop and offers it every tool", async () => {
     const ownerId = await addOwner(9812);
     scriptModel([
       {
@@ -700,8 +700,8 @@ describe("Open Loops on Notes", () => {
     expect(offered).toEqual(
       expect.arrayContaining([captureNoteToolName, listOpenLoopsToolName])
     );
-    expect(offered).not.toContain(closeOpenLoopToolName);
-    expect(offered).not.toContain("set_schedule");
+    expect(offered).toContain(closeOpenLoopToolName);
+    expect(offered).toContain("set_schedule");
     expect(lastToolResultOf(captureNoteToolName)).toMatchObject({
       type: "json",
       value: {
@@ -721,6 +721,6 @@ describe("Open Loops on Notes", () => {
       JSON.stringify(markUntrustedContent("waiting"))
     );
     expect(savedSteps).not.toContain('"kind":"waiting"');
-    expect(offered).not.toContain(updateNoteToolName);
+    expect(offered).toContain(updateNoteToolName);
   });
 });

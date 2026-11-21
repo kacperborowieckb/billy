@@ -42,7 +42,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 ### What the Owner sees
 
 - Each tool that can need Approval gives a code function that writes its frozen input in plain words (the summary). The model's text is never the summary.
-- A Turn with drafts sends one Delivery: the model's reply text, if any, then for each draft its summary and one row of Approve and Reject buttons. There is no "Approve all".
+- A Turn with drafts sends one Delivery: the model's reply text, if any, then for each draft its summary and one row of Approve and Reject buttons. There is no "Approve all". In Telegram, the reply text comes first, then one Approval message that has only the summaries and the rows. So code can later edit the Approval message alone, and its Channel message id is the id of that last message.
 - A Turn with drafts cannot end with `stay_silent` or with a reaction only. Code refuses them.
 - The Channel interface adds three operations: send with Approval buttons, edit the Approval message with a status line and no buttons, and answer a button press. Telegram uses inline keyboards, `editMessageText` or `editMessageReplyMarkup`, and `answerCallbackQuery`. The webhook setup receives `callback_query` updates.
 

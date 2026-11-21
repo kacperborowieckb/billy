@@ -13,8 +13,16 @@ import type {
   ReasoningEffort,
   ResolvedRoute,
 } from "./model-provider.ts";
-import { modelStepOf, pendingToolCallsOf } from "./model-step-of.ts";
-import type { ModelStep, PendingToolCall } from "./model-step.ts";
+import {
+  approvalRequestedCallsOf,
+  modelStepOf,
+  pendingToolCallsOf,
+} from "./model-step-of.ts";
+import type {
+  ApprovalRequestedCall,
+  ModelStep,
+  PendingToolCall,
+} from "./model-step.ts";
 import { ModelUnavailable } from "./model-unavailable.ts";
 import { StepLimitReached } from "./step-limit-reached.ts";
 import {
@@ -40,6 +48,7 @@ export interface ModelReply {
   readonly usage: Usage;
   readonly steps: readonly ModelStep[];
   readonly endedWith: readonly PendingToolCall[];
+  readonly awaitingApproval: readonly ApprovalRequestedCall[];
 }
 
 const attemptTimeout = `${attemptTimeoutMillis} millis` as const;
@@ -113,7 +122,7 @@ const replyOf = (
   route: ResolvedRoute,
   text: string,
   steps: readonly ModelStep[]
-): Omit<ModelReply, "endedWith"> => ({
+): Omit<ModelReply, "endedWith" | "awaitingApproval"> => ({
   modelId: route.model.modelId,
   reasoningEffort: route.reasoningEffort,
   text,
@@ -172,7 +181,13 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const lastStep = result.steps.at(-1);
       const endedWith =
         lastStep === undefined ? [] : pendingToolCallsOf(lastStep);
-      if (lastStep?.finishReason === "tool-calls" && endedWith.length === 0) {
+      const awaitingApproval =
+        lastStep === undefined ? [] : approvalRequestedCallsOf(lastStep);
+      if (
+        lastStep?.finishReason === "tool-calls" &&
+        endedWith.length === 0 &&
+        awaitingApproval.length === 0
+      ) {
         return yield* new StepLimitReached({
           modelId,
           reasoningEffort,
@@ -183,6 +198,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       return {
         ...replyOf(route, result.text, steps),
         endedWith,
+        awaitingApproval,
       } satisfies ModelReply;
     });
 

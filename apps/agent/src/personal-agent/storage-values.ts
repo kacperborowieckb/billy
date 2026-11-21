@@ -72,3 +72,14 @@ export const proactiveFoldReasons = [
 export const proactiveMuteChanges = ["muted", "unmuted"] as const;
 
 export type ProactiveOutcome = (typeof proactiveOutcomes)[number];
+
+export const pendingApprovalStates = [
+  "draft",
+  "pending",
+  "approved",
+  "rejected",
+  "expired",
+  "executed",
+  "failed",
+  "unconfirmed",
+] as const;

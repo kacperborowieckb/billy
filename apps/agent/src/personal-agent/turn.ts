@@ -82,6 +82,7 @@ const answer = (
         inputs: burstInputs(burst),
         tools: { ...tools, ...ownerTools },
         trustLevel: trustLevelOfBurst(burst),
+        asksOwnerForApproval: true,
         prepare: Effect.succeed({
           ...preparation,
           situation: [

@@ -136,6 +136,11 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     scheduleId: Schema.String,
     nextDueAt: Schema.String,
   },
+  ApprovalPending: {
+    eventId: Schema.String,
+    pendingApprovalId: Schema.String,
+    toolName: Schema.String,
+  },
   OwnerPreferenceChanged: {
     eventId: Schema.String,
     preference: Schema.Literals(ownerPreferenceKeys),

@@ -12,13 +12,13 @@ import { Journal, JournalRecordSchema } from "../src/journal/journal.ts";
 import type { JournalEntry, JournalRecord } from "../src/journal/journal.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import type { Conversation } from "../src/personal-agent/conversation.ts";
+import { noOwnerConversationReason } from "../src/personal-agent/delivery-send.ts";
 import {
   deliveryStateOf,
   deliveryStateOfEntries,
   fail,
   failWithNotice,
   honestFailureText,
-  noOwnerConversationReason,
   recordOutcome,
   recordUnconfirmedSend,
   send,
@@ -218,6 +218,10 @@ const sentTexts: string[] = [];
 
 const testChannel = Layer.succeed(Channel, {
   send: (message) => {
+    sentTexts.push(message.text);
+    return answer.next === "never" ? Effect.never : Effect.succeed(answer.next);
+  },
+  sendWithApprovals: (message) => {
     sentTexts.push(message.text);
     return answer.next === "never" ? Effect.never : Effect.succeed(answer.next);
   },

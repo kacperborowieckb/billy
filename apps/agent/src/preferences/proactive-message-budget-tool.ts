@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 
+import { countOf } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import type { TurnProgress } from "../personal-agent/turn-progress.ts";
@@ -49,6 +50,12 @@ export const proactiveMessageBudgetTool = (
     {
       name: proactiveMessageBudgetToolName,
       riskClass: "change",
+      approvalSummary: ({ sends }) =>
+        Effect.succeed(
+          sends === undefined
+            ? "Show the Budget of Proactive Messages"
+            : `Set the Budget of Proactive Messages to ${countOf(sends, "message", "messages")} a day`
+        ),
       description:
         "Read or change the Budget of the Owner: the most Proactive Messages that you send in one local day. Call it with no input to read it. To change it, give sends as a whole number. For example, when the Owner says to message them at most twice a day, give sends 2. A Proactive Message over the Budget is not sent alone: it goes into the next Brief. The Brief still comes. Reminders and Scheduled Tasks that the Owner set do not count. It returns the Budget, its source (owner or default), and whether it changed.",
       inputSchema: ProactiveMessageBudgetInput,

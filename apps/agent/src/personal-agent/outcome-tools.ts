@@ -1,19 +1,23 @@
-import type { JSONValue, ModelMessage } from "ai";
+import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
+import type { DraftApproval } from "../approval/pending-approvals.ts";
 import { Channel } from "../channels/channel.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import { ModelGateway } from "../model-gateway/model-gateway.ts";
-import type { ModelRequest } from "../model-gateway/model-gateway.ts";
 import type {
-  ModelStep,
-  PendingToolCall,
-} from "../model-gateway/model-step.ts";
+  ModelReply,
+  ModelRequest,
+} from "../model-gateway/model-gateway.ts";
+import type { ModelStep } from "../model-gateway/model-step.ts";
 import { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
 import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
+import { answerApprovalRequests } from "./approval-step.ts";
+import type { ApprovalAsking } from "./approval-step.ts";
 import {
   defaultReactionAllowed,
+  outcomeWhileApprovalWaitsMessage,
   refusalOfOutcomeTool,
 } from "./outcome-refusal.ts";
 import {
@@ -22,6 +26,7 @@ import {
   requestedEmojiOf,
 } from "./react-tool.ts";
 import { silenceAcceptedOutput } from "./stay-silent-tool.ts";
+import { closeLastStep, sameOutputFor } from "./step-closing.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import type {
   ModelFailure,
@@ -34,63 +39,8 @@ export interface DecidedOutcome {
   readonly kind: OutcomeKind | undefined;
   readonly reaction?: ReactionOutcome;
   readonly refusedOutcomeTools: readonly string[];
+  readonly drafts: readonly DraftApproval[];
 }
-
-const toolResultMessage = (
-  call: PendingToolCall,
-  output: JSONValue
-): ModelMessage => ({
-  role: "tool",
-  content: [
-    {
-      type: "tool-result",
-      toolCallId: call.callId,
-      toolName: call.name,
-      output:
-        typeof output === "string"
-          ? { type: "text", value: output }
-          : { type: "json", value: output },
-    },
-  ],
-});
-
-interface OutcomeToolResults {
-  readonly calls: readonly PendingToolCall[];
-  readonly output: JSONValue;
-  readonly refused: boolean;
-}
-
-const closeLastStep = (
-  steps: readonly ModelStep[],
-  { calls, output, refused }: OutcomeToolResults
-): readonly ModelStep[] => {
-  const last = steps.at(-1);
-  if (last === undefined) {
-    return steps;
-  }
-  const outputText =
-    typeof output === "string" ? output : JSON.stringify(output);
-  return [
-    ...steps.slice(0, -1),
-    {
-      ...last,
-      toolCalls: [
-        ...last.toolCalls,
-        ...calls.map((call) => ({
-          callId: call.callId,
-          name: call.name,
-          input: call.input,
-          output: outputText,
-          failed: refused,
-        })),
-      ],
-      responseMessages: [
-        ...last.responseMessages,
-        ...calls.map((call) => toolResultMessage(call, output)),
-      ],
-    },
-  ];
-};
 
 const withEarlierSteps = (
   error: ModelFailure,
@@ -116,6 +66,7 @@ interface OutcomeGeneration {
   readonly request: ModelRequest;
   readonly tools: AgentTools;
   readonly defaultReaction: string;
+  readonly approvalAsking: ApprovalAsking;
 }
 
 export const generateWithOutcomeTools = Effect.fnUntraced(
@@ -125,11 +76,30 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     request,
     tools,
     defaultReaction,
+    approvalAsking,
   }: OutcomeGeneration) {
     const modelGateway = yield* ModelGateway;
     const channel = yield* Channel;
     let earlier: readonly ModelStep[] = [];
     const refused: string[] = [];
+    const drafts: DraftApproval[] = [];
+    const stepLimitFailure = (
+      reply: ModelReply,
+      steps: readonly ModelStep[]
+    ): DecidedOutcome => ({
+      outcome: {
+        _tag: "ModelFailed",
+        error: new StepLimitReached({
+          modelId: reply.modelId,
+          reasoningEffort: reply.reasoningEffort,
+          stepLimit: request.stepLimit,
+          steps,
+        }),
+      },
+      kind: undefined,
+      refusedOutcomeTools: refused,
+      drafts,
+    });
 
     for (;;) {
       const stepLimit = request.stepLimit - earlier.length;
@@ -159,6 +129,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           },
           kind: undefined,
           refusedOutcomeTools: refused,
+          drafts,
         } satisfies DecidedOutcome;
       }
       const { reply } = generated;
@@ -179,16 +150,35 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         kind,
         ...(reaction === undefined ? {} : { reaction }),
         refusedOutcomeTools: refused,
+        drafts,
       });
       const calls = reply.endedWith;
+      if (reply.awaitingApproval.length > 0) {
+        const answered = yield* answerApprovalRequests(
+          { asking: approvalAsking, turnEventId: eventId, tools },
+          reply.awaitingApproval
+        );
+        drafts.push(...answered.drafts);
+        refused.push(...calls.map((call) => call.name));
+        earlier = closeLastStep(steps, [
+          ...answered.results,
+          ...sameOutputFor(calls, outcomeWhileApprovalWaitsMessage, true),
+        ]);
+        if (earlier.length >= request.stepLimit) {
+          return stepLimitFailure(reply, earlier);
+        }
+        continue;
+      }
       if (calls.length === 0) {
         const reactionInstead =
+          drafts.length === 0 &&
           reply.text.trim().length === 0 &&
           (yield* defaultReactionAllowed({
             eventId,
             steps,
             earlierMessages,
             tools,
+            approvalWaits: false,
           }));
         return reactionInstead
           ? replied(steps, "reaction", { emoji: defaultReaction })
@@ -202,6 +192,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
             steps,
             earlierMessages,
             tools,
+            approvalWaits: drafts.length > 0,
           })
         )
       );
@@ -210,11 +201,10 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         const requested = requestedEmojiOf(calls);
         if (requested === undefined) {
           return replied(
-            closeLastStep(steps, {
-              calls,
-              output: silenceAcceptedOutput,
-              refused: false,
-            }),
+            closeLastStep(
+              steps,
+              sameOutputFor(calls, silenceAcceptedOutput, false)
+            ),
             "silent"
           );
         }
@@ -224,31 +214,18 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           defaultReaction
         );
         return replied(
-          closeLastStep(steps, {
-            calls,
-            output: reactionAcceptedOutput(reaction.emoji),
-            refused: false,
-          }),
+          closeLastStep(
+            steps,
+            sameOutputFor(calls, reactionAcceptedOutput(reaction.emoji), false)
+          ),
           "reaction",
           reaction
         );
       }
       refused.push(...calls.map((call) => call.name));
-      earlier = closeLastStep(steps, { calls, output: refusal, refused: true });
+      earlier = closeLastStep(steps, sameOutputFor(calls, refusal, true));
       if (earlier.length >= request.stepLimit) {
-        return {
-          outcome: {
-            _tag: "ModelFailed",
-            error: new StepLimitReached({
-              modelId: reply.modelId,
-              reasoningEffort: reply.reasoningEffort,
-              stepLimit: request.stepLimit,
-              steps: earlier,
-            }),
-          },
-          kind: undefined,
-          refusedOutcomeTools: refused,
-        } satisfies DecidedOutcome;
+        return stepLimitFailure(reply, earlier);
       }
     }
   }

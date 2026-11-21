@@ -155,7 +155,7 @@
     },
     {
       "id": "approval",
-      "purpose": "The Risk Class of a tool call (read, change, approve, or blocked) and the gate. Every agent tool declares a Risk Class, and an optional function from its input can only raise it. The function runs only on an input that matches the input schema of the tool; any other input keeps the declared class, because the tool cannot run with it. The gate is one function from the tool, its input, and the Trust Level of the Turn to a decision: Run, or Deny with a reason that the model reads. Now it denies only a blocked call; Pending Approvals come with the later tickets of decision 0027.",
+      "purpose": "The Risk Class of a tool call (read, change, approve, or blocked) and the gate. Every agent tool declares a Risk Class, and an optional function from its input can only raise it. The function runs only on an input that matches the input schema of the tool; any other input keeps the declared class, because the tool cannot run with it. The gate is one function from the tool, its input, and the Trust Level of the Turn to a decision: Run, AskOwner, or Deny with a reason that the model reads. A change call in an untrusted Turn and every approve call ask the Owner, except a change call of a tool that marks its work untrusted (capture_note). Every tool that can need Approval gives a code function that writes its decoded input in plain words (the summary). When the SDK stops a call for Approval, code writes a draft Pending Approval (table pending_approvals, read through an Effect Schema) with the exact decoded input as frozen input, its summary, and an expiry from the Behavior Config, and the model gets the tool result that it waits for the Approval. A call whose input holds an Operator secret gets no Pending Approval and a refusal. The drafts of a Turn become pending, each with an ApprovalPending Journal Entry, when its Delivery with the Approval buttons is Sent. Answering and expiry come with the later tickets of decision 0027.",
       "roots": ["apps/agent/src/approval"],
       "adrs": ["docs/decisions/0027-actions-and-approval.md"]
     },
@@ -187,18 +187,19 @@
     },
     {
       "id": "channel",
-      "purpose": "The Channel send, reaction, and typing actions and the Telegram Channel: it decodes private text messages from Telegram updates, with the forward origin name (one line, at most 100 characters) of a forwarded message, and sends a plain-text message, split into parts within the Telegram limit of 4,096 characters. The send action takes an optional message to reply to; with none, the request has no reply parameters. A send is confirmed only with a Telegram message id. The reaction action (react) sets one emoji reaction on a message with Telegram setMessageReaction and is confirmed with Telegram ok. The Channel keeps the list of reactions that Telegram allows bots to use: allowedReaction drops variation selectors and skin tones and gives an allowed emoji, a close match from a small mapping, or nothing. The typing action (showTyping) sends Telegram sendChatAction with typing and fails with TypingNotShown when Telegram refuses it or cannot be reached; it is not a Delivery.",
+      "purpose": "The Channel send, reaction, and typing actions and the Telegram Channel: it decodes private text messages from Telegram updates, with the forward origin name (one line, at most 100 characters) of a forwarded message, and sends a plain-text message, split into parts within the Telegram limit of 4,096 characters. The send action takes an optional message to reply to; with none, the request has no reply parameters. A send is confirmed only with a Telegram message id. The send with Approval buttons (sendWithApprovals) sends the reply text, then one message with the summaries and a Telegram inline keyboard of one Approve and Reject row for each Pending Approval; the Approval message id is the id of that last message. The reaction action (react) sets one emoji reaction on a message with Telegram setMessageReaction and is confirmed with Telegram ok. The Channel keeps the list of reactions that Telegram allows bots to use: allowedReaction drops variation selectors and skin tones and gives an allowed emoji, a close match from a small mapping, or nothing. The typing action (showTyping) sends Telegram sendChatAction with typing and fails with TypingNotShown when Telegram refuses it or cannot be reached; it is not a Delivery.",
       "roots": ["apps/agent/src/channels"],
       "adrs": [
         "docs/decisions/0004-owners-and-channels.md",
         "docs/decisions/0009-agent-loop-and-client-boundaries.md",
         "docs/decisions/0023-reaction-outcome.md",
-        "docs/decisions/0024-reaction-plan-on-reply-planned.md"
+        "docs/decisions/0024-reaction-plan-on-reply-planned.md",
+        "docs/decisions/0027-actions-and-approval.md"
       ]
     },
     {
       "id": "behavior-config",
-      "purpose": "The typed Behavior Config defaults: the texting style, the tool step limit of a Turn, the size limit of the Profile in characters, and an optional default time zone that the Owner Preference overrides. proactiveDailyTokenBudget, proactiveResponseWindowMillis (24 hours), and the default quietHours (the Brief is at the end).",
+      "purpose": "The typed Behavior Config defaults: the texting style, the tool step limit of a Turn, the size limit of the Profile in characters, and an optional default time zone that the Owner Preference overrides. proactiveDailyTokenBudget, proactiveResponseWindowMillis (24 hours), the default quietHours (the Brief is at the end), and pendingApprovalExpiryMillis (24 hours), the default expiry of a Pending Approval.",
       "roots": ["apps/agent/src/behavior"],
       "adrs": [
         "docs/decisions/0013-schedules-and-time.md",

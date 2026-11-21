@@ -1,10 +1,12 @@
 import { Cause, Effect, Option, Schema } from "effect";
 
+import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { profileEntryKinds } from "../personal-agent/storage-values.ts";
 import { ProfileFull } from "./profile-full.ts";
 import type { ProfileToolServices } from "./profile-tool-services.ts";
+import type { ProfileEntry } from "./profile.ts";
 import { UnknownProfileEntry } from "./unknown-profile-entry.ts";
 
 export const updateProfileToolName = "update_profile";
@@ -73,6 +75,27 @@ export const updateProfileTool = (
     {
       name: updateProfileToolName,
       riskClass: "change",
+      approvalSummary: ({ action, kind, text, entryId }) =>
+        action === "add"
+          ? Effect.succeed(
+              `Add to the Profile${kind === "style_rule" ? " as a style rule" : ""}: ${quoted(text ?? "")}`
+            )
+          : profile.read.pipe(
+              Effect.map((entries) =>
+                Option.fromNullishOr(
+                  entries.find((entry) => entry.entryId === entryId)
+                )
+              ),
+              Effect.orElseSucceed(() => Option.none<ProfileEntry>()),
+              Effect.map(
+                Option.match({
+                  onNone: () =>
+                    `Remove from the Profile: entry ${entryId ?? ""}`,
+                  onSome: (entry) =>
+                    `Remove from the Profile: ${quoted(entry.text)}`,
+                })
+              )
+            ),
       description:
         "Add or remove one entry of the Profile: a core fact or a style rule about the Owner. The Profile is in every Turn, so keep only what the Owner states about themselves or asks for, and keep it short. Fails when the Profile has no room.",
       inputSchema: UpdateProfileInput,

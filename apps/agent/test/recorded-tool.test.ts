@@ -61,6 +61,8 @@ const inRecordedTool = async <A>(
               {
                 name: "keep_word",
                 riskClass: "change",
+                approvalSummary: ({ word }) =>
+                  Effect.succeed(`Keep the word "${word}"`),
                 description: "Keep a word",
                 inputSchema: WordInput,
                 failureMessage,
@@ -206,6 +208,8 @@ describe("Recorded tool", () => {
               {
                 name: captureNoteToolName,
                 riskClass: "change",
+                approvalSummary: ({ word }) =>
+                  Effect.succeed(`Keep the word "${word}"`),
                 description: "Keep a Note, then crash",
                 inputSchema: WordInput,
                 failureMessage,

@@ -15,6 +15,7 @@ export interface BehaviorConfig {
   readonly burstQuietMillis: number;
   readonly burstMaxWaitMillis: number;
   readonly burstMaxRestarts: number;
+  readonly pendingApprovalExpiryMillis: number;
   readonly quietHours: { readonly start: string; readonly end: string };
   readonly defaultTimeZone?: string | undefined;
 }
@@ -37,5 +38,6 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   burstQuietMillis: 2500,
   burstMaxWaitMillis: 10_000,
   burstMaxRestarts: 2,
+  pendingApprovalExpiryMillis: 24 * 60 * 60 * 1000,
   quietHours: { start: "22:00", end: "08:00" },
 };

@@ -387,7 +387,7 @@ describe("the Owner changes Quiet Hours in the chat", () => {
 });
 
 describe("an untrusted Turn", () => {
-  it("gets no Quiet Hours tool", async () => {
+  it("gets the Quiet Hours tool, where the gate decides each call", async () => {
     await addOwner(9730);
     scriptModel([{ say: "Kept" }]);
 
@@ -407,6 +407,6 @@ describe("an untrusted Turn", () => {
     const offered = fakeModel.doGenerateCalls.flatMap(
       (call) => call.tools?.map((tool) => tool.name) ?? []
     );
-    expect(offered).not.toContain(quietHoursToolName);
+    expect(offered).toContain(quietHoursToolName);
   });
 });

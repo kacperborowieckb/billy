@@ -1,4 +1,4 @@
-import { trustLevelOfBurst, turnEventOf } from "../personal-agent/burst.ts";
+import { turnEventOf } from "../personal-agent/burst.ts";
 import type { Burst } from "../personal-agent/burst.ts";
 import { captureNoteTool, captureNoteToolName } from "./capture-note-tool.ts";
 import {
@@ -21,12 +21,8 @@ export const noteToolsFor = (services: NoteToolServices, burst: Burst) => {
   const { eventId } = turnEventOf(burst);
   return {
     [captureNoteToolName]: captureNoteTool(services, burst),
-    ...(trustLevelOfBurst(burst) === "owner"
-      ? {
-          [updateNoteToolName]: updateNoteTool(services, eventId),
-          [closeOpenLoopToolName]: closeOpenLoopTool(services, eventId),
-        }
-      : {}),
+    [updateNoteToolName]: updateNoteTool(services, eventId),
+    [closeOpenLoopToolName]: closeOpenLoopTool(services, eventId),
     [searchNotesToolName]: searchNotesTool(services, eventId),
     [listLinkedNotesToolName]: listLinkedNotesTool(services, eventId),
     [listOpenLoopsToolName]: listOpenLoopsTool(services, eventId),

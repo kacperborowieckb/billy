@@ -10,16 +10,12 @@ import { TurnTraces } from "../tracing/turn-trace.ts";
 import type { TurnTrace } from "../tracing/turn-trace.ts";
 import { Conversation } from "./conversation.ts";
 import { lastOf, latestPlanOf, textPlanOf } from "./delivery-plans.ts";
-import { recordSend } from "./delivery-send.ts";
+import { sendPlanned } from "./delivery-send.ts";
 import { Inbox } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
-import { OwnerChannelConversation } from "./owner-channel-conversation.ts";
 
 export const honestFailureText =
   "Sorry, I could not answer that. Please try again in a moment.";
-
-export const noOwnerConversationReason =
-  "The Owner has no Channel conversation to send to yet";
 
 export const unconfirmedSendReason =
   "A send started but Telegram did not confirm it, so the agent did not send again";
@@ -136,45 +132,18 @@ export const deliveryStateOf = (eventId: string) =>
     Effect.map(deliveryStateOfEntries)
   );
 
-const destinationOf = Effect.fnUntraced(function* destinationOf(
-  event: InboxEvent
-) {
-  if (event._tag === "OwnerMessage") {
-    return {
-      conversationId: event.conversationId,
-      inReplyTo: event.channelMessageId,
-    };
-  }
-  const ownerConversation = yield* OwnerChannelConversation;
-  const current = yield* ownerConversation.current;
-  return current === undefined
-    ? undefined
-    : { conversationId: current.conversationId };
-});
-
 export const send = Effect.fnUntraced(function* send(
   event: InboxEvent,
   text: string,
   replyTo: InboxEvent = event
 ) {
-  const journal = yield* Journal;
   const channel = yield* Channel;
-
-  yield* journal.append({
-    _tag: "ReplyPlanned",
-    eventId: event.eventId,
+  return yield* sendPlanned({
+    event,
     text,
+    replyTo,
+    attempt: (destination) => channel.send({ ...destination, text }),
   });
-  const destination = yield* destinationOf(replyTo);
-  if (destination === undefined) {
-    yield* journal.append({
-      _tag: "ReplyFailed",
-      eventId: event.eventId,
-      reason: noOwnerConversationReason,
-    });
-    return { _tag: "Failed", reason: noOwnerConversationReason } as const;
-  }
-  return yield* recordSend(event, channel.send({ ...destination, text }));
 });
 
 const appendEntry = (record: JournalEntry["record"]) =>

@@ -3,11 +3,17 @@ import { Effect, Layer, Schema } from "effect";
 import { Channel } from "../channel.ts";
 import type {
   Delivery,
+  OutgoingApprovalMessage,
   OutgoingMessage,
   OutgoingReaction,
   ReactionDelivery,
 } from "../channel.ts";
 import { TypingNotShown } from "../typing-not-shown.ts";
+import {
+  approvalKeyboardOf,
+  approvalRequestText,
+} from "./approval-keyboard.ts";
+import type { InlineKeyboard } from "./approval-keyboard.ts";
 import { telegramReactionFor } from "./telegram-reactions.ts";
 
 export interface TelegramConfig {
@@ -63,7 +69,11 @@ const hasText = (part: string) => part.trim().length > 0;
 export const telegramParts = (text: string): readonly string[] =>
   splitAtLimit(text).filter(hasText);
 
-const sendMessageRequest = (config: TelegramConfig, message: OutgoingMessage) =>
+interface TelegramPart extends OutgoingMessage {
+  readonly keyboard?: InlineKeyboard;
+}
+
+const sendMessageRequest = (config: TelegramConfig, message: TelegramPart) =>
   new Request(`${config.apiUrl}/bot${config.botToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,6 +88,9 @@ const sendMessageRequest = (config: TelegramConfig, message: OutgoingMessage) =>
               allow_sending_without_reply: true,
             },
           }),
+      ...(message.keyboard === undefined
+        ? {}
+        : { reply_markup: { inline_keyboard: message.keyboard } }),
     }),
   });
 
@@ -100,7 +113,7 @@ const deliveryFrom = (response: Response) =>
     )
   );
 
-const sendPart = (config: TelegramConfig, message: OutgoingMessage) =>
+const sendPart = (config: TelegramConfig, message: TelegramPart) =>
   Effect.tryPromise(() =>
     (config.fetch ?? fetch)(sendMessageRequest(config, message))
   ).pipe(
@@ -110,20 +123,19 @@ const sendPart = (config: TelegramConfig, message: OutgoingMessage) =>
     })
   );
 
-const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
-  Effect.gen(function* sendEffect() {
-    const parts = telegramParts(message.text);
+const sendParts = (config: TelegramConfig, parts: readonly TelegramPart[]) =>
+  Effect.gen(function* sendPartsEffect() {
     const [first, ...rest] = parts;
     if (first === undefined) {
       return failed("The reply has no text");
     }
-    let delivery = yield* sendPart(config, { ...message, text: first });
+    let delivery = yield* sendPart(config, first);
     let sentParts = 1;
-    for (const text of rest) {
+    for (const part of rest) {
       if (delivery._tag === "Failed") {
         break;
       }
-      delivery = yield* sendPart(config, { ...message, text });
+      delivery = yield* sendPart(config, part);
       sentParts += 1;
     }
     if (delivery._tag === "Failed" && parts.length > 1) {
@@ -131,6 +143,26 @@ const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
     }
     return delivery;
   });
+
+const textPartsOf = (message: OutgoingMessage): TelegramPart[] =>
+  telegramParts(message.text).map((text) => ({ ...message, text }));
+
+const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
+  sendParts(config, textPartsOf(message));
+
+const sendWithApprovals =
+  (config: TelegramConfig) => (message: OutgoingApprovalMessage) =>
+    sendParts(config, [
+      ...textPartsOf(message),
+      {
+        conversationId: message.conversationId,
+        ...(message.inReplyTo === undefined
+          ? {}
+          : { inReplyTo: message.inReplyTo }),
+        text: approvalRequestText(message.approvals),
+        keyboard: approvalKeyboardOf(message.approvals),
+      },
+    ]);
 
 const sendChatActionRequest = (
   config: TelegramConfig,
@@ -217,6 +249,7 @@ const react = (config: TelegramConfig) => (reaction: OutgoingReaction) =>
 export const telegramChannel = (config: TelegramConfig) =>
   Layer.succeed(Channel, {
     send: send(config),
+    sendWithApprovals: sendWithApprovals(config),
     react: react(config),
     allowedReaction: telegramReactionFor,
     showTyping: showTyping(config),

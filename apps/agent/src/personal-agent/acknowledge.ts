@@ -55,6 +55,10 @@ export const whileAcknowledging =
                 Fiber.interrupt(typing).pipe(
                   Effect.andThen(channel.send(message))
                 ),
+              sendWithApprovals: (message) =>
+                Fiber.interrupt(typing).pipe(
+                  Effect.andThen(channel.sendWithApprovals(message))
+                ),
               react: (reaction) =>
                 Fiber.interrupt(typing).pipe(
                   Effect.andThen(channel.react(reaction))

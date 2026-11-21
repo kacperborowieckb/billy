@@ -16,6 +16,9 @@ import {
 export const unknownOutcomeToolMessage =
   "This tool is not available. Answer the Owner with a text.";
 
+export const outcomeWhileApprovalWaitsMessage =
+  "A call in this Turn waits for the Owner's Approval, so the Owner must get a text reply with the Approval buttons. Answer the Owner with a short text that says what waits for their Approval.";
+
 const ownerDataChanges: ReadonlySet<JournalRecord["_tag"]> = new Set([
   "NoteCaptured",
   "NoteUpdated",
@@ -38,6 +41,7 @@ interface OutcomeToolCall {
   readonly steps: readonly ModelStep[];
   readonly earlierMessages: readonly ModelMessage[];
   readonly tools: AgentTools;
+  readonly approvalWaits: boolean;
 }
 
 const failedOutputTypes: ReadonlySet<string> = new Set([
@@ -103,12 +107,16 @@ export const refusalOfOutcomeTool = Effect.fnUntraced(
     steps,
     earlierMessages,
     tools,
+    approvalWaits,
   }: OutcomeToolCall) {
     if (
       !(name in tools) ||
       (name !== staySilentToolName && name !== reactToolName)
     ) {
       return unknownOutcomeToolMessage;
+    }
+    if (approvalWaits) {
+      return outcomeWhileApprovalWaitsMessage;
     }
     const changeFailed =
       aChangingCallFailed(tools, earlierMessages, "recorded") ||

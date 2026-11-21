@@ -7,7 +7,7 @@ import {
   effectInputSchema,
   ToolFailed,
 } from "../model-gateway/agent-tool.ts";
-import type { AgentTool } from "../model-gateway/agent-tool.ts";
+import type { AgentTool, ToolApproval } from "../model-gateway/agent-tool.ts";
 import type { Redactor } from "../tracing/redactor.ts";
 import type { TurnProgress } from "./turn-progress.ts";
 
@@ -17,29 +17,34 @@ export interface RecordedToolServices {
   readonly redactor: Redactor["Service"];
 }
 
-export interface RecordedToolDefinition<
+export type RecordedToolApproval<Input> =
+  | {
+      readonly riskClass: "read";
+      readonly riskClassOfInput?: undefined;
+      readonly approvalSummary?: undefined;
+    }
+  | {
+      readonly riskClass: RiskClass;
+      readonly riskClassOfInput?: (input: Input) => RiskClass;
+      readonly approvalSummary: (input: Input) => Effect.Effect<string>;
+    };
+
+export type RecordedToolDefinition<
   Input extends JSONValue,
   Output extends JSONValue,
   Failure,
-> {
+> = RecordedToolApproval<Input> & {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Schema.Codec<Input, unknown>;
   readonly failureMessage: string | ((cause: Cause.Cause<unknown>) => string);
   readonly recordedInput?: (input: Input) => JSONValue;
-  readonly riskClass: RiskClass;
-  readonly riskClassOfInput?: (input: Input) => RiskClass;
+  readonly marksItsWorkUntrusted?: boolean;
   readonly work: (input: Input) => Effect.Effect<Output, Failure>;
-}
+};
 
 const toolFailedFrom =
-  (
-    failureMessage: RecordedToolDefinition<
-      never,
-      never,
-      never
-    >["failureMessage"]
-  ) =>
+  (failureMessage: string | ((cause: Cause.Cause<unknown>) => string)) =>
   (cause: Cause.Cause<unknown>) =>
     Cause.findErrorOption(cause).pipe(
       Option.filter((error) => error instanceof ToolFailed),
@@ -54,6 +59,26 @@ const toolFailedFrom =
       )
     );
 
+const approvalOf = <Input extends JSONValue>(
+  definition: RecordedToolApproval<Input> & {
+    readonly inputSchema: Schema.Codec<Input, unknown>;
+  }
+): ToolApproval<Input> => {
+  const isInput = Schema.is(definition.inputSchema);
+  if (definition.approvalSummary === undefined) {
+    return { riskClass: definition.riskClass };
+  }
+  return {
+    riskClass: definition.riskClass,
+    ...(definition.riskClassOfInput === undefined
+      ? {}
+      : {
+          riskClassOfInput: { isInput, of: definition.riskClassOfInput },
+        }),
+    approvalSummary: { isInput, of: definition.approvalSummary },
+  };
+};
+
 export const recordedTool = <
   Input extends JSONValue,
   Output extends JSONValue,
@@ -64,15 +89,10 @@ export const recordedTool = <
 ): AgentTool =>
   agentTool({
     description: definition.description,
-    riskClass: definition.riskClass,
-    ...(definition.riskClassOfInput === undefined
+    ...approvalOf(definition),
+    ...(definition.marksItsWorkUntrusted === undefined
       ? {}
-      : {
-          riskClassOfInput: {
-            isInput: Schema.is(definition.inputSchema),
-            of: definition.riskClassOfInput,
-          },
-        }),
+      : { marksItsWorkUntrusted: definition.marksItsWorkUntrusted }),
     inputSchema: effectInputSchema(definition.inputSchema),
     execute: Effect.fnUntraced(
       function* recordedToolEffect(input, { toolCallId, modelStepKey }) {

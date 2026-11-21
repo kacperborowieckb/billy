@@ -528,7 +528,7 @@ describe("the tools of a Turn", () => {
     expect(offered).toContain(muteProactiveMessageToolName);
   });
 
-  it("offers none to a Turn for an untrusted Event", async () => {
+  it("offers the tool to a Turn for an untrusted Event too, where the gate decides each call", async () => {
     await addOwner(9910);
     scriptModel([{ say: "Noted" }]);
 
@@ -554,7 +554,7 @@ describe("the tools of a Turn", () => {
       (call) => call.tools?.map((tool) => tool.name) ?? []
     );
     expect(offered.length).toBeGreaterThan(0);
-    expect(offered).not.toContain(muteProactiveMessageToolName);
+    expect(offered).toContain(muteProactiveMessageToolName);
   });
 
   it("offers none to a proactive Turn", async () => {
