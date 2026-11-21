@@ -231,6 +231,13 @@ const testChannel = Layer.succeed(Channel, {
             : answer.next
         );
   },
+  editApprovalMessage: () =>
+    Effect.succeed(
+      answer.next === "never"
+        ? { _tag: "Failed", reason: "never" }
+        : answer.next
+    ),
+  answerPress: () => Effect.void,
   react: () =>
     answer.next === "never" ? Effect.never : Effect.succeed(answer.next),
   allowedReaction: (emoji) => emoji,

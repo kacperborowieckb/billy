@@ -25,6 +25,7 @@ import m0023 from "./20261120082644_schedule_open_loops/migration.sql";
 import m0024 from "./20261120100930_less_of_this/migration.sql";
 import m0025 from "./20261120110432_send_budget/migration.sql";
 import m0026 from "./20261121192012_pending_approvals/migration.sql";
+import m0027 from "./20261121214207_approval_answers/migration.sql";
 
 export default {
   migrations: {
@@ -55,5 +56,6 @@ export default {
     "20261120100930_less_of_this": m0024,
     "20261120110432_send_budget": m0025,
     "20261121192012_pending_approvals": m0026,
+    "20261121214207_approval_answers": m0027,
   },
 };

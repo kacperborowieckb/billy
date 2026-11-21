@@ -34,6 +34,22 @@ export interface OutgoingApprovalMessage {
   readonly approvals: readonly [ApprovalRequest, ...ApprovalRequest[]];
 }
 
+export interface ShownApproval extends ApprovalRequest {
+  readonly channelMessageId: string;
+  readonly status?: string;
+}
+
+export interface ApprovalMessageEdit {
+  readonly conversationId: string;
+  readonly channelMessageId: string;
+  readonly turnApprovals: readonly ShownApproval[];
+}
+
+export interface ApprovalPressAnswer {
+  readonly pressId: string;
+  readonly notice?: string;
+}
+
 export interface OutgoingReaction {
   readonly conversationId: string;
   readonly channelMessageId: string;
@@ -55,6 +71,10 @@ export class Channel extends Context.Service<
     readonly sendWithApprovals: (
       message: OutgoingApprovalMessage
     ) => Effect.Effect<ApprovalDelivery>;
+    readonly editApprovalMessage: (
+      edit: ApprovalMessageEdit
+    ) => Effect.Effect<Delivery>;
+    readonly answerPress: (answer: ApprovalPressAnswer) => Effect.Effect<void>;
     readonly react: (
       reaction: OutgoingReaction
     ) => Effect.Effect<ReactionDelivery>;

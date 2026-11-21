@@ -5,6 +5,8 @@ import type { OwnerId } from "../owner-id.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { journalEntries } from "../personal-agent/storage-schema.ts";
 import {
+  approvalAnswers,
+  approvalRunResults,
   noteChanges,
   openLoopClosedReasons,
   proactiveFoldReasons,
@@ -140,6 +142,17 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     eventId: Schema.String,
     pendingApprovalId: Schema.String,
     toolName: Schema.String,
+  },
+  ApprovalAnswered: {
+    eventId: Schema.String,
+    pendingApprovalId: Schema.String,
+    answer: Schema.Literals(approvalAnswers),
+  },
+  ApprovalRun: {
+    eventId: Schema.String,
+    pendingApprovalId: Schema.String,
+    result: Schema.Literals(approvalRunResults),
+    reason: Schema.optionalKey(Schema.String),
   },
   OwnerPreferenceChanged: {
     eventId: Schema.String,

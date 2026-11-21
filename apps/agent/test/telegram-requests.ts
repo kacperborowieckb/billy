@@ -30,6 +30,37 @@ export const textUpdate = ({
   };
 };
 
+export const pressUpdate = ({
+  fromUserId,
+  data,
+  messageId,
+  pressId = `press-${nextUpdateId + 1}`,
+  chatId = fromUserId,
+}: {
+  readonly fromUserId: number;
+  readonly data: string;
+  readonly messageId: number;
+  readonly pressId?: string;
+  readonly chatId?: number;
+}) => {
+  nextUpdateId += 1;
+  return {
+    update_id: nextUpdateId,
+    callback_query: {
+      id: pressId,
+      from: { id: fromUserId, is_bot: false, first_name: "Owner" },
+      message: {
+        message_id: messageId,
+        date: 1_794_000_000,
+        chat: { id: chatId, type: "private" },
+        text: "This waits for your Approval:",
+      },
+      chat_instance: "chat-instance-1",
+      data,
+    },
+  };
+};
+
 export const sendToEdge = (request: Parameters<typeof worker.fetch>[0]) =>
   worker.fetch(
     request,

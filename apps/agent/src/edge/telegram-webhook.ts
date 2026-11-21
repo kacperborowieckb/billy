@@ -1,8 +1,12 @@
 import { Clock, Effect, Option } from "effect";
 
-import { textMessageFrom } from "../channels/telegram/update.ts";
+import {
+  approvalPressFrom,
+  textMessageFrom,
+} from "../channels/telegram/update.ts";
 import { telegramIdentity } from "../directory/channel-identity.ts";
 import { Directory } from "../directory/directory.ts";
+import type { Event } from "../event.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import { OperatorMetrics } from "../tracing/operator-metrics.ts";
@@ -12,6 +16,21 @@ import { matchesSecret } from "./secret.ts";
 const telegramSecretHeader = "X-Telegram-Bot-Api-Secret-Token";
 
 const accepted = () => new Response(null, { status: 200 });
+
+interface TelegramEvent {
+  readonly senderId: number;
+  readonly event: Event;
+}
+
+const telegramEventFrom = (body: unknown): Option.Option<TelegramEvent> =>
+  textMessageFrom(body).pipe(
+    Option.map(({ senderId, message }) => ({ senderId, event: message })),
+    Option.orElse(() =>
+      approvalPressFrom(body).pipe(
+        Option.map(({ senderId, answered }) => ({ senderId, event: answered }))
+      )
+    )
+  );
 
 const readJson = (request: Request) =>
   Effect.tryPromise(() => request.json<unknown>()).pipe(Effect.option);
@@ -45,13 +64,13 @@ export const handleTelegramUpdate = (request: Request, env: Env) =>
       return new Response(null, { status: 401 });
     }
     const body = yield* readJson(request);
-    const textMessage = body.pipe(Option.flatMap(textMessageFrom));
-    if (Option.isNone(textMessage)) {
+    const telegramEvent = body.pipe(Option.flatMap(telegramEventFrom));
+    if (Option.isNone(telegramEvent)) {
       return accepted();
     }
     const directory = yield* Directory;
     const owner = yield* directory.findOwner(
-      telegramIdentity(textMessage.value.senderId)
+      telegramIdentity(telegramEvent.value.senderId)
     );
     if (Option.isNone(owner)) {
       yield* recordRefusal("unknown_sender", undefined, startedAt);
@@ -65,7 +84,7 @@ export const handleTelegramUpdate = (request: Request, env: Env) =>
       personalAgentFor(env.PERSONAL_AGENT, owner.value.ownerId)
     );
     yield* Effect.tryPromise(() =>
-      personalAgent.receive(textMessage.value.message)
+      personalAgent.receive(telegramEvent.value.event)
     );
     return accepted();
   });

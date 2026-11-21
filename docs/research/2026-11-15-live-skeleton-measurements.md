@@ -16,7 +16,7 @@ The Instance ran on a real Cloudflare account with a real Telegram bot. Seven re
 4. In `apps/agent`, run `wrangler deploy --secrets-file <file> --var AI_GATEWAY_URL:https://gateway.ai.cloudflare.com/v1/<account id>/assistant/compat`. The first deploy creates the D1 database. A new Worker cannot receive secrets before its first deploy, so the file is required.
 5. Run `wrangler d1 migrations apply assistant-directory --remote`.
 6. Add the Owner: `pnpm control owner add --telegram-user <id> --url <Worker URL>` with `OPERATOR_TOKEN` in the environment.
-7. Call the Telegram `setWebhook` method with the path `/telegram/webhook`, the webhook secret as `secret_token`, and `allowed_updates` set to `["message"]`.
+7. Call the Telegram `setWebhook` method with the path `/telegram/webhook`, the webhook secret as `secret_token`, and `allowed_updates` set to `["message", "callback_query"]` (`callback_query` since [#144](https://github.com/kacperborowieckb/billy/issues/144), for the Approval buttons).
 
 ## Measurements
 

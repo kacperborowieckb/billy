@@ -4,7 +4,13 @@ import { Channel } from "../channel.ts";
 import type { OutgoingReaction, ReactionDelivery } from "../channel.ts";
 import { TypingNotShown } from "../typing-not-shown.ts";
 import { telegramReactionFor } from "./telegram-reactions.ts";
-import { failed, send, sendWithApprovals } from "./telegram-send.ts";
+import {
+  answerPress,
+  editApprovalMessage,
+  failed,
+  send,
+  sendWithApprovals,
+} from "./telegram-send.ts";
 import type { TelegramConfig } from "./telegram-send.ts";
 
 const TrueResponseSchema = Schema.Union([
@@ -101,6 +107,8 @@ export const telegramChannel = (config: TelegramConfig) =>
   Layer.succeed(Channel, {
     send: send(config),
     sendWithApprovals: sendWithApprovals(config),
+    editApprovalMessage: editApprovalMessage(config),
+    answerPress: answerPress(config),
     react: react(config),
     allowedReaction: telegramReactionFor,
     showTyping: showTyping(config),
