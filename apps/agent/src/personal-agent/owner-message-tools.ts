@@ -41,6 +41,7 @@ import {
   listSchedulesTool,
   listSchedulesToolName,
 } from "../schedule/list-schedules-tool.ts";
+import { openLoopTextsOf } from "../schedule/schedule-summary.ts";
 import type { ScheduleToolServices } from "../schedule/schedule-tool-services.ts";
 import type { Schedules } from "../schedule/schedules.ts";
 import {
@@ -86,6 +87,7 @@ export const scheduleToolServicesOf = (
   ),
   noteTexts: (noteIds) =>
     storedNoteTexts(notes, noteIds, "No Schedule was set."),
+  openLoopTexts: (noteIds) => openLoopTextsOf(notes, noteIds),
   mutedAmong: (noteIds) => mutedAmong({ preferences, notes }, noteIds),
   progress,
   redactor,

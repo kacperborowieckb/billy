@@ -28,9 +28,13 @@ import {
 } from "../src/preferences/quiet-hours-tool.ts";
 import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { muteProactiveMessageToolName } from "../src/proactive/mute-proactive-message-tool.ts";
-import { updateProfileToolName } from "../src/profile/update-profile-tool.ts";
+import {
+  profileEntryMissingFieldMessage,
+  updateProfileToolName,
+} from "../src/profile/update-profile-tool.ts";
 import { cancelScheduleToolName } from "../src/schedule/cancel-schedule-tool.ts";
 import { changeScheduleToolName } from "../src/schedule/change-schedule-tool.ts";
+import { notOpenLoopsMessage } from "../src/schedule/not-open-loops.ts";
 import { noActiveScheduleMessage } from "../src/schedule/schedule-presentation.ts";
 import {
   followUpNeedsOpenLoopsMessage,
@@ -602,6 +606,14 @@ describe("Checks before a draft", () => {
             input: { noteId: "note-1", reason: "done" },
           },
           { tool: cancelScheduleToolName, input: { scheduleId: "schedule-1" } },
+          {
+            tool: updateProfileToolName,
+            input: { action: "add", kind: "fact" },
+          },
+          {
+            tool: updateProfileToolName,
+            input: { action: "remove", entryId: "entry-1" },
+          },
         ],
       },
       { say: "I could not do these." },
@@ -621,6 +633,8 @@ describe("Checks before a draft", () => {
       nothingToUpdateMessage,
       "No Note of the Owner has the id note-1",
       noActiveScheduleMessage("schedule-1"),
+      profileEntryMissingFieldMessage.add,
+      "The Profile has no entry with the id entry-1",
     ]) {
       expect(results).toContain(JSON.stringify(refusal).slice(1, -1));
     }
@@ -635,6 +649,7 @@ describe("Checks before a draft", () => {
             tool: captureNoteToolName,
             input: { text: "pay rent", openLoop: { kind: "task" } },
           },
+          { tool: captureNoteToolName, input: { text: "Ana likes Osteria" } },
           { tool: setScheduleToolName, input: reminderInput },
         ],
       },
@@ -644,7 +659,11 @@ describe("Checks before a draft", () => {
     await waitForSends(1);
     const [note] = await rowsOf<{ note_id: string }>(
       ownerId,
-      "SELECT note_id FROM notes"
+      "SELECT note_id FROM notes WHERE open_loop_state = 'open'"
+    );
+    const [fact] = await rowsOf<{ note_id: string }>(
+      ownerId,
+      "SELECT note_id FROM notes WHERE open_loop_state IS NULL"
     );
     const [schedule] = await rowsOf<{ schedule_id: string }>(
       ownerId,
@@ -653,6 +672,14 @@ describe("Checks before a draft", () => {
     scriptModel([
       {
         callTools: [
+          {
+            tool: setScheduleToolName,
+            input: {
+              action: { _tag: "RunPrompt", prompt: "Ask about Osteria" },
+              localDueTime: "2030-11-26T09:00",
+              openLoopIds: [fact?.note_id],
+            },
+          },
           {
             tool: setScheduleToolName,
             input: {
@@ -674,6 +701,9 @@ describe("Checks before a draft", () => {
     await waitForSends(3);
     await waitForPendingApprovals(ownerId, 2);
 
+    expect(toolResultsOfLastModelCall()).toContain(
+      notOpenLoopsMessage([fact?.note_id ?? ""])
+    );
     const approvals = await pendingApprovalsOf(ownerId);
     expect(approvals.map((row) => row.summary)).toEqual([
       'Set a follow-up of the agent, Scheduled Task "Ask about the rent", Tue 26 Nov 2030, 09:00, to follow up Note "pay rent"',

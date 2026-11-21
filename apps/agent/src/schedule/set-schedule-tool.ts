@@ -114,6 +114,7 @@ export const setScheduleTool = (
     ownerTimeZone,
     mutedAmong,
     noteTexts,
+    openLoopTexts,
     progress,
     redactor,
     maxActiveScheduledTasks,
@@ -184,7 +185,7 @@ export const setScheduleTool = (
         const about = yield* noteTexts(
           input.noteId === undefined ? [] : [input.noteId]
         );
-        const followedUp = yield* noteTexts(input.openLoopIds ?? []);
+        const followedUp = yield* openLoopTexts(input.openLoopIds ?? []);
         return setScheduleSummaryText({
           action: input.action,
           due: scheduleDueText(

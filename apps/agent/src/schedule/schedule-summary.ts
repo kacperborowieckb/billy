@@ -2,12 +2,15 @@ import { DateTime, Effect, Option } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
+import { storedNotes } from "../notes/note-summary.ts";
+import type { Notes } from "../notes/notes.ts";
 import {
   instantText,
   localDueTimeText,
   recurrenceText,
 } from "../time/local-time-text.ts";
 import type { RecurrenceRule } from "../time/recurrence-rule.ts";
+import { notOpenLoopsMessage } from "./not-open-loops.ts";
 import type { ScheduleAction } from "./schedule-action.ts";
 import { noActiveScheduleMessage } from "./schedule-presentation.ts";
 import type { Schedule } from "./schedule.ts";
@@ -95,3 +98,18 @@ export const setScheduleSummaryText = ({
       ? []
       : [`to follow up ${followedUp.join(", ")}`]),
   ].join(", ");
+
+export const openLoopTextsOf = (
+  notes: Notes["Service"],
+  noteIds: readonly string[]
+) =>
+  storedNotes(notes, noteIds, "No Schedule was set.").pipe(
+    Effect.flatMap((found) => {
+      const notOpen = found
+        .filter((note) => note.openLoop?._tag !== "Open")
+        .map((note) => note.noteId);
+      return notOpen.length > 0
+        ? Effect.fail(new ToolFailed({ message: notOpenLoopsMessage(notOpen) }))
+        : Effect.succeed(found.map((note) => `Note ${quoted(note.text)}`));
+    })
+  );

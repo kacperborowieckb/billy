@@ -12,6 +12,9 @@ export interface ScheduleToolServices {
   readonly noteTexts: (
     noteIds: readonly string[]
   ) => Effect.Effect<readonly string[], ToolFailed>;
+  readonly openLoopTexts: (
+    noteIds: readonly string[]
+  ) => Effect.Effect<readonly string[], ToolFailed>;
   readonly mutedAmong: (
     noteIds: readonly string[]
   ) => Effect.Effect<readonly string[], MutedLookupFailed>;
