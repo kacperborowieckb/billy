@@ -28,6 +28,7 @@ import { burstWaitOf } from "./burst-wait.ts";
 import type { BurstWait } from "./burst-wait.ts";
 import { Conversation } from "./conversation.ts";
 import { fireDueSchedulesThen } from "./due-schedule-events.ts";
+import { expireDueApprovals } from "./expire-due-approvals.ts";
 import { Inbox } from "./inbox.ts";
 import { recordOutcomesDueAtAlarm } from "./outcome-records.ts";
 import { OwnerChannelConversation } from "./owner-channel-conversation.ts";
@@ -120,6 +121,14 @@ export class PersonalAgent extends Agent<Env> {
   }
 
   async fireDueSchedules(): Promise<void> {
+    await this.runtime.runPromise(
+      expireDueApprovals.pipe(
+        Effect.provide(this.turnServices(this.env, this.ownerId)),
+        Effect.catchCause((cause) =>
+          Effect.logError("The due Pending Approvals did not expire", cause)
+        )
+      )
+    );
     await this.runtime.runPromise(
       recordOutcomesDueAtAlarm(
         this.ownerId,

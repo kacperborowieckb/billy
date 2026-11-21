@@ -19,6 +19,7 @@ import {
   fakeTelegram,
   fakeTelegramApiUrl,
   fakeTool,
+  fakeToolApprovalExpiryMillis,
   testTypingRepeatMillis,
 } from "./fakes.ts";
 
@@ -56,6 +57,7 @@ const fakeTools: AgentTools = {
         z.object({ word: z.string() }).safeParse(value).success,
       of: ({ word }) => Effect.succeed(`Keep the word "${word}"`),
     },
+    approvalExpiryMillis: fakeToolApprovalExpiryMillis,
     execute: ({ word }) =>
       fakeTool.failWith === undefined
         ? Effect.sync(() => {

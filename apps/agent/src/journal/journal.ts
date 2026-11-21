@@ -148,6 +148,10 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     pendingApprovalId: Schema.String,
     answer: Schema.Literals(approvalAnswers),
   },
+  ApprovalExpired: {
+    eventId: Schema.String,
+    pendingApprovalId: Schema.String,
+  },
   ApprovalRun: {
     eventId: Schema.String,
     pendingApprovalId: Schema.String,
