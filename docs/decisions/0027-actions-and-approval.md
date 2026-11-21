@@ -51,13 +51,13 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 - States: `draft`, then `pending`, then `approved`, `rejected`, or `expired`, then for an approved one `executed`, `failed`, or `unconfirmed`. Every change after `draft` is a Journal Entry.
 - A draft becomes `pending` only when its Delivery is `Sent` or `Unconfirmed`. When the Delivery is `Unconfirmed`, the Pending Approval is `pending` and expires at its expiry instant like any other. A Restart or a failed send deletes the drafts.
 - Storage: a new table in the Personal Agent SQLite. Code reads it only through an Effect `Schema`. A versioned migration adds the table. It has the id, the Turn Event id, the tool name, the frozen input, the summary, the state, the expiry instant, the Channel message id, and the result.
-- Frozen input: the frozen input is the decoded input of the tool call, not the output of `recordedInput`. The Redactor replaces only the Operator secrets of the Instance (the values that it gets at start). Before code writes a draft, it checks the input with the Redactor. When the Redactor would change the input, code does not write the draft and gives the model a refusal as the tool result. When the Redactor would not change the input, code stores the exact decoded input. The run of an approved call reads only that stored input.
+- Frozen input: the frozen input is the decoded input of the tool call, not the output of `recordedInput`. The run of an approved call reads only the stored frozen input. See the open question on the frozen input below.
 - Expiry: each tool can set its own. The default is a new Behavior Config value of 24 hours. The alarm of the Schedules store expires Pending Approvals at their instant, with no model call.
 
 ### Answering
 
 - Button press: the Edge accepts a Telegram `callback_query` only from the Owner's Channel Identity in the Directory, with data that is a short Pending Approval id and an answer. It forwards an `ApprovalAnswered` Event. The Inbox gives it Owner priority and drops a duplicate by the callback query id. Code answers the press at once.
-- Typed yes: the outcome tool `answer_approval` takes two inputs: the Pending Approval id and the answer (approved or rejected). It exists only in a Turn whose Trust Level is `owner` and when exactly one Pending Approval is `pending`. Code checks both again when the tool runs.
+- Typed yes: the outcome tool `answer_approval` takes two inputs: the Pending Approval id and the answer (approved or rejected). It exists only in a Turn whose Trust Level is `owner` and when exactly one Pending Approval is `pending`. Code checks both again when the tool runs. See the open question on the typed yes below.
 - Code handles an `ApprovalAnswered` Event with no model call. It does not join a Burst and does not cause a Restart.
 - An answer to a Pending Approval that is not `pending` changes nothing. A late press gets "This expired" or "This was already answered".
 
@@ -76,6 +76,13 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 - No Eval Cases for Approval. They come with the Eval work, as in [0019](0019-proactivity.md).
 - No Auto-review. Issue [#140](https://github.com/kacperborowieckb/billy/issues/140) tracks it. Work on #140 starts only after the first `approve`-class tool exists.
+
+### Open questions
+
+The ticket that builds each part settles its question with the repository owner and updates this record. Until then, nothing in this record allows the alternative.
+
+- Frozen input: #139 asks for a stored input that the Redactor redacts and for a run with the exact input. The Redactor replaces only the Operator secrets of the Instance, so the two rules conflict only for a call whose input contains an Operator secret. Recommended answer: code does not write a draft for such a call and gives the model a refusal, so the stored input is the exact input. The other answer: store the exact input in a protected column for the run, and a redacted copy for the Journal and the display.
+- Typed yes: the code checks above (Trust Level `owner`, exactly one `pending`) do not tie the answer of `answer_approval` to a yes in the Owner's own words. The model could answer `approved` after an Owner message that is not a yes, for example a question about the status. Recommended answer: code accepts `approved` only when the newest Owner message of the Burst is a short yes that code recognizes, with no other content. The other answers: keep the model's reading of the yes, or remove the typed yes and keep only the buttons.
 
 ## Why
 
