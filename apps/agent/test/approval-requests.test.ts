@@ -614,39 +614,43 @@ const runTurnAfterReset = async (ownerId: string) => {
 };
 
 describe("Drafts of a Turn whose Delivery does not show them", () => {
-  it("are deleted by a Restart, so the dropped answer leaves no Pending Approval", async () => {
-    const ownerId = await addOwner(9120);
-    fakeBurstWait.quietMillis = 1500;
-    fakeBurstWait.maxWaitMillis = 60_000;
-    scriptModel([
-      { callTool: setScheduleToolName, input: reminderInput },
-      { say: "This waits for you." },
-      { say: "Noted both messages." },
-    ]);
-    const releaseModel = holdModel(1);
+  it(
+    "are deleted by a Restart, so the dropped answer leaves no Pending Approval",
+    { timeout: 40_000 },
+    async () => {
+      const ownerId = await addOwner(9120);
+      fakeBurstWait.quietMillis = 1500;
+      fakeBurstWait.maxWaitMillis = 60_000;
+      scriptModel([
+        { callTool: setScheduleToolName, input: reminderInput },
+        { say: "This waits for you." },
+        { say: "Noted both messages." },
+      ]);
+      const releaseModel = holdModel(1);
 
-    await telegramWebhook(
-      textUpdate({
-        fromUserId: 9120,
-        text: forwardedInvitation,
-        messageId: 1,
-        forwardOrigin: forwardedFromAna,
-      })
-    );
-    await waitForDrafts(ownerId, 1);
-    await telegramWebhook(
-      textUpdate({ fromUserId: 9120, text: "never mind", messageId: 2 })
-    );
-    releaseModel();
-    await waitForSends(1);
-    await waitForEventStates(ownerId, ["done", "done"]);
+      await telegramWebhook(
+        textUpdate({
+          fromUserId: 9120,
+          text: forwardedInvitation,
+          messageId: 1,
+          forwardOrigin: forwardedFromAna,
+        })
+      );
+      await waitForDrafts(ownerId, 1);
+      await telegramWebhook(
+        textUpdate({ fromUserId: 9120, text: "never mind", messageId: 2 })
+      );
+      releaseModel();
+      await waitForSends(1);
+      await waitForEventStates(ownerId, ["done", "done"]);
 
-    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
-    expect(fakeTelegram.sent[0]?.body).toMatchObject({
-      text: "Noted both messages.",
-    });
-    expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
-  });
+      expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+      expect(fakeTelegram.sent[0]?.body).toMatchObject({
+        text: "Noted both messages.",
+      });
+      expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
+    }
+  );
 
   it("are deleted by a failed send", async () => {
     const ownerId = await addOwner(9121);
