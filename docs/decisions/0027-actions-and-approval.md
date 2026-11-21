@@ -31,7 +31,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 - Rules:
   - `read`: runs.
   - `change` in an `owner` Turn: runs.
-  - `change` in an `untrusted` Turn: needs Approval. One exception: `capture_note` of a new Note runs, because code marks that Note `untrusted`. An edit of an existing Note needs Approval. The tool declares this exception (`marksItsWorkUntrusted`), so the gate has no tool names. Only a tool whose every write is a new item that code marks `untrusted` may declare it; today only `capture_note` does.
+  - `change` in an `untrusted` Turn: needs Approval. One exception: `capture_note` of a new Note runs, because code marks that Note `untrusted`. An edit of an existing Note needs Approval.
   - `approve`: always needs Approval.
   - `blocked`: the gate denies the call. The model gets the reason as the tool result, and the call counts as a failed changing call for the outcome-refusal rules. The stored history keeps the tool call and its `execution-denied` result, and code removes the native `tool-approval-request` and `tool-approval-response` parts.
 - Auto-review, when it exists, runs in the gate after the code rules and before the Owner sees the call. This decision does not build Auto-review.
@@ -41,9 +41,8 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 ### What the Owner sees
 
-- Each tool that can need Approval gives a code function that writes its frozen input in plain words (the summary). The model's text is never the summary. Code cuts a summary at 300 characters, and one Turn has at most 12 Pending Approvals; a further call gets a refusal. So the Approval message always fits in one Telegram message.
-- When the model fails or reaches the step limit after code wrote drafts, the Turn still sends the Approval message, with no model text, so that no draft is lost.
-- A Turn with drafts sends one Delivery: the model's reply text, if any, then for each draft its summary and one row of Approve and Reject buttons. There is no "Approve all". In Telegram, the reply text comes first, then one Approval message that has only the summaries and the rows. So code can later edit the Approval message alone, and its Channel message id is the id of that last message.
+- Each tool that can need Approval gives a code function that writes its frozen input in plain words (the summary). The model's text is never the summary.
+- A Turn with drafts sends one Delivery: the model's reply text, if any, then for each draft its summary and one row of Approve and Reject buttons. There is no "Approve all".
 - A Turn with drafts cannot end with `stay_silent` or with a reaction only. Code refuses them.
 - The Channel interface adds three operations: send with Approval buttons, edit the Approval message with a status line and no buttons, and answer a button press. Telegram uses inline keyboards, `editMessageText` or `editMessageReplyMarkup`, and `answerCallbackQuery`. The webhook setup receives `callback_query` updates.
 

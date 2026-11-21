@@ -2,7 +2,7 @@ import type { TrustLevel } from "../notes/note.ts";
 import type { RiskClass, RiskClassified } from "./risk-class.ts";
 
 export interface GatedTool extends RiskClassified {
-  readonly marksItsWorkUntrusted: boolean;
+  readonly marksItsWorkUntrusted: (input: unknown) => boolean;
 }
 
 export interface GatedCall {
@@ -27,8 +27,10 @@ const decisionOfClass: Readonly<
   Record<RiskClass, (call: GatedCall) => GateDecision>
 > = {
   read: () => run,
-  change: ({ tool, trustLevel }) =>
-    trustLevel === "owner" || tool.marksItsWorkUntrusted ? run : askOwner,
+  change: ({ tool, input, trustLevel }) =>
+    trustLevel === "owner" || tool.marksItsWorkUntrusted(input)
+      ? run
+      : askOwner,
   approve: () => askOwner,
   blocked: () => ({ _tag: "Deny", reason: blockedCallReason }),
 };

@@ -1,6 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
+import type { ApprovalMessage } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { pendingApprovalStates } from "../personal-agent/storage-values.ts";
@@ -46,8 +47,7 @@ export interface DraftRequest {
 
 export interface SentDrafts {
   readonly turnEventId: string;
-  readonly pendingApprovalIds: readonly string[];
-  readonly channelMessageId: string;
+  readonly approvalMessages: readonly ApprovalMessage[];
 }
 
 export interface DraftApproval {
@@ -97,11 +97,10 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       .orderBy(sql`rowid`)
       .pipe(Effect.map((rows) => rows.map((row) => decodeRow(row))));
 
-  const openSentDrafts = Effect.fnUntraced(function* openSentDrafts({
-    turnEventId,
-    pendingApprovalIds,
-    channelMessageId,
-  }: SentDrafts) {
+  const openSentDraft = Effect.fnUntraced(function* openSentDraft(
+    turnEventId: string,
+    { pendingApprovalId, channelMessageId }: ApprovalMessage
+  ) {
     const opened = yield* database
       .update(pendingApprovals)
       .set({ state: "pending", channelMessageId })
@@ -109,24 +108,29 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
         and(
           eq(pendingApprovals.turnEventId, turnEventId),
           eq(pendingApprovals.state, "draft"),
-          inArray(pendingApprovals.pendingApprovalId, [...pendingApprovalIds])
+          eq(pendingApprovals.pendingApprovalId, pendingApprovalId)
         )
       )
       .returning({
         pendingApprovalId: pendingApprovals.pendingApprovalId,
         toolName: pendingApprovals.toolName,
       });
-    for (const { pendingApprovalId, toolName } of opened.map((row) =>
-      decodeOpened(row)
-    )) {
+    for (const row of opened.map((returned) => decodeOpened(returned))) {
       yield* journal.append({
         _tag: "ApprovalPending",
         eventId: turnEventId,
-        pendingApprovalId,
-        toolName,
+        pendingApprovalId: row.pendingApprovalId,
+        toolName: row.toolName,
       });
     }
   });
+
+  const openSentDrafts = ({ turnEventId, approvalMessages }: SentDrafts) =>
+    Effect.forEach(
+      approvalMessages,
+      (approvalMessage) => openSentDraft(turnEventId, approvalMessage),
+      { discard: true }
+    );
 
   const openDrafts = (sent: SentDrafts) =>
     database.transaction(() => openSentDrafts(sent));

@@ -39,7 +39,7 @@ export type RecordedToolDefinition<
   readonly inputSchema: Schema.Codec<Input, unknown>;
   readonly failureMessage: string | ((cause: Cause.Cause<unknown>) => string);
   readonly recordedInput?: (input: Input) => JSONValue;
-  readonly marksItsWorkUntrusted?: boolean;
+  readonly marksItsWorkUntrusted?: (input: Input) => boolean;
   readonly work: (input: Input) => Effect.Effect<Output, Failure>;
 };
 
@@ -92,7 +92,12 @@ export const recordedTool = <
     ...approvalOf(definition),
     ...(definition.marksItsWorkUntrusted === undefined
       ? {}
-      : { marksItsWorkUntrusted: definition.marksItsWorkUntrusted }),
+      : {
+          marksItsWorkUntrusted: {
+            isInput: Schema.is(definition.inputSchema),
+            holds: definition.marksItsWorkUntrusted,
+          },
+        }),
     inputSchema: effectInputSchema(definition.inputSchema),
     execute: Effect.fnUntraced(
       function* recordedToolEffect(input, { toolCallId, modelStepKey }) {

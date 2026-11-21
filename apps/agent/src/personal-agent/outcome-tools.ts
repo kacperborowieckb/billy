@@ -143,7 +143,6 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
             asking: approvalAsking,
             turnEventId: eventId,
             tools,
-            draftsSoFar: drafts.length,
           },
           reply.awaitingApproval
         );

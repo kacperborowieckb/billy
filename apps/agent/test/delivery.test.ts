@@ -223,7 +223,13 @@ const testChannel = Layer.succeed(Channel, {
   },
   sendWithApprovals: (message) => {
     sentTexts.push(message.text);
-    return answer.next === "never" ? Effect.never : Effect.succeed(answer.next);
+    return answer.next === "never"
+      ? Effect.never
+      : Effect.succeed(
+          answer.next._tag === "Confirmed"
+            ? { ...answer.next, approvalMessages: [] }
+            : answer.next
+        );
   },
   react: () =>
     answer.next === "never" ? Effect.never : Effect.succeed(answer.next),

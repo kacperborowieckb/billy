@@ -43,6 +43,16 @@ export const effectInputSchema = <Input>(
       }),
   });
 
+export interface InputCheck<Input> {
+  readonly isInput: (value: unknown) => value is Input;
+  readonly holds: (input: Input) => boolean;
+}
+
+const inputCheckOf =
+  <Input>(check: InputCheck<Input> | undefined) =>
+  (input: unknown) =>
+    check !== undefined && check.isInput(input) && check.holds(input);
+
 export const noTools: AgentTools = {};
 
 export const toolNamed = (
@@ -66,7 +76,7 @@ export type ToolApproval<Input> =
 type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;
-  readonly marksItsWorkUntrusted?: boolean;
+  readonly marksItsWorkUntrusted?: InputCheck<Input>;
   readonly execute: (
     input: Input,
     call: { readonly toolCallId: string; readonly modelStepKey: number }
@@ -96,7 +106,7 @@ export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
 ): AgentTool => ({
   ...riskClassified(definition.riskClass, definition.riskClassOfInput),
-  marksItsWorkUntrusted: definition.marksItsWorkUntrusted ?? false,
+  marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
   approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
   toAiSdkTool: (runEffect) =>
     definition.riskClass === "blocked"
@@ -148,7 +158,7 @@ export const outcomeTool = <Input>(
   definition: OutcomeToolDefinition<Input>
 ): AgentTool => ({
   ...riskClassified("read"),
-  marksItsWorkUntrusted: false,
+  marksItsWorkUntrusted: () => false,
   approvalSummaryOf: () => Effect.succeed(Option.none()),
   toAiSdkTool: () =>
     tool<Input, unknown, Record<string, unknown>>({

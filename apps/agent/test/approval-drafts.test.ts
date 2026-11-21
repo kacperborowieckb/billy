@@ -2,13 +2,12 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
-  maxApprovalsPerTurn,
   maxSummaryCharacters,
   summaryWithinLimit,
 } from "../src/approval/approval-summary.ts";
 import { holdsOperatorSecret } from "../src/approval/draft-approval.ts";
-import { approvalRequestText } from "../src/channels/telegram/approval-keyboard.ts";
-import { telegramTextLimit } from "../src/channels/telegram/telegram-channel.ts";
+import { approvalBlocksOf } from "../src/channels/telegram/approval-keyboard.ts";
+import { telegramTextLimit } from "../src/channels/telegram/telegram-send.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
 
 const redactorWith = (secrets: readonly string[]) =>
@@ -28,17 +27,49 @@ describe("A draft Pending Approval", () => {
     );
   });
 
-  it("fits the most Approvals of one Turn, with the longest summaries, in one Telegram message", () => {
+  it("splits the Approval rows into messages within the Telegram limit and keeps one numbering", () => {
     const summary = summaryWithinLimit("x".repeat(maxSummaryCharacters * 2));
     expect([...summary]).toHaveLength(maxSummaryCharacters);
+    const approvals = Array.from({ length: 3 }, (_, index) => ({
+      pendingApprovalId: `id-${index}`,
+      summary,
+    }));
 
-    const text = approvalRequestText(
-      Array.from({ length: maxApprovalsPerTurn }, (_, index) => ({
-        pendingApprovalId: `id-${index}`,
-        summary,
-      }))
+    const blocks = approvalBlocksOf(approvals, telegramTextLimit);
+
+    expect(blocks.map((block) => block.pendingApprovalIds)).toEqual([
+      ["id-0"],
+      ["id-1"],
+      ["id-2"],
+    ]);
+    for (const block of blocks) {
+      expect(block.text.length).toBeLessThanOrEqual(telegramTextLimit);
+    }
+    expect(
+      blocks[0]?.text.startsWith("These wait for your Approval:\n1. ")
+    ).toBe(true);
+    expect(blocks[2]?.text.startsWith("3. ")).toBe(true);
+    expect(blocks[2]?.keyboard).toEqual([
+      [
+        { text: "Approve 3", callback_data: "approve:id-2" },
+        { text: "Reject 3", callback_data: "reject:id-2" },
+      ],
+    ]);
+  });
+
+  it("keeps short Approval rows in one message", () => {
+    const blocks = approvalBlocksOf(
+      [
+        {
+          pendingApprovalId: "a",
+          summary: "Set the time zone to Europe/Warsaw",
+        },
+        { pendingApprovalId: "b", summary: "Show the Quiet Hours" },
+      ],
+      telegramTextLimit
     );
 
-    expect(text.length).toBeLessThanOrEqual(telegramTextLimit);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.pendingApprovalIds).toEqual(["a", "b"]);
   });
 });

@@ -51,10 +51,7 @@ const sendWithDrafts = Effect.fnUntraced(function* sendWithDrafts(
   if (delivery._tag === "Confirmed") {
     yield* pendingApprovals.openDrafts({
       turnEventId: event.eventId,
-      pendingApprovalIds: approvals.map(
-        ({ pendingApprovalId }) => pendingApprovalId
-      ),
-      channelMessageId: delivery.channelMessageId,
+      approvalMessages: delivery.approvalMessages,
     });
   }
   return delivery;

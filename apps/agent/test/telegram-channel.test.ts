@@ -2,16 +2,16 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { Channel } from "../src/channels/channel.ts";
-import {
-  telegramChannel,
-  telegramParts,
-  telegramTextLimit,
-} from "../src/channels/telegram/telegram-channel.ts";
+import { telegramChannel } from "../src/channels/telegram/telegram-channel.ts";
 import {
   telegramCloseMatches,
   telegramReactionFor,
   telegramReactions,
 } from "../src/channels/telegram/telegram-reactions.ts";
+import {
+  telegramParts,
+  telegramTextLimit,
+} from "../src/channels/telegram/telegram-send.ts";
 
 const fakeTelegramApi = (refuseFrom = Number.POSITIVE_INFINITY) => {
   const texts: string[] = [];

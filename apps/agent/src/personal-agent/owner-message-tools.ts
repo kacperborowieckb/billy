@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Journal } from "../journal/journal.ts";
+import { storedNoteTexts } from "../notes/note-summary.ts";
 import type { NoteToolServices } from "../notes/note-tool-services.ts";
 import { noteToolsFor } from "../notes/note-tools.ts";
 import { OwnerPreferences } from "../preferences/owner-preferences.ts";
@@ -83,6 +84,7 @@ export const scheduleToolServicesOf = (
     Effect.provideService(OwnerPreferences, preferences),
     Effect.orDie
   ),
+  noteTexts: (noteIds) => storedNoteTexts(notes, noteIds),
   mutedAmong: (noteIds) => mutedAmong({ preferences, notes }, noteIds),
   progress,
   redactor,

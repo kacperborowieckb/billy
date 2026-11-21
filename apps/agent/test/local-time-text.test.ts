@@ -37,7 +37,7 @@ describe("Plain words for an Approval summary", () => {
   it("quotes text on one line and cuts it at the limit", () => {
     expect(quoted("Call\n  Ana")).toBe('"Call Ana"');
     const cut = quoted("a".repeat(400));
-    expect([...cut]).toHaveLength(202);
+    expect([...cut]).toHaveLength(302);
     expect(cut.endsWith('…"')).toBe(true);
   });
 });

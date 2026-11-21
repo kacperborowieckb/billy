@@ -4,7 +4,7 @@ import { toolNamed } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ApprovalRequestedCall } from "../model-gateway/model-step.ts";
 import { Redactor } from "../tracing/redactor.ts";
-import { maxApprovalsPerTurn, summaryWithinLimit } from "./approval-summary.ts";
+import { summaryWithinLimit } from "./approval-summary.ts";
 import { PendingApprovals } from "./pending-approvals.ts";
 import type { DraftApproval } from "./pending-approvals.ts";
 
@@ -20,8 +20,6 @@ export const approvalUnavailableRefusal =
 export const noSummaryRefusal =
   "This call cannot be shown to the Owner for Approval, so it did not run. Tell the Owner that you could not do it.";
 
-export const tooManyApprovalsRefusal = `This Turn already has ${maxApprovalsPerTurn} calls that wait for the Owner's Approval, so this call did not run. Tell the Owner which calls wait, and ask them to send the rest in a later message.`;
-
 export type DraftOutcome =
   | { readonly _tag: "Drafted"; readonly draft: DraftApproval }
   | { readonly _tag: "Refused"; readonly reason: string };
@@ -30,7 +28,6 @@ export interface ApprovalDrafting {
   readonly turnEventId: string;
   readonly tools: AgentTools;
   readonly expiryMillis: number;
-  readonly draftsSoFar: number;
 }
 
 const refused = (reason: string): DraftOutcome => ({ _tag: "Refused", reason });
@@ -56,7 +53,7 @@ export const holdsOperatorSecret = (
 };
 
 export const draftApproval = Effect.fnUntraced(function* draftApproval(
-  { turnEventId, tools, expiryMillis, draftsSoFar }: ApprovalDrafting,
+  { turnEventId, tools, expiryMillis }: ApprovalDrafting,
   call: ApprovalRequestedCall
 ) {
   const redactor = yield* Redactor;
@@ -67,9 +64,6 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
   }
   if (holdsOperatorSecret(redactor, call.input)) {
     return refused(operatorSecretRefusal);
-  }
-  if (draftsSoFar >= maxApprovalsPerTurn) {
-    return refused(tooManyApprovalsRefusal);
   }
   const summary = yield* tool.approvalSummaryOf(call.input);
   if (Option.isNone(summary)) {

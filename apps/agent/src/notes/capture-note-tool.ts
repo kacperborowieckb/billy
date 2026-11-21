@@ -10,7 +10,7 @@ import {
 import type { Burst, BurstNoteSource } from "../personal-agent/burst.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { noteIdListSchema } from "./note-id-list-schema.ts";
-import { openLoopText } from "./note-summary.ts";
+import { openLoopText, storedNoteTexts } from "./note-summary.ts";
 import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import type { NoteSource } from "./note.ts";
@@ -87,14 +87,18 @@ export const captureNoteTool = (
     {
       name: captureNoteToolName,
       riskClass: "change",
-      marksItsWorkUntrusted: true,
-      approvalSummary: ({ text, url, openLoop }) =>
-        Effect.succeed(
-          [
-            `Keep Note ${quoted(text)}`,
-            ...(url === undefined ? [] : [`with link ${url}`]),
-            ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
-          ].join(", ")
+      marksItsWorkUntrusted: ({ linkedNoteIds }) =>
+        (linkedNoteIds ?? []).length === 0,
+      approvalSummary: ({ text, url, openLoop, linkedNoteIds = [] }) =>
+        storedNoteTexts(notes, linkedNoteIds).pipe(
+          Effect.map((linked) =>
+            [
+              `Keep Note ${quoted(text)}`,
+              ...(url === undefined ? [] : [`with link ${url}`]),
+              ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
+              ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
+            ].join(", ")
+          )
         ),
       description:
         "Keep a Note for the Owner at once: a task, a text, a link, or a text with a link. Call it without asking the Owner first. Does not open the link. Give openLoop when the Note is something to do or to come back to; give none for a fact. Fails with a message when a due time is given and the time zone of the Owner is not known.",

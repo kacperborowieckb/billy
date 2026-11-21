@@ -18,11 +18,9 @@ export const approvalSummaryOf =
       ? summary.of(input).pipe(Effect.map(Option.some))
       : Effect.succeed(Option.none());
 
-export const maxQuotedCharacters = 200;
+export const maxQuotedCharacters = 300;
 
-export const maxSummaryCharacters = 300;
-
-export const maxApprovalsPerTurn = 12;
+export const maxSummaryCharacters = 3500;
 
 const oneLineCutAt = (text: string, limit: number) => {
   const characters = [...text.replaceAll(/\s+/gu, " ").trim()];

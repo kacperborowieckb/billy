@@ -297,6 +297,28 @@ describe("Approval for a forwarded message", () => {
     expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
   });
 
+  it("asks for Approval when a new Note from a forwarded message links an existing Note", async () => {
+    const ownerId = await addOwner(9112);
+    scriptModel([
+      {
+        callTool: captureNoteToolName,
+        input: { text: "dinner", linkedNoteIds: ["note-of-owner"] },
+      },
+      { say: "Waiting for you." },
+    ]);
+
+    await forward(9112);
+    await waitForSends(2);
+    await waitForPendingApprovals(ownerId, 1);
+
+    expect(await countOf(ownerId, "notes")).toBe(0);
+    const [approval] = await pendingApprovalsOf(ownerId);
+    expect(approval).toMatchObject({
+      tool_name: captureNoteToolName,
+      summary: 'Keep Note "dinner", link to Note note-of-owner',
+    });
+  });
+
   it("asks for Approval to edit an existing owner Note from a forwarded message", async () => {
     const ownerId = await addOwner(9104);
     scriptModel([
@@ -444,23 +466,32 @@ describe("An Owner message Turn with Trust Level owner", () => {
 });
 
 describe("Drafts at the limits of a Turn", () => {
-  it("refuses a gated call after the most Pending Approvals of one Turn", async () => {
+  it("splits long Approval rows over several messages, each Pending Approval with the id of its own message", async () => {
     const ownerId = await addOwner(9109);
+    const longReminder = {
+      ...reminderInput,
+      action: { _tag: "SendText", text: "Call Ana ".repeat(40) },
+    };
     scriptModel([
-      { callTool: setScheduleToolName, times: 13, input: reminderInput },
+      { callTool: setScheduleToolName, times: 13, input: longReminder },
       { say: "These wait for your Approval." },
     ]);
 
     await forward(9109);
-    await waitForSends(2);
-    await waitForPendingApprovals(ownerId, 12);
+    await waitForSends(3);
+    await waitForPendingApprovals(ownerId, 13);
 
-    expect(toolResultsOfLastModelCall()).toContain(
-      "already has 12 calls that wait"
-    );
-    expect(
-      fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard
-    ).toHaveLength(12);
+    const [, first, second] = fakeTelegram.sent;
+    const firstRows = first?.body.reply_markup?.inline_keyboard ?? [];
+    const secondRows = second?.body.reply_markup?.inline_keyboard ?? [];
+    expect(firstRows.length + secondRows.length).toBe(13);
+    expect(first?.body.text.length).toBeLessThanOrEqual(4096);
+    expect(second?.body.text.length).toBeLessThanOrEqual(4096);
+    const approvals = await pendingApprovalsOf(ownerId);
+    expect(approvals.map((row) => row.channel_message_id)).toEqual([
+      ...firstRows.map(() => "9002"),
+      ...secondRows.map(() => "9003"),
+    ]);
   });
 
   it("still sends the Approval message when the model reaches the step limit after drafting", async () => {
@@ -506,8 +537,12 @@ describe("Drafts at the limits of a Turn", () => {
               });
               yield* pendingApprovals.openDrafts({
                 turnEventId: "turn-1",
-                pendingApprovalIds: [shown.pendingApprovalId],
-                channelMessageId: "500",
+                approvalMessages: [
+                  {
+                    pendingApprovalId: shown.pendingApprovalId,
+                    channelMessageId: "500",
+                  },
+                ],
               });
             })
           )

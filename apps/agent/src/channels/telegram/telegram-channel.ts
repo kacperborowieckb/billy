@@ -1,37 +1,11 @@
 import { Effect, Layer, Schema } from "effect";
 
 import { Channel } from "../channel.ts";
-import type {
-  Delivery,
-  OutgoingApprovalMessage,
-  OutgoingMessage,
-  OutgoingReaction,
-  ReactionDelivery,
-} from "../channel.ts";
+import type { OutgoingReaction, ReactionDelivery } from "../channel.ts";
 import { TypingNotShown } from "../typing-not-shown.ts";
-import {
-  approvalKeyboardOf,
-  approvalRequestText,
-} from "./approval-keyboard.ts";
-import type { InlineKeyboard } from "./approval-keyboard.ts";
 import { telegramReactionFor } from "./telegram-reactions.ts";
-
-export interface TelegramConfig {
-  readonly apiUrl: string;
-  readonly botToken: string;
-  readonly fetch?: typeof fetch;
-}
-
-const SendMessageResponseSchema = Schema.Union([
-  Schema.Struct({
-    ok: Schema.Literal(true),
-    result: Schema.Struct({ message_id: Schema.Int }),
-  }),
-  Schema.Struct({
-    ok: Schema.Literal(false),
-    description: Schema.optionalKey(Schema.String),
-  }),
-]);
+import { failed, send, sendWithApprovals } from "./telegram-send.ts";
+import type { TelegramConfig } from "./telegram-send.ts";
 
 const TrueResponseSchema = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(true) }),
@@ -40,131 +14,6 @@ const TrueResponseSchema = Schema.Union([
     description: Schema.optionalKey(Schema.String),
   }),
 ]);
-
-const failed = (reason: string): Delivery => ({ _tag: "Failed", reason });
-
-export const telegramTextLimit = 4096;
-
-const cutPosition = (text: string) => {
-  const window = text.slice(0, telegramTextLimit);
-  const lastBreak = Math.max(window.lastIndexOf("\n"), window.lastIndexOf(" "));
-  const cut = lastBreak > 0 ? lastBreak : telegramTextLimit;
-  const splitsSurrogatePair = /[\uD800-\uDBFF]/u.test(text.charAt(cut - 1));
-  return splitsSurrogatePair ? cut - 1 : cut;
-};
-
-const splitAtLimit = (text: string): readonly string[] => {
-  if (text.length <= telegramTextLimit) {
-    return [text];
-  }
-  const cut = cutPosition(text);
-  return [
-    text.slice(0, cut).trimEnd(),
-    ...splitAtLimit(text.slice(cut).trimStart()),
-  ];
-};
-
-const hasText = (part: string) => part.trim().length > 0;
-
-export const telegramParts = (text: string): readonly string[] =>
-  splitAtLimit(text).filter(hasText);
-
-interface TelegramPart extends OutgoingMessage {
-  readonly keyboard?: InlineKeyboard;
-}
-
-const sendMessageRequest = (config: TelegramConfig, message: TelegramPart) =>
-  new Request(`${config.apiUrl}/bot${config.botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: Number(message.conversationId),
-      text: message.text,
-      ...(message.inReplyTo === undefined
-        ? {}
-        : {
-            reply_parameters: {
-              message_id: Number(message.inReplyTo),
-              allow_sending_without_reply: true,
-            },
-          }),
-      ...(message.keyboard === undefined
-        ? {}
-        : { reply_markup: { inline_keyboard: message.keyboard } }),
-    }),
-  });
-
-const deliveryFrom = (response: Response) =>
-  Effect.tryPromise(() => response.json()).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(SendMessageResponseSchema)),
-    Effect.map((answer): Delivery => {
-      if (answer.ok) {
-        return {
-          _tag: "Confirmed",
-          channelMessageId: String(answer.result.message_id),
-        };
-      }
-      return failed(
-        `Telegram refused the message (${response.status}): ${answer.description ?? "no description"}`
-      );
-    }),
-    Effect.orElseSucceed(() =>
-      failed(`Telegram answered ${response.status} without a result`)
-    )
-  );
-
-const sendPart = (config: TelegramConfig, message: TelegramPart) =>
-  Effect.tryPromise(() =>
-    (config.fetch ?? fetch)(sendMessageRequest(config, message))
-  ).pipe(
-    Effect.matchEffect({
-      onFailure: () => Effect.succeed(failed("Telegram could not be reached")),
-      onSuccess: deliveryFrom,
-    })
-  );
-
-const sendParts = Effect.fnUntraced(function* sendParts(
-  config: TelegramConfig,
-  parts: readonly TelegramPart[]
-) {
-  const [first, ...rest] = parts;
-  if (first === undefined) {
-    return failed("The reply has no text");
-  }
-  let delivery = yield* sendPart(config, first);
-  let sentParts = 1;
-  for (const part of rest) {
-    if (delivery._tag === "Failed") {
-      break;
-    }
-    delivery = yield* sendPart(config, part);
-    sentParts += 1;
-  }
-  if (delivery._tag === "Failed" && parts.length > 1) {
-    return failed(`Part ${sentParts} of ${parts.length}: ${delivery.reason}`);
-  }
-  return delivery;
-});
-
-const textPartsOf = (message: OutgoingMessage): TelegramPart[] =>
-  telegramParts(message.text).map((text) => ({ ...message, text }));
-
-const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
-  sendParts(config, textPartsOf(message));
-
-const sendWithApprovals =
-  (config: TelegramConfig) => (message: OutgoingApprovalMessage) =>
-    sendParts(config, [
-      ...textPartsOf(message),
-      {
-        conversationId: message.conversationId,
-        ...(message.inReplyTo === undefined
-          ? {}
-          : { inReplyTo: message.inReplyTo }),
-        text: approvalRequestText(message.approvals),
-        keyboard: approvalKeyboardOf(message.approvals),
-      },
-    ]);
 
 const sendChatActionRequest = (
   config: TelegramConfig,

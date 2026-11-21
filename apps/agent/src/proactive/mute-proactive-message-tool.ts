@@ -151,12 +151,22 @@ export const muteProactiveMessageTool = (
           return Effect.succeed("Show what is muted");
         }
         const verb = action === "mute" ? "Mute" : "Remove the Mute of";
-        if (scope === "kind") {
+        if (scope === "kind" && kind !== undefined) {
           return Effect.succeed(
-            kind === undefined
-              ? `${verb} the kinds of the Open Loops of the last Proactive Message`
-              : `${verb} all Open Loops of kind ${quoted(kind)}`
+            `${verb} all Open Loops of kind ${quoted(kind)}`
           );
+        }
+        if (scope === "kind") {
+          return openLoopIds === undefined || openLoopIds.length === 0
+            ? Effect.succeed(
+                `${verb} all Open Loops of the kinds of the Open Loops of the last Proactive Message`
+              )
+            : storedNoteTexts(notes, openLoopIds).pipe(
+                Effect.map(
+                  (texts) =>
+                    `${verb} all Open Loops of the kinds of ${texts.join(", ")}`
+                )
+              );
         }
         return openLoopIds === undefined || openLoopIds.length === 0
           ? Effect.succeed(

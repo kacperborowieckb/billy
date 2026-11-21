@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import { Channel } from "../channels/channel.ts";
 import type {
+  ApprovalMessage,
   ApprovalRequest,
   Delivery,
   ReactionDelivery,
@@ -113,11 +114,23 @@ export const sendWithApprovals = Effect.fnUntraced(function* sendWithApprovals({
   replyTo,
 }: ApprovalSend) {
   const channel = yield* Channel;
-  return yield* sendPlanned({
+  let approvalMessages: readonly ApprovalMessage[] = [];
+  const delivery = yield* sendPlanned({
     event,
     text,
     replyTo,
     attempt: (destination) =>
-      channel.sendWithApprovals({ ...destination, text, approvals }),
+      channel.sendWithApprovals({ ...destination, text, approvals }).pipe(
+        Effect.tap((sent) =>
+          Effect.sync(() => {
+            if (sent._tag === "Confirmed") {
+              ({ approvalMessages } = sent);
+            }
+          })
+        )
+      ),
   });
+  return delivery._tag === "Confirmed"
+    ? { ...delivery, approvalMessages }
+    : delivery;
 });

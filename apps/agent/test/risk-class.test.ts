@@ -82,7 +82,7 @@ const everyToolSet = async (): Promise<Record<string, AgentTools>> =>
 
 const gatedTool = (tool: RiskClassified) => ({
   ...tool,
-  marksItsWorkUntrusted: false,
+  marksItsWorkUntrusted: () => false,
 });
 
 const WideInput = z.object({ wide: z.boolean() });
@@ -181,7 +181,7 @@ describe("The gate", () => {
         isInput: isWideInput,
         of: (input) => (input.wide ? "approve" : "change"),
       }),
-      marksItsWorkUntrusted: true,
+      marksItsWorkUntrusted: () => true,
     };
 
     expect(
