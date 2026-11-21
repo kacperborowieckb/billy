@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
@@ -117,8 +117,8 @@ export const captureNoteTool = (
               () => new ToolFailed({ message: noteNotKeptMessage })
             )
           );
-        if (alreadyKept) {
-          return `Keep Note ${quoted(keptText)}: it is already kept, so nothing changes`;
+        if (Option.isSome(alreadyKept)) {
+          return `Keep Note ${quoted(keptText)}: Note ${quoted(alreadyKept.value.text)} (id ${alreadyKept.value.noteId}) already keeps it, so nothing changes`;
         }
         const timeZone = yield* ownerTimeZone;
         return [

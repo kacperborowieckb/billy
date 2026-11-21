@@ -18,7 +18,8 @@ import {
   scheduleOf,
 } from "./schedule-presentation.ts";
 import {
-  activeScheduleText,
+  activeSchedule,
+  activeScheduleTextOf,
   scheduleActionText,
   scheduleDueText,
 } from "./schedule-summary.ts";
@@ -135,19 +136,20 @@ export const changeScheduleTool = (
           localDueTime,
           repeat,
         });
-        const schedule = yield* activeScheduleText(
-          schedules,
-          scheduleId,
-          Option.some(timeZone)
-        );
+        const schedule = yield* activeSchedule(schedules, scheduleId);
+        const stopsRepeating =
+          schedule.repeat !== undefined &&
+          localDueTime !== undefined &&
+          repeat === undefined;
         const due = scheduleDueText(
           { localDueTime, repeat },
           Option.some(timeZone)
         );
         return [
-          `Change ${schedule}`,
+          `Change ${activeScheduleTextOf(schedule, Option.some(timeZone))}`,
           ...(action === undefined ? [] : [`to ${scheduleActionText(action)}`]),
           ...(due === "" ? [] : [`due ${due}`]),
+          ...(stopsRepeating ? ["so it stops repeating"] : []),
         ].join(", ");
       }),
       description:

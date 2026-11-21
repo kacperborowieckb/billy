@@ -40,7 +40,7 @@ export const scheduleDueText = (
 export const schedulesNotReadMessage =
   "The Schedules could not be read, so nothing waits for the Owner's Approval. Tell the Owner that you could not do it.";
 
-const activeScheduleTextOf = (
+export const activeScheduleTextOf = (
   schedule: Schedule,
   timeZone: Option.Option<DateTime.TimeZone>
 ) => {
@@ -58,16 +58,15 @@ const activeScheduleTextOf = (
   ].join(", ");
 };
 
-export const activeScheduleText = (
+export const activeSchedule = (
   schedules: Schedules["Service"],
-  scheduleId: string,
-  timeZone: Option.Option<DateTime.TimeZone>
+  scheduleId: string
 ) =>
   schedules.byId(scheduleId).pipe(
     Effect.mapError(() => new ToolFailed({ message: schedulesNotReadMessage })),
     Effect.flatMap((found) =>
       Option.isSome(found) && found.value.state === "active"
-        ? Effect.succeed(activeScheduleTextOf(found.value, timeZone))
+        ? Effect.succeed(found.value)
         : Effect.fail(
             new ToolFailed({ message: noActiveScheduleMessage(scheduleId) })
           )

@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { noActiveScheduleMessage } from "./schedule-presentation.ts";
-import { activeScheduleText } from "./schedule-summary.ts";
+import { activeSchedule, activeScheduleTextOf } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
 
 export const cancelScheduleToolName = "cancel_schedule";
@@ -32,7 +32,9 @@ export const cancelScheduleTool = (
       approvalSummary: ({ scheduleId }) =>
         ownerTimeZone.pipe(
           Effect.flatMap((timeZone) =>
-            activeScheduleText(schedules, scheduleId, timeZone)
+            activeSchedule(schedules, scheduleId).pipe(
+              Effect.map((schedule) => activeScheduleTextOf(schedule, timeZone))
+            )
           ),
           Effect.map((schedule) => `Cancel ${schedule}`)
         ),

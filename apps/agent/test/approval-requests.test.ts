@@ -419,10 +419,14 @@ describe("Approval for a forwarded message", () => {
     await forward(9117);
     await waitForSends(3);
     await waitForPendingApprovals(ownerId, 1);
+    const [kept] = await rowsOf<{ note_id: string }>(
+      ownerId,
+      "SELECT note_id FROM notes WHERE trust_level = 'untrusted'"
+    );
 
     const [approval] = await pendingApprovalsOf(ownerId);
     expect(approval?.summary).toBe(
-      `Keep Note "${forwardedInvitation}": it is already kept, so nothing changes`
+      `Keep Note "${forwardedInvitation}": Note "${forwardedInvitation}" (id ${kept?.note_id}) already keeps it, so nothing changes`
     );
   });
 

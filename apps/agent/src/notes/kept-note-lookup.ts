@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import type { OwnerId } from "../owner-id.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
@@ -14,7 +14,7 @@ export const makeKeptNoteLookup = Effect.fnUntraced(
       hashOfNoteText(text).pipe(
         Effect.flatMap((textHash) =>
           database
-            .select({ noteId: notes.noteId })
+            .select({ noteId: notes.noteId, text: notes.text })
             .from(notes)
             .where(
               and(
@@ -24,7 +24,7 @@ export const makeKeptNoteLookup = Effect.fnUntraced(
               )
             )
         ),
-        Effect.map((rows) => rows.length > 0)
+        Effect.map(([row]) => Option.fromNullishOr(row))
       );
 
     return { keptFrom };
