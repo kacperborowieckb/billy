@@ -49,14 +49,17 @@ export const editApprovalMessage =
       edit.turnApprovals,
       edit.channelMessageId
     );
-    return Effect.tryPromise(() =>
+    return Effect.tryPromise((signal) =>
       (config.fetch ?? fetch)(
-        telegramRequest(config, "editMessageText", {
-          chat_id: Number(edit.conversationId),
-          message_id: Number(edit.channelMessageId),
-          text: block.text,
-          reply_markup: { inline_keyboard: block.keyboard },
-        })
+        new Request(
+          telegramRequest(config, "editMessageText", {
+            chat_id: Number(edit.conversationId),
+            message_id: Number(edit.channelMessageId),
+            text: block.text,
+            reply_markup: { inline_keyboard: block.keyboard },
+          }),
+          { signal }
+        )
       )
     ).pipe(
       Effect.matchEffect({
