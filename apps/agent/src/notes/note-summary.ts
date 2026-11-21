@@ -5,11 +5,14 @@ import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { localDueTimeText } from "../time/local-time-text.ts";
 import { unknownNotesMessage } from "./note-tool-failure-message.ts";
-import type { Notes } from "./notes.ts";
+import type { Note, Notes } from "./notes.ts";
 import type { OpenLoopInput } from "./open-loop-input.ts";
 
 export const notesNotReadMessage =
   "The Notes could not be read, so nothing waits for the Owner's Approval. Tell the Owner that you could not do it.";
+
+export const storedNoteLabel = (note: Note) =>
+  `Note ${quoted(note.text)} (id ${note.noteId})`;
 
 export const storedNotes = (
   notes: Notes["Service"],
@@ -44,7 +47,7 @@ export const storedNoteTexts = (
   consequence: string
 ) =>
   storedNotes(notes, noteIds, consequence).pipe(
-    Effect.map((found) => found.map((note) => `Note ${quoted(note.text)}`))
+    Effect.map((found) => found.map(storedNoteLabel))
   );
 
 export const openLoopText = (

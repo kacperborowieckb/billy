@@ -2,7 +2,7 @@ import { DateTime, Effect, Option } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
-import { storedNotes } from "../notes/note-summary.ts";
+import { storedNoteLabel, storedNotes } from "../notes/note-summary.ts";
 import type { Notes } from "../notes/notes.ts";
 import {
   instantText,
@@ -111,6 +111,6 @@ export const openLoopTextsOf = (
         .map((note) => note.noteId);
       return notOpen.length > 0
         ? Effect.fail(new ToolFailed({ message: notOpenLoopsMessage(notOpen) }))
-        : Effect.succeed(found.map((note) => `Note ${quoted(note.text)}`));
+        : Effect.succeed(found.map(storedNoteLabel));
     })
   );

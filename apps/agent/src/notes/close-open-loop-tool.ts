@@ -1,10 +1,9 @@
 import { Cause, Effect, Option, Schema } from "effect";
 
-import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { NoOpenLoop } from "./no-open-loop.ts";
-import { storedNotes } from "./note-summary.ts";
+import { storedNoteLabel, storedNotes } from "./note-summary.ts";
 import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import { OpenLoopClosedReasonSchema } from "./open-loop.ts";
@@ -58,7 +57,7 @@ export const closeOpenLoopTool = (
           Effect.flatMap(([note]) =>
             note?.openLoop?._tag === "Open"
               ? Effect.succeed(
-                  `Close the Open Loop of Note ${quoted(note.text)} as ${reason}`
+                  `Close the Open Loop of ${storedNoteLabel(note)} as ${reason}`
                 )
               : Effect.fail(
                   new ToolFailed({ message: noOpenLoopMessage(noteId) })

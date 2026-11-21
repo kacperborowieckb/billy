@@ -139,7 +139,7 @@ export const updateProfileTool = (
             message: unknownProfileEntryMessage(change.entryId),
           });
         }
-        return `Remove from the Profile: ${quoted(entry.text)}`;
+        return `Remove the ${entry.kind === "style_rule" ? "style rule" : "fact"} ${quoted(entry.text)} from the Profile (id ${entry.entryId})`;
       }),
       description:
         "Add or remove one entry of the Profile: a core fact or a style rule about the Owner. The Profile is in every Turn, so keep only what the Owner states about themselves or asks for, and keep it short. Fails when the Profile has no room.",

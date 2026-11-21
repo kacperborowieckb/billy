@@ -391,7 +391,7 @@ describe("Approval for a forwarded message", () => {
     const [approval] = await pendingApprovalsOf(ownerId);
     expect(approval).toMatchObject({
       tool_name: captureNoteToolName,
-      summary: `Keep Note "${forwardedInvitation}", link to Note "buy milk"`,
+      summary: `Keep Note "${forwardedInvitation}", link to Note "buy milk" (id ${owned?.note_id})`,
     });
   });
 
@@ -456,7 +456,7 @@ describe("Approval for a forwarded message", () => {
     const [approval] = await pendingApprovalsOf(ownerId);
     expect(approval).toMatchObject({
       tool_name: updateNoteToolName,
-      summary: 'Change Note "buy milk", new text "buy milk for Ana"',
+      summary: `Change Note "buy milk" (id ${note?.note_id}), new text "buy milk for Ana"`,
     });
   });
 
@@ -774,7 +774,7 @@ describe("Checks before a draft", () => {
     );
     const approvals = await pendingApprovalsOf(ownerId);
     expect(approvals.map((row) => row.summary)).toEqual([
-      'Set a follow-up of the agent, Scheduled Task "Ask about the rent", Tue 26 Nov 2030, 09:00, to follow up Note "pay rent"',
+      `Set a follow-up of the agent, Scheduled Task "Ask about the rent", Tue 26 Nov 2030, 09:00, to follow up Note "pay rent" (id ${note?.note_id})`,
       `Cancel Reminder "Call Ana about dinner", next due Tue 26 Nov 2030, 09:00, id ${schedule?.schedule_id}`,
     ]);
   });
