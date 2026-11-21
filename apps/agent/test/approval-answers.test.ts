@@ -138,12 +138,12 @@ const setTimeZone = async (userId: number) => {
 
 const reminderInput = {
   action: { _tag: "SendText", text: "Call Ana about dinner" },
-  localDueTime: "2026-11-26T09:00",
+  localDueTime: "2099-11-26T09:00",
   ownerAskedForSchedule: true,
 };
 
 const reminderSummary =
-  'Set Reminder "Call Ana about dinner", Thu 26 Nov 2026, 09:00';
+  'Set Reminder "Call Ana about dinner", Thu 26 Nov 2099, 09:00';
 
 const waitForSends = (count: number) =>
   vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(count), {
@@ -435,6 +435,20 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     expect(await statesOf(ownerId)).toEqual(["executed", "rejected"]);
     expect(await countOf(ownerId, "schedules WHERE set_by = 'owner'")).toBe(1);
     expect(fakeTool.kept).toEqual([]);
+  });
+
+  it("runs the approved call when Telegram never answers the press", async () => {
+    const { ownerId, id, messageId } = await askForReminder(9210, 1);
+    const releasePressAnswer = fakeTelegram.holdPressAnswers();
+
+    await press(9210, `approve:${id}`, { messageId });
+    await waitForEdits(1);
+    await waitForInboxDone(ownerId);
+    releasePressAnswer();
+
+    expect(await countOf(ownerId, "schedules WHERE set_by = 'owner'")).toBe(1);
+    expect(await firstStateOf(ownerId)).toBe("executed");
+    expect(fakeTelegram.edits[0]?.body.text).toContain(doneStatus);
   });
 
   it("does not run the call twice after a reset during the approved run", async () => {

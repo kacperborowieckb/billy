@@ -30,6 +30,8 @@ export interface ApprovalAnswerSettings {
   readonly tools: AgentTools;
 }
 
+export const channelAnswerTimeoutMillis = 3000;
+
 export const turnGoneReason = "The Turn of this Approval is no longer stored";
 
 export const toolGoneReason = "The tool of this Approval no longer exists";
@@ -162,11 +164,21 @@ const editApprovalMessage = Effect.fnUntraced(function* editApprovalMessage(
           },
         ];
   });
-  const edited = yield* channel.editApprovalMessage({
-    conversationId: event.conversationId,
-    channelMessageId: approval.value.channelMessageId,
-    turnApprovals,
-  });
+  const edited = yield* channel
+    .editApprovalMessage({
+      conversationId: event.conversationId,
+      channelMessageId: approval.value.channelMessageId,
+      turnApprovals,
+    })
+    .pipe(
+      Effect.timeoutOption(channelAnswerTimeoutMillis),
+      Effect.map(
+        Option.getOrElse(() => ({
+          _tag: "Failed" as const,
+          reason: "Telegram did not answer the edit in time",
+        }))
+      )
+    );
   if (edited._tag === "Failed") {
     yield* Effect.logWarning("The Approval message was not edited", {
       pendingApprovalId: event.pendingApprovalId,
@@ -193,10 +205,17 @@ const answerPress = Effect.fnUntraced(function* answerPress(
   const channel = yield* Channel;
   const approval = yield* pendingApprovals.byId(event.pendingApprovalId);
   const notice = lateNoticeOf(approval, yield* DateTime.now);
-  yield* channel.answerPress({
-    pressId: event.pressId,
-    ...(notice === undefined ? {} : { notice }),
-  });
+  const pressAnswered = yield* channel
+    .answerPress({
+      pressId: event.pressId,
+      ...(notice === undefined ? {} : { notice }),
+    })
+    .pipe(Effect.timeoutOption(channelAnswerTimeoutMillis));
+  if (Option.isNone(pressAnswered)) {
+    yield* Effect.logWarning("Telegram did not answer the press in time", {
+      pendingApprovalId: event.pendingApprovalId,
+    });
+  }
   if (notice !== undefined || Option.isNone(approval)) {
     return false;
   }

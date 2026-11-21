@@ -70,11 +70,14 @@ export const editApprovalMessage =
 
 export const answerPress =
   (config: TelegramConfig) => (answer: ApprovalPressAnswer) =>
-    Effect.tryPromise(() =>
+    Effect.tryPromise((signal) =>
       (config.fetch ?? fetch)(
-        telegramRequest(config, "answerCallbackQuery", {
-          callback_query_id: answer.pressId,
-          ...(answer.notice === undefined ? {} : { text: answer.notice }),
-        })
+        new Request(
+          telegramRequest(config, "answerCallbackQuery", {
+            callback_query_id: answer.pressId,
+            ...(answer.notice === undefined ? {} : { text: answer.notice }),
+          }),
+          { signal }
+        )
       )
     ).pipe(Effect.ignore);

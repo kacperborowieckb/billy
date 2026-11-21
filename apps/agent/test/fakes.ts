@@ -62,6 +62,7 @@ const fakeTelegramState = {
   edits: [] as SentTelegramMessage[],
   editHold: Promise.resolve() as Promise<undefined>,
   pressAnswers: [] as TelegramPressAnswer[],
+  pressAnswerHold: Promise.resolve() as Promise<undefined>,
 };
 
 const answerEdit = async (request: Request) => {
@@ -77,6 +78,7 @@ const answerPressAnswer = async (request: Request) => {
   fakeTelegramState.pressAnswers.push(
     await request.json<TelegramPressAnswer>()
   );
+  await fakeTelegramState.pressAnswerHold;
   return Response.json({ ok: true, result: true });
 };
 
@@ -154,6 +156,11 @@ export const fakeTelegram = {
   },
   get pressAnswers(): readonly TelegramPressAnswer[] {
     return fakeTelegramState.pressAnswers;
+  },
+  holdPressAnswers: () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    fakeTelegramState.pressAnswerHold = promise;
+    return () => resolve(undefined);
   },
   holdEdits: () => {
     const { promise, resolve } = Promise.withResolvers<undefined>();
@@ -428,6 +435,7 @@ export const resetFakes = () => {
   fakeTelegramState.edits = [];
   fakeTelegramState.editHold = Promise.resolve(undefined);
   fakeTelegramState.pressAnswers = [];
+  fakeTelegramState.pressAnswerHold = Promise.resolve(undefined);
   fakeModel.doGenerateCalls.length = 0;
   releaseModel = Promise.resolve();
   callsBeforeHold = 0;
