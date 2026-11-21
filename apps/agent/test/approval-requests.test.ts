@@ -392,6 +392,37 @@ describe("Approval for a forwarded message", () => {
     });
   });
 
+  it("says that nothing changes when a linking capture_note keeps a forwarded text that the Turn already kept", async () => {
+    const ownerId = await addOwner(9117);
+    scriptModel([
+      { callTool: captureNoteToolName, input: { text: "buy milk" } },
+      { say: "Kept." },
+    ]);
+    await telegramWebhook(textUpdate({ fromUserId: 9117, text: "buy milk" }));
+    await waitForSends(1);
+    const [owned] = await rowsOf<{ note_id: string }>(
+      ownerId,
+      "SELECT note_id FROM notes"
+    );
+    scriptModel([
+      { callTool: captureNoteToolName, input: { text: "dinner" } },
+      {
+        callTool: captureNoteToolName,
+        input: { text: "dinner", linkedNoteIds: [owned?.note_id] },
+      },
+      { say: "Kept." },
+    ]);
+
+    await forward(9117);
+    await waitForSends(3);
+    await waitForPendingApprovals(ownerId, 1);
+
+    const [approval] = await pendingApprovalsOf(ownerId);
+    expect(approval?.summary).toBe(
+      `Keep Note "${forwardedInvitation}": it is already kept, so nothing changes`
+    );
+  });
+
   it("asks for Approval to edit an existing owner Note from a forwarded message", async () => {
     const ownerId = await addOwner(9104);
     scriptModel([

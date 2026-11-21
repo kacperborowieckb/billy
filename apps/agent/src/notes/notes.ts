@@ -5,6 +5,7 @@ import { Journal } from "../journal/journal.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { notes } from "../personal-agent/storage-schema.ts";
+import { makeKeptNoteLookup } from "./kept-note-lookup.ts";
 import { makeNoteLinks, uniqueNoteIds } from "./note-links.ts";
 import { toNote } from "./note-row.ts";
 import { hashOfNoteText } from "./note-text-hash.ts";
@@ -161,6 +162,8 @@ const makeNotes = (ownerId: OwnerId) =>
         )
       );
 
+    const { keptFrom } = yield* makeKeptNoteLookup(ownerId);
+
     const listLinked = Effect.fnUntraced(function* listLinked(
       noteId: string,
       offset: number
@@ -242,6 +245,7 @@ const makeNotes = (ownerId: OwnerId) =>
 
     return {
       capture,
+      keptFrom,
       update,
       byIds,
       closeOpenLoop,

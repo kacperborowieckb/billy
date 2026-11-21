@@ -109,9 +109,20 @@ export const captureNoteTool = (
           linkedNoteIds,
           "Nothing was kept."
         );
+        const keptText = keptTextOf(source, text);
+        const alreadyKept = yield* notes
+          .keptFrom(source.eventId, keptText)
+          .pipe(
+            Effect.mapError(
+              () => new ToolFailed({ message: noteNotKeptMessage })
+            )
+          );
+        if (alreadyKept) {
+          return `Keep Note ${quoted(keptText)}: it is already kept, so nothing changes`;
+        }
         const timeZone = yield* ownerTimeZone;
         return [
-          `Keep Note ${quoted(keptTextOf(source, text))}`,
+          `Keep Note ${quoted(keptText)}`,
           ...(url === undefined ? [] : [`with link ${url}`]),
           ...(openLoop === undefined ? [] : [openLoopText(openLoop, timeZone)]),
           ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
