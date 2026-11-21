@@ -14,6 +14,7 @@ import {
 } from "../src/model-gateway/ai-gateway.ts";
 import { ModelGateway } from "../src/model-gateway/model-gateway.ts";
 import { ModelProvider } from "../src/model-gateway/model-provider.ts";
+import type { ModelStep } from "../src/model-gateway/model-step.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { decodeTurnEnv } from "../src/personal-agent/turn-services.ts";
@@ -204,25 +205,37 @@ const toolOutputsSentToModel = () =>
     )
   );
 
+const approvalPartsOf = (steps: readonly ModelStep[]) =>
+  steps
+    .flatMap((step) => step.responseMessages)
+    .flatMap((message): readonly { readonly type: string }[] =>
+      typeof message.content === "string" ? [] : message.content
+    )
+    .filter(
+      (part) =>
+        part.type === "tool-approval-request" ||
+        part.type === "tool-approval-response"
+    );
+
 describe("The gate in the Model Gateway", () => {
   it.each([
     { name: "a blocked tool", riskClass: "blocked" as const },
     {
       name: "a tool raised to blocked by its input",
       riskClass: "change" as const,
+      riskClassOfInput: ({ word }: { readonly word: string }) =>
+        word === "secret" ? ("blocked" as const) : ("change" as const),
     },
   ])(
     "never runs $name and gives the model the reason",
-    async ({ riskClass }) => {
+    async ({ riskClass, riskClassOfInput }) => {
       resetFakes();
       scriptModel([
         { callTool: "keep_word", input: { word: "secret" } },
         { say: "I cannot keep that word." },
       ]);
       const kept: string[] = [];
-      const tool = keepWordTool(kept, riskClass, ({ word }) =>
-        word === "secret" ? "blocked" : "read"
-      );
+      const tool = keepWordTool(kept, riskClass, riskClassOfInput);
 
       const reply = await Effect.runPromise(
         ModelGateway.pipe(
@@ -253,6 +266,7 @@ describe("The gate in the Model Gateway", () => {
       expect(toolOutputsSentToModel()).toEqual([
         { type: "execution-denied", reason: blockedCallReason },
       ]);
+      expect(approvalPartsOf(reply.steps)).toEqual([]);
     }
   );
 

@@ -4,7 +4,7 @@ Status: accepted
 
 Date: 2026-11-21
 
-Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026, but 0026 is the marketing site stack, so it is 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. The Risk Class `read` takes its place, and the outcome-refusal rules read the Risk Class. The rest of 0021 stands. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
+Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. The Risk Class `read` takes its place, and the outcome-refusal rules read the Risk Class of each failed call, from its tool and its input. The rest of 0021 stands. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
 
 The feature is built in steps. Ticket [#143](https://github.com/kacperborowieckb/billy/issues/143) adds the Risk Class and the gate, with no change in behavior for the Owner: the gate denies only a `blocked` call, and no tool is `blocked` yet. The later tickets of #139 add the Trust Level of a Turn, Pending Approvals, the Telegram buttons, and the typed yes.
 
@@ -33,7 +33,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
   - `change` in an `owner` Turn: runs.
   - `change` in an `untrusted` Turn: needs Approval. One exception: `capture_note` of a new Note runs, because code marks that Note `untrusted`. An edit of an existing Note needs Approval.
   - `approve`: always needs Approval.
-  - `blocked`: denied. The model gets the reason as the tool result, and the call counts as a failed changing call for the outcome-refusal rules.
+  - `blocked`: denied. The model gets the reason as the tool result, and the call counts as a failed changing call for the outcome-refusal rules. The stored history keeps the tool call and its `execution-denied` result, and code removes the native `tool-approval-request` and `tool-approval-response` parts.
 - The gate has a place for Auto-review between the code rules and the Owner. It is not built.
 - A run that the gate allows maps to `not-applicable`, so the Conversation gets no approval parts for it.
 - Code does not continue the model history with `tool-approval-response`. When the SDK stops for Approval, code writes the frozen call as a draft Pending Approval, and writes a tool result for that call into the Conversation: "waiting for the Owner's Approval, id X". The history stays valid when other Owner messages or a reset come before the answer. Each call of a step that needs Approval becomes its own draft.
@@ -77,7 +77,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 ## Why
 
-Removing tools by Trust Level was the only protection, and it was too strict and incomplete at once. A forwarded invitation could not become a Reminder, and an untrusted Note read in an Owner message Turn could still push the model to change data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
+Before this decision, the only protection was to remove tools by Trust Level. That protection had two problems. It was too strict: a forwarded invitation could not become a Reminder. It was incomplete: an untrusted Note that an Owner message Turn read could still push the model to change data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
 
 ## Revisit if
 

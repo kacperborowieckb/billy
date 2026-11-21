@@ -1,6 +1,8 @@
+import type { ModelMessage, ToolResultPart } from "ai";
 import { env, runInDurableObject } from "cloudflare:test";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { riskClasses, riskClassified } from "../src/approval/risk-class.ts";
 import type { RiskClass } from "../src/approval/risk-class.ts";
@@ -9,14 +11,21 @@ import {
   gateDecisionOf,
 } from "../src/approval/tool-gate.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
+import { agentTool } from "../src/model-gateway/agent-tool.ts";
 import type { AgentTools } from "../src/model-gateway/agent-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { agentToolServices } from "../src/personal-agent/agent-tool-services.ts";
 import type { Burst } from "../src/personal-agent/burst.ts";
+import { refusalOfOutcomeTool } from "../src/personal-agent/outcome-refusal.ts";
 import { ownerMessageTools } from "../src/personal-agent/owner-message-tools.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { proactiveTools } from "../src/personal-agent/proactive-tools.ts";
 import { scheduledTaskTools } from "../src/personal-agent/scheduled-task-tools.ts";
+import {
+  silenceAfterFailureMessage,
+  staySilentTool,
+  staySilentToolName,
+} from "../src/personal-agent/stay-silent-tool.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
 
 const readTools = new Set([
@@ -120,5 +129,77 @@ describe("The gate", () => {
         );
       }
     }
+  });
+});
+
+const peekTool = agentTool({
+  description: "Read a word",
+  inputSchema: z.object({ word: z.string() }),
+  riskClass: "read",
+  riskClassOfInput: ({ word }) => (word === "secret" ? "blocked" : "read"),
+  execute: ({ word }) => Effect.succeed({ word }),
+});
+
+const failedPeek = (
+  word: string,
+  output: ToolResultPart["output"]
+): readonly ModelMessage[] => [
+  {
+    role: "assistant",
+    content: [
+      {
+        type: "tool-call",
+        toolCallId: "peek-1",
+        toolName: "peek",
+        input: { word },
+      },
+    ],
+  },
+  {
+    role: "tool",
+    content: [
+      { type: "tool-result", toolCallId: "peek-1", toolName: "peek", output },
+    ],
+  },
+];
+
+const silenceRefusalAfter = async (
+  ownerId: string,
+  earlierMessages: readonly ModelMessage[]
+) =>
+  runInDurableObject(
+    await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
+    (instance) =>
+      instance.runtime.runPromise(
+        refusalOfOutcomeTool({
+          eventId: "event-1",
+          name: staySilentToolName,
+          steps: [],
+          earlierMessages,
+          tools: { peek: peekTool, [staySilentToolName]: staySilentTool },
+        })
+      )
+  );
+
+describe("The outcome-refusal rules", () => {
+  it("read the class of the call, so a read tool that its input raised to blocked refuses silence", async () => {
+    const refusal = await silenceRefusalAfter(
+      "refusal-raised-owner",
+      failedPeek("secret", {
+        type: "execution-denied",
+        reason: blockedCallReason,
+      })
+    );
+
+    expect(refusal).toBe(silenceAfterFailureMessage);
+  });
+
+  it("allow silence after a failed read call", async () => {
+    const refusal = await silenceRefusalAfter(
+      "refusal-read-owner",
+      failedPeek("plain", { type: "error-text", value: "The store is down" })
+    );
+
+    expect(refusal).toBeUndefined();
   });
 });

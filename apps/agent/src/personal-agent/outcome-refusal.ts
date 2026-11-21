@@ -39,18 +39,51 @@ interface OutcomeToolCall {
   readonly tools: AgentTools;
 }
 
-const failedToolNamesOf = (messages: readonly ModelMessage[]) =>
+const failedOutputTypes: ReadonlySet<string> = new Set([
+  "error-text",
+  "error-json",
+  "execution-denied",
+]);
+
+const failedCallIdsOf = (messages: readonly ModelMessage[]) =>
+  new Set(
+    messages.flatMap((message) =>
+      message.role === "tool"
+        ? message.content.flatMap((part) =>
+            part.type === "tool-result" &&
+            failedOutputTypes.has(part.output.type)
+              ? [part.toolCallId]
+              : []
+          )
+        : []
+    )
+  );
+
+const toolCallsOf = (messages: readonly ModelMessage[]) =>
   messages.flatMap((message) =>
-    message.role === "tool"
+    message.role === "assistant" && typeof message.content !== "string"
       ? message.content.flatMap((part) =>
-          part.type === "tool-result" &&
-          (part.output.type === "error-text" ||
-            part.output.type === "error-json")
-            ? [part.toolName]
-            : []
+          part.type === "tool-call" ? [part] : []
         )
       : []
   );
+
+const isReadCall = (
+  tools: AgentTools,
+  call: { readonly toolName: string; readonly input: unknown }
+) =>
+  Object.hasOwn(tools, call.toolName) &&
+  tools[call.toolName]?.riskClassOf(call.input) === "read";
+
+const aChangingCallFailed = (
+  tools: AgentTools,
+  messages: readonly ModelMessage[]
+) => {
+  const failed = failedCallIdsOf(messages);
+  return toolCallsOf(messages).some(
+    (call) => failed.has(call.toolCallId) && !isReadCall(tools, call)
+  );
+};
 
 export const refusalOfOutcomeTool = Effect.fnUntraced(
   function* refusalOfOutcomeTool({
@@ -66,16 +99,10 @@ export const refusalOfOutcomeTool = Effect.fnUntraced(
     ) {
       return unknownOutcomeToolMessage;
     }
-    const failedNames = [
-      ...steps
-        .flatMap((step) => step.toolCalls)
-        .filter((call) => call.failed)
-        .map((call) => call.name),
-      ...failedToolNamesOf(earlierMessages),
-    ];
-    const changeFailed = failedNames.some(
-      (failedName) => tools[failedName]?.riskClass !== "read"
-    );
+    const changeFailed = aChangingCallFailed(tools, [
+      ...earlierMessages,
+      ...steps.flatMap((step) => step.responseMessages),
+    ]);
     if (changeFailed) {
       return name === reactToolName
         ? reactionAfterFailureMessage
