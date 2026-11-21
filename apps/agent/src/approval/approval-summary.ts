@@ -22,7 +22,7 @@ export const approvalSummaryOf =
 
 export const maxSummaryLength = 3500;
 
-export const quoted = (text: string) => `"${text}"`;
+export const quoted = (text: string) => JSON.stringify(text);
 
 export const fitsOneApprovalRow = (summary: string) =>
   summary.length <= maxSummaryLength;

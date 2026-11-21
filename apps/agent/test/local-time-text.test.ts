@@ -50,8 +50,9 @@ describe("Plain words for an Approval summary", () => {
     ).toBe("on the last day of each month at 18:00");
   });
 
-  it("quotes text exactly, with all of its characters and spaces", () => {
-    expect(quoted("Call\n  Ana ")).toBe('"Call\n  Ana "');
+  it("quotes text exactly, and a quote or a line break in it cannot end the quote", () => {
+    expect(quoted("Call\n  Ana ")).toBe(String.raw`"Call\n  Ana "`);
+    expect(quoted('B", new text "C')).toBe(String.raw`"B\", new text \"C"`);
     expect(quoted("a".repeat(400))).toBe(`"${"a".repeat(400)}"`);
   });
 });
