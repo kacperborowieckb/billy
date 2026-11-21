@@ -13,6 +13,7 @@ import { refuseAtAgentScheduleLimit } from "./active-agent-schedule-limit-reache
 import { refuseAtScheduledTaskLimit } from "./active-scheduled-task-limit-reached.ts";
 import { refuseNotOpenLoops } from "./not-open-loops.ts";
 import { ScheduleActionInputSchema } from "./schedule-action-input.ts";
+import type { ScheduleAction } from "./schedule-action.ts";
 import { resolveScheduleDue } from "./schedule-due.ts";
 import { scheduleOf } from "./schedule-presentation.ts";
 import { scheduleActionText, scheduleDueText } from "./schedule-summary.ts";
@@ -98,6 +99,36 @@ const isFollowUpCall = (
   turnOrigin === "proactive" ||
   (openLoopIds.length > 0 && ownerAskedForSchedule !== true);
 
+interface SetScheduleSummary {
+  readonly action: ScheduleAction;
+  readonly due: string;
+  readonly followUp: boolean;
+  readonly about: readonly string[];
+  readonly followedUp: readonly string[];
+}
+
+const setScheduleSummaryText = ({
+  action,
+  due,
+  followUp,
+  about,
+  followedUp,
+}: SetScheduleSummary) => {
+  if (followUp && (followedUp.length === 0 || action._tag !== "RunPrompt")) {
+    return "Change nothing: a follow-up of the agent needs Open Loops and a Scheduled Task";
+  }
+  return [
+    followUp
+      ? `Set a follow-up of the agent, ${scheduleActionText(action)}`
+      : `Set ${scheduleActionText(action)}`,
+    due === "" ? "with no due time, so it sets nothing" : due,
+    ...(about.length === 0 ? [] : [`about ${about.join(", ")}`]),
+    ...(followedUp.length === 0
+      ? []
+      : [`to follow up ${followedUp.join(", ")}`]),
+  ].join(", ");
+};
+
 export const setScheduleTool = (
   {
     schedules,
@@ -131,17 +162,16 @@ export const setScheduleTool = (
           ownerTimeZone,
         ]).pipe(
           Effect.map(([about, followedUp, timeZone]) =>
-            [
-              isFollowUpCall(turnOrigin, { openLoopIds, ownerAskedForSchedule })
-                ? `Set a follow-up of the agent, ${scheduleActionText(action)}`
-                : `Set ${scheduleActionText(action)}`,
-              scheduleDueText({ localDueTime, repeat }, timeZone) ||
-                "with no due time",
-              ...(about.length === 0 ? [] : [`about ${about.join(", ")}`]),
-              ...(followedUp.length === 0
-                ? []
-                : [`to follow up ${followedUp.join(", ")}`]),
-            ].join(", ")
+            setScheduleSummaryText({
+              action,
+              due: scheduleDueText({ localDueTime, repeat }, timeZone),
+              followUp: isFollowUpCall(turnOrigin, {
+                openLoopIds,
+                ownerAskedForSchedule,
+              }),
+              about,
+              followedUp,
+            })
           )
         ),
       description:

@@ -487,7 +487,7 @@ describe("An Owner message Turn with Trust Level owner", () => {
 });
 
 describe("Summaries that follow execution", () => {
-  it("says what a partial Quiet Hours call and an agent follow-up really do", async () => {
+  it("says what a call really does when execution refuses it or sets an agent follow-up", async () => {
     const ownerId = await addOwner(9114);
     scriptModel([
       {
@@ -501,6 +501,19 @@ describe("Summaries that follow execution", () => {
               openLoopIds: ["loop-1"],
             },
           },
+          {
+            tool: setScheduleToolName,
+            input: {
+              action: { _tag: "SendText", text: "Call Ana" },
+              localDueTime: "2026-11-26T09:00",
+              openLoopIds: ["loop-1"],
+            },
+          },
+          {
+            tool: setScheduleToolName,
+            input: { action: { _tag: "SendText", text: "Call Ana" } },
+          },
+          { tool: setTimeZoneToolName, input: { timeZone: "Mars/Olympus" } },
         ],
       },
       { say: "These wait for your Approval." },
@@ -508,12 +521,15 @@ describe("Summaries that follow execution", () => {
 
     await forward(9114);
     await waitForSends(2);
-    await waitForPendingApprovals(ownerId, 2);
+    await waitForPendingApprovals(ownerId, 5);
 
     const approvals = await pendingApprovalsOf(ownerId);
     expect(approvals.map((row) => row.summary)).toEqual([
       "Change nothing: the Quiet Hours need both a valid start and a valid end",
       'Set a follow-up of the agent, Scheduled Task "Ask about the dinner", Thu 26 Nov 2026, 09:00, to follow up Note loop-1',
+      "Change nothing: a follow-up of the agent needs Open Loops and a Scheduled Task",
+      'Set Reminder "Call Ana", with no due time, so it sets nothing',
+      'Change nothing: "Mars/Olympus" is not a known time zone',
     ]);
   });
 });
