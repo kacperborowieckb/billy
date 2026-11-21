@@ -177,16 +177,23 @@ const fakeModelGateway = ModelGateway.layer.pipe(
   )
 );
 
+const WordInput = z.object({ word: z.string() });
+
+const isWordInput = (value: unknown): value is z.infer<typeof WordInput> =>
+  WordInput.safeParse(value).success;
+
 const keepWordTool = (
   kept: string[],
   riskClass: RiskClass,
-  riskClassOfInput?: (input: { readonly word: string }) => RiskClass
+  riskClassOf?: (input: z.infer<typeof WordInput>) => RiskClass
 ) =>
   agentTool({
     description: "Keep a word",
-    inputSchema: z.object({ word: z.string() }),
+    inputSchema: WordInput,
     riskClass,
-    ...(riskClassOfInput === undefined ? {} : { riskClassOfInput }),
+    ...(riskClassOf === undefined
+      ? {}
+      : { riskClassOfInput: { isInput: isWordInput, of: riskClassOf } }),
     execute: ({ word }) =>
       Effect.sync(() => {
         kept.push(word);

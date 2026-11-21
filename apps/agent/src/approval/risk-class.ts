@@ -15,14 +15,19 @@ export interface RiskClassified {
   readonly readsForEveryInput: boolean;
 }
 
+export interface InputRiskClass<Input> {
+  readonly isInput: (value: unknown) => value is Input;
+  readonly of: (input: Input) => RiskClass;
+}
+
 export const riskClassified = <Input>(
   riskClass: RiskClass,
-  riskClassOfInput?: (input: Input) => RiskClass
+  inputRiskClass?: InputRiskClass<Input>
 ): RiskClassified => ({
   riskClass,
   riskClassOf: (input) =>
-    riskClassOfInput === undefined
-      ? riskClass
-      : higherRiskClass(riskClass, riskClassOfInput(input as Input)),
-  readsForEveryInput: riskClass === "read" && riskClassOfInput === undefined,
+    inputRiskClass !== undefined && inputRiskClass.isInput(input)
+      ? higherRiskClass(riskClass, inputRiskClass.of(input))
+      : riskClass,
+  readsForEveryInput: riskClass === "read" && inputRiskClass === undefined,
 });

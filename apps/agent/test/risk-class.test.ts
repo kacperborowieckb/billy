@@ -80,6 +80,11 @@ const everyToolSet = async (): Promise<Record<string, AgentTools>> =>
       )
   );
 
+const WideInput = z.object({ wide: z.boolean() });
+
+const isWideInput = (value: unknown): value is z.infer<typeof WideInput> =>
+  WideInput.safeParse(value).success;
+
 describe("Risk Class", () => {
   it("is declared by every tool in every tool set, read for reading and outcome tools and change for the rest", async () => {
     const toolSets = await everyToolSet();
@@ -95,16 +100,30 @@ describe("Risk Class", () => {
   });
 
   it("can be raised by the input function", () => {
-    const tool = riskClassified<{ readonly wide: boolean }>("read", (input) =>
-      input.wide ? "approve" : "read"
-    );
+    const tool = riskClassified("read", {
+      isInput: isWideInput,
+      of: (input) => (input.wide ? "approve" : "read"),
+    });
 
     expect(tool.riskClassOf({ wide: true })).toBe("approve");
     expect(tool.riskClassOf({ wide: false })).toBe("read");
   });
 
+  it("stays the declared class for an input that does not match the input schema", () => {
+    const tool = riskClassified("read", {
+      isInput: isWideInput,
+      of: () => "approve",
+    });
+
+    expect(tool.riskClassOf(null)).toBe("read");
+    expect(tool.riskClassOf({ wide: "yes" })).toBe("read");
+  });
+
   it("is never lowered by the input function", () => {
-    const tool = riskClassified("blocked", () => "read");
+    const tool = riskClassified("blocked", {
+      isInput: (value): value is unknown => value !== undefined,
+      of: () => "read",
+    });
 
     expect(tool.riskClassOf({})).toBe("blocked");
     expect(gateDecisionOf({ tool, input: {}, trustLevel: "owner" })).toEqual({
@@ -133,14 +152,21 @@ describe("The gate", () => {
   });
 });
 
+const WordInput = z.object({ word: z.string() });
+
+const isWordInput = (value: unknown): value is z.infer<typeof WordInput> =>
+  WordInput.safeParse(value).success;
+
 const readWordTool = (
-  riskClassOfInput?: (input: { readonly word: string }) => RiskClass
+  riskClassOf?: (input: z.infer<typeof WordInput>) => RiskClass
 ) =>
   agentTool({
     description: "Read a word",
-    inputSchema: z.object({ word: z.string() }),
+    inputSchema: WordInput,
     riskClass: "read",
-    ...(riskClassOfInput === undefined ? {} : { riskClassOfInput }),
+    ...(riskClassOf === undefined
+      ? {}
+      : { riskClassOfInput: { isInput: isWordInput, of: riskClassOf } }),
     execute: ({ word }) => Effect.succeed({ word }),
   });
 

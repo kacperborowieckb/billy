@@ -6,7 +6,7 @@ Date: 2026-11-21
 
 Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. The Risk Class `read` takes its place, and the outcome-refusal rules read the Risk Class of each failed call. For a call in the current model run, the class comes from its tool and its exact input. A call from Turn progress (after a Restart or a reset) has its recorded input, which can be changed or redacted, so it counts as a read call only when its tool is `read` for every input. The rest of 0021 stands. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
 
-The feature is built in steps. Ticket [#143](https://github.com/kacperborowieckb/billy/issues/143) adds the Risk Class and the gate, with no change in behavior for the Owner: the gate denies only a `blocked` call, and no tool is `blocked` yet. The later tickets of #139 add the Trust Level of a Turn, Pending Approvals, the Telegram buttons, and the typed yes.
+Each ticket of #139 adds one part of this decision. Ticket [#143](https://github.com/kacperborowieckb/billy/issues/143) adds the Risk Class and the gate, with no change in behavior for the Owner: the gate denies only a `blocked` call, and no tool is `blocked` yet. The later tickets of #139 add the Trust Level of a Turn, Pending Approvals, the Telegram buttons, and the typed yes.
 
 This feature does not use the word "Action". In `CONTEXT.md`, an Action stays the Action of a Schedule (`SendText` or `RunPrompt`).
 
@@ -15,7 +15,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 ### Risk Class
 
 - Each agent tool declares a Risk Class: `read`, `change`, `approve`, or `blocked`. The type makes it required, and a test lists every tool of every tool set and fails when a tool has no Risk Class.
-- A tool can also give a function from its decoded input to a Risk Class. The class of a call is the higher of the two, so the function can raise the class and never lower it.
+- A tool can also give a function from its decoded input to a Risk Class. The class of a call is the higher of the two, so the function can raise the class and never lower it. The function runs only on an input that matches the input schema of the tool. Any other input keeps the declared class, because the tool cannot run with it.
 - The model never sets or sees the class.
 - `read` for `search_notes`, `list_linked_notes`, `list_open_loops`, `list_schedules`, and the outcome tools (`stay_silent`, `react`). `change` for every other tool. No tool is `approve` or `blocked` yet.
 
@@ -77,7 +77,7 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 ## Why
 
-Before this decision, the only protection was to remove tools by Trust Level. That protection had two problems. It was too strict: a forwarded invitation could not become a Reminder. It was incomplete: an untrusted Note that an Owner message Turn read could still push the model to change data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
+Before this decision, the only protection was to remove tools by Trust Level. That protection had two problems. It was too strict: a forwarded invitation could not become a Reminder. It was incomplete: in an Owner message Turn, the model can read an untrusted Note. That Note can contain an instruction, and the model can follow it and call a tool that changes the Owner's data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
 
 ## Revisit if
 

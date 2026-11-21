@@ -3,7 +3,11 @@ import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
 import { Data, Effect, Result, Schema } from "effect";
 
 import { riskClassified } from "../approval/risk-class.ts";
-import type { RiskClass, RiskClassified } from "../approval/risk-class.ts";
+import type {
+  InputRiskClass,
+  RiskClass,
+  RiskClassified,
+} from "../approval/risk-class.ts";
 
 export class ToolFailed extends Data.TaggedError("ToolFailed")<{
   readonly message: string;
@@ -41,7 +45,7 @@ interface AgentToolDefinition<Input, Output> {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;
   readonly riskClass: RiskClass;
-  readonly riskClassOfInput?: (input: Input) => RiskClass;
+  readonly riskClassOfInput?: InputRiskClass<Input>;
   readonly execute: (
     input: Input,
     call: { readonly toolCallId: string; readonly modelStepKey: number }

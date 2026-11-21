@@ -155,13 +155,13 @@
     },
     {
       "id": "approval",
-      "purpose": "The Risk Class of a tool call (read, change, approve, or blocked) and the gate. Every agent tool declares a Risk Class, and an optional function from its input can only raise it. The gate is one function from the tool, its input, and the Trust Level of the Turn to a decision: Run, or Deny with a reason that the model reads. Now it denies only a blocked call; Pending Approvals come with the later tickets of decision 0027.",
+      "purpose": "The Risk Class of a tool call (read, change, approve, or blocked) and the gate. Every agent tool declares a Risk Class, and an optional function from its input can only raise it. The function runs only on an input that matches the input schema of the tool; any other input keeps the declared class, because the tool cannot run with it. The gate is one function from the tool, its input, and the Trust Level of the Turn to a decision: Run, or Deny with a reason that the model reads. Now it denies only a blocked call; Pending Approvals come with the later tickets of decision 0027.",
       "roots": ["apps/agent/src/approval"],
       "adrs": ["docs/decisions/0027-actions-and-approval.md"]
     },
     {
       "id": "recorded-tool",
-      "purpose": "The module that wraps every agent tool. A tool gives its name, its Risk Class (and an optional function from its input that can only raise it), its input schema, its work, and its failure message. The module marks the model step, records the tool call and its result in the same transaction as the work with redaction, and keeps a ToolFailed from the work and maps any other failure to ToolFailed with the failure message. It records the decoded input, or the result of an optional recordedInput function of the tool (capture_note uses it to keep the Untrusted Content marking of forwarded text). agentToolServices collects the services that the tools of both kinds of Turn need.",
+      "purpose": "The module that wraps every agent tool that runs work (the outcome tools stay_silent and react use outcomeTool and have no work). A tool gives its name, its Risk Class (and an optional function from its input that can only raise it), its input schema, its work, and its failure message. The module marks the model step, records the tool call and its result in the same transaction as the work with redaction, and keeps a ToolFailed from the work and maps any other failure to ToolFailed with the failure message. It records the decoded input, or the result of an optional recordedInput function of the tool (capture_note uses it to keep the Untrusted Content marking of forwarded text). agentToolServices collects the services that the tools of both kinds of Turn need.",
       "roots": [
         "apps/agent/src/personal-agent/recorded-tool.ts",
         "apps/agent/src/personal-agent/agent-tool-services.ts"

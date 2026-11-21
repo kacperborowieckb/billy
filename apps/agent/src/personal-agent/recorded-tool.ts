@@ -1,6 +1,5 @@
 import type { JSONValue } from "ai";
-import { Cause, Effect, Option } from "effect";
-import type { Schema } from "effect";
+import { Cause, Effect, Option, Schema } from "effect";
 
 import type { RiskClass } from "../approval/risk-class.ts";
 import {
@@ -68,7 +67,12 @@ export const recordedTool = <
     riskClass: definition.riskClass,
     ...(definition.riskClassOfInput === undefined
       ? {}
-      : { riskClassOfInput: definition.riskClassOfInput }),
+      : {
+          riskClassOfInput: {
+            isInput: Schema.is(definition.inputSchema),
+            of: definition.riskClassOfInput,
+          },
+        }),
     inputSchema: effectInputSchema(definition.inputSchema),
     execute: Effect.fnUntraced(
       function* recordedToolEffect(input, { toolCallId, modelStepKey }) {
