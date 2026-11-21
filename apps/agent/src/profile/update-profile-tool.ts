@@ -6,6 +6,7 @@ import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { profileEntryKinds } from "../personal-agent/storage-values.ts";
 import { ProfileFull } from "./profile-full.ts";
 import type { ProfileToolServices } from "./profile-tool-services.ts";
+import { charactersUsedBy } from "./profile.ts";
 import { UnknownProfileEntry } from "./unknown-profile-entry.ts";
 
 export const updateProfileToolName = "update_profile";
@@ -51,6 +52,9 @@ const UpdateProfileInput = Schema.Struct({
   ),
 });
 
+const profileFullMessage = (charactersUsed: number, characterLimit: number) =>
+  `The Profile is full: it has ${charactersUsed} of ${characterLimit} characters. Nothing was added. Tell the Owner that the Profile is full and that they can ask you to remove an entry first.`;
+
 const unknownProfileEntryMessage = (entryId: string) =>
   `The Profile has no entry with the id ${entryId}. Nothing was removed. Use an entry id from the Profile.`;
 
@@ -88,7 +92,10 @@ const failureMessageOf = (cause: Cause.Cause<unknown>) => {
     return profileNotChangedMessage;
   }
   if (error.value instanceof ProfileFull) {
-    return `The Profile is full: it has ${error.value.charactersUsed} of ${error.value.characterLimit} characters. Nothing was added. Tell the Owner that the Profile is full and that they can ask you to remove an entry first.`;
+    return profileFullMessage(
+      error.value.charactersUsed,
+      error.value.characterLimit
+    );
   }
   if (error.value instanceof UnknownProfileEntry) {
     return unknownProfileEntryMessage(error.value.entryId);
@@ -107,14 +114,23 @@ export const updateProfileTool = (
       riskClass: "change",
       approvalSummary: Effect.fnUntraced(function* profileSummaryEffect(input) {
         const change = yield* checkedProfileChange(input);
-        if (change._tag === "Add") {
-          return `Add to the Profile${change.kind === "style_rule" ? " as a style rule" : ""}: ${quoted(change.text)}`;
-        }
         const entries = yield* profile.read.pipe(
           Effect.mapError(
             () => new ToolFailed({ message: profileNotChangedMessage })
           )
         );
+        if (change._tag === "Add") {
+          const kept = entries.some(
+            (entry) => entry.kind === change.kind && entry.text === change.text
+          );
+          const charactersUsed = charactersUsedBy(entries);
+          if (!kept && charactersUsed + change.text.length > characterLimit) {
+            return yield* new ToolFailed({
+              message: profileFullMessage(charactersUsed, characterLimit),
+            });
+          }
+          return `Add to the Profile${change.kind === "style_rule" ? " as a style rule" : ""}: ${quoted(change.text)}`;
+        }
         const entry = entries.find(
           (candidate) => candidate.entryId === change.entryId
         );

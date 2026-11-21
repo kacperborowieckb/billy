@@ -21,7 +21,10 @@ import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { reactToolName } from "../src/personal-agent/react-tool.ts";
 import { staySilentToolName } from "../src/personal-agent/stay-silent-tool.ts";
 import { OwnerPreferences } from "../src/preferences/owner-preferences.ts";
-import { proactiveMessageBudgetToolName } from "../src/preferences/proactive-message-budget-tool.ts";
+import {
+  invalidProactiveMessageBudgetMessage,
+  proactiveMessageBudgetToolName,
+} from "../src/preferences/proactive-message-budget-tool.ts";
 import {
   invalidQuietHoursMessage,
   quietHoursToolName,
@@ -614,6 +617,15 @@ describe("Checks before a draft", () => {
             tool: updateProfileToolName,
             input: { action: "remove", entryId: "entry-1" },
           },
+          {
+            tool: updateProfileToolName,
+            input: {
+              action: "add",
+              kind: "fact",
+              text: "x".repeat(defaultBehaviorConfig.maxProfileCharacters + 1),
+            },
+          },
+          { tool: proactiveMessageBudgetToolName, input: { sends: 1.5 } },
         ],
       },
       { say: "I could not do these." },
@@ -635,6 +647,8 @@ describe("Checks before a draft", () => {
       noActiveScheduleMessage("schedule-1"),
       profileEntryMissingFieldMessage.add,
       "The Profile has no entry with the id entry-1",
+      "The Profile is full",
+      invalidProactiveMessageBudgetMessage,
     ]) {
       expect(results).toContain(JSON.stringify(refusal).slice(1, -1));
     }
