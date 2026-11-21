@@ -25,3 +25,18 @@ export const approvalStatusOf =
       ? { type: "denied", reason: decision.reason }
       : "not-applicable";
   };
+
+const anyBlockedInput = "{}";
+
+export const blockedCallReachingTheGate =
+  (tools: AgentTools) =>
+  <Call extends { readonly toolName: string; readonly input: string }>({
+    toolCall,
+  }: {
+    readonly toolCall: Call;
+  }): Promise<Call | null> =>
+    Promise.resolve(
+      toolNamed(tools, toolCall.toolName)?.riskClass === "blocked"
+        ? { ...toolCall, input: anyBlockedInput }
+        : null
+    );

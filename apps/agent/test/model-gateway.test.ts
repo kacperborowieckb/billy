@@ -1,4 +1,5 @@
 import { generateText } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import { env } from "cloudflare:test";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import { Effect, Exit, Layer } from "effect";
@@ -14,6 +15,7 @@ import {
 } from "../src/model-gateway/ai-gateway.ts";
 import { ModelGateway } from "../src/model-gateway/model-gateway.ts";
 import { ModelProvider } from "../src/model-gateway/model-provider.ts";
+import type { ResolvedRoute } from "../src/model-gateway/model-provider.ts";
 import type { ModelStep } from "../src/model-gateway/model-step.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
@@ -162,20 +164,23 @@ describe("Model Gateway transport", () => {
   });
 });
 
-const fakeModelGateway = ModelGateway.layer.pipe(
-  Layer.provide(
-    Layer.succeed(UsageLedger, {
-      record: () => Effect.void,
-      read: Effect.succeed([]),
-      tokensSpent: () => Effect.succeed(0),
-    })
-  ),
-  Layer.provide(
-    Layer.succeed(ModelProvider, {
-      route: () => ({ model: fakeModel, reasoningEffort: "none" }),
-    })
-  )
-);
+const gatewayWith = (model: ResolvedRoute["model"]) =>
+  ModelGateway.layer.pipe(
+    Layer.provide(
+      Layer.succeed(UsageLedger, {
+        record: () => Effect.void,
+        read: Effect.succeed([]),
+        tokensSpent: () => Effect.succeed(0),
+      })
+    ),
+    Layer.provide(
+      Layer.succeed(ModelProvider, {
+        route: () => ({ model, reasoningEffort: "none" }),
+      })
+    )
+  );
+
+const fakeModelGateway = gatewayWith(fakeModel);
 
 const WordInput = z.object({ word: z.string() });
 
@@ -303,6 +308,72 @@ describe("The gate in the Model Gateway", () => {
 
     expect(kept).toEqual([]);
     expect(toolOutputsSentToModel()).toEqual([
+      { type: "execution-denied", reason: blockedCallReason },
+    ]);
+  });
+
+  it("never runs a blocked tool with input that is not JSON, and gives the model the reason", async () => {
+    const kept: string[] = [];
+    const usage = {
+      inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 1, text: 1, reasoning: 0 },
+    };
+    let modelCalls = 0;
+    const brokenJsonModel = new MockLanguageModelV4({
+      doGenerate: () => {
+        modelCalls += 1;
+        return Promise.resolve(
+          modelCalls === 1
+            ? {
+                content: [
+                  {
+                    type: "tool-call",
+                    toolCallId: "call-broken",
+                    toolName: "keep_word",
+                    input: '{"word": "sec',
+                  },
+                ],
+                finishReason: { unified: "tool-calls", raw: "tool_calls" },
+                usage,
+                warnings: [],
+              }
+            : {
+                content: [{ type: "text", text: "I cannot keep that word." }],
+                finishReason: { unified: "stop", raw: "stop" },
+                usage,
+                warnings: [],
+              }
+        );
+      },
+    });
+
+    await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Keep secret" }],
+            tools: { keep_word: keepWordTool(kept, "blocked") },
+            trustLevel: "owner",
+            stepLimit: 4,
+          })
+        ),
+        Effect.provide(gatewayWith(brokenJsonModel))
+      )
+    );
+
+    const toolOutputs = brokenJsonModel.doGenerateCalls.flatMap((call) =>
+      call.prompt.flatMap((message) =>
+        message.role === "tool"
+          ? message.content.flatMap((part) =>
+              part.type === "tool-result" ? [part.output] : []
+            )
+          : []
+      )
+    );
+    expect(kept).toEqual([]);
+    expect(toolOutputs).toEqual([
       { type: "execution-denied", reason: blockedCallReason },
     ]);
   });

@@ -17,7 +17,10 @@ import { modelStepOf, pendingToolCallsOf } from "./model-step-of.ts";
 import type { ModelStep, PendingToolCall } from "./model-step.ts";
 import { ModelUnavailable } from "./model-unavailable.ts";
 import { StepLimitReached } from "./step-limit-reached.ts";
-import { approvalStatusOf } from "./tool-approval.ts";
+import {
+  approvalStatusOf,
+  blockedCallReachingTheGate,
+} from "./tool-approval.ts";
 import { sumUsage, UsageLedger } from "./usage-ledger.ts";
 import type { Usage } from "./usage-ledger.ts";
 
@@ -63,6 +66,7 @@ const toolLoopAgentOf = (
       request.tools ?? noTools,
       request.trustLevel
     ),
+    repairToolCall: blockedCallReachingTheGate(request.tools ?? noTools),
     stopWhen: isStepCount(request.stepLimit),
     maxRetries: 0,
   });
