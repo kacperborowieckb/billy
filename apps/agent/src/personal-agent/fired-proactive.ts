@@ -18,11 +18,11 @@ import type { MergedSchedule } from "./fired-merge.ts";
 import { lateNoticeFor } from "./fired-schedule-lateness.ts";
 import type { Inbox, ScheduleFiredEvent } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
-import type { TurnPreparation } from "./model-turn.ts";
 import { proactiveReach } from "./proactive-reach.ts";
 import { proactiveSection } from "./proactive-section.ts";
 import { proactiveTools } from "./proactive-tools.ts";
 import { tokensSpentToday } from "./scheduled-task-budget.ts";
+import type { TurnPreparation } from "./turn-preparation.ts";
 import { proactiveTraceOf } from "./turn-record.ts";
 
 const uniqueNotes = <Item extends { readonly noteId: string }>(

@@ -17,9 +17,9 @@ import { nameOfPrompt } from "./fired-scheduled-task-name.ts";
 import { skipOverBudget } from "./fired-scheduled-task-skip.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
-import type { TurnPreparation } from "./model-turn.ts";
 import { scheduledTaskSection } from "./scheduled-task-section.ts";
 import { scheduledTaskTools } from "./scheduled-task-tools.ts";
+import type { TurnPreparation } from "./turn-preparation.ts";
 import { scheduledTaskTraceOf } from "./turn-record.ts";
 
 export const scheduledTaskFailureText = Effect.fnUntraced(

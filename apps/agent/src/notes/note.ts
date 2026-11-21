@@ -48,3 +48,16 @@ const withoutMarkers = (text: string) =>
 
 export const markUntrustedContent = (text: string) =>
   `${untrustedContentOpening}\n${withoutMarkers(text)}\n${untrustedContentClosing}`;
+
+export const holdsUntrustedContent = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return value.includes(untrustedContentOpening);
+  }
+  if (Array.isArray(value)) {
+    return value.some(holdsUntrustedContent);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).some(holdsUntrustedContent);
+  }
+  return false;
+};

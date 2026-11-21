@@ -9,7 +9,7 @@ import { ownerTimeZone } from "../time/owner-current-time.ts";
 import { agentToolServices } from "./agent-tool-services.ts";
 import type { Burst } from "./burst.ts";
 import { deliveryStateOf } from "./delivery.ts";
-import type { TurnPreparation } from "./model-turn.ts";
+import type { TurnPreparation } from "./turn-preparation.ts";
 
 const openLoopLine = (note: Note, timeZone: OwnerTimeZone) => {
   const openLoop = openLoopForModel(note, timeZone);

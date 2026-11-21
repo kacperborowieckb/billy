@@ -2,7 +2,7 @@ import { isStepCount, ToolLoopAgent, wrapLanguageModel } from "ai";
 import type { ModelMessage, StepResult, ToolSet } from "ai";
 import { Context, Effect, Layer, Schedule } from "effect";
 
-import type { TrustLevel } from "../notes/note.ts";
+import type { TurnTrust } from "../approval/turn-trust.ts";
 import { noTools, runToolEffect } from "./agent-tool.ts";
 import type { AgentTools, RunToolEffect } from "./agent-tool.ts";
 import { ModelCallFailed } from "./model-call-failed.ts";
@@ -37,7 +37,7 @@ export interface ModelRequest {
   readonly system: string;
   readonly messages: readonly ModelMessage[];
   readonly tools?: AgentTools;
-  readonly trustLevel: TrustLevel;
+  readonly trust: TurnTrust;
   readonly stepLimit: number;
 }
 
@@ -71,10 +71,7 @@ const toolLoopAgentOf = (
     model: retryingModelCalls(route.model),
     instructions: request.system,
     tools: aiSdkToolsOf(request.tools ?? noTools, runTool),
-    toolApproval: approvalStatusOf(
-      request.tools ?? noTools,
-      request.trustLevel
-    ),
+    toolApproval: approvalStatusOf(request.tools ?? noTools, request.trust),
     repairToolCall: blockedCallReachingTheGate(request.tools ?? noTools),
     stopWhen: isStepCount(request.stepLimit),
     maxRetries: 0,
@@ -160,6 +157,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             abortSignal,
             onStepFinish: (step) => {
               finishedSteps.push(step);
+              request.trust.readToolResults(step.toolResults);
             },
           }),
         catch: (cause) =>

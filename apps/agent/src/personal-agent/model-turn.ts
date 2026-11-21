@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { Clock, Effect, Option } from "effect";
 
+import { turnTrustOf } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { TrustLevel } from "../notes/note.ts";
@@ -21,10 +22,12 @@ import { rememberCompletedSteps } from "./remember-completed-steps.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import { systemPrompt } from "./system-prompt.ts";
 import { approvalAskingOf, deliverTurnOutcome } from "./turn-delivery.ts";
+import { recordTurnMetric } from "./turn-metric.ts";
+import { unpreparedTurn } from "./turn-preparation.ts";
+import type { TurnPreparation } from "./turn-preparation.ts";
 import { TurnProgress } from "./turn-progress.ts";
 import {
   modelFailureReason,
-  recordTurnMetric,
   responseMessagesOf,
   stepLimitReason,
 } from "./turn-record.ts";
@@ -33,16 +36,6 @@ import { recordSuperseded, restartCountForTurn } from "./turn-restart.ts";
 import type { Restart } from "./turn-restart.ts";
 
 export type BeforeFirstStep = "Proceed" | "Stopped";
-
-export interface TurnPreparation {
-  readonly situation: readonly string[];
-  readonly lateText: (text: string) => string;
-}
-
-const unpreparedTurn: TurnPreparation = {
-  situation: [],
-  lateText: (text) => text,
-};
 
 export interface ModelTurnKind<Failure, Requirements> {
   readonly task: "reply" | "scheduled_task" | "proactive";
@@ -125,6 +118,7 @@ export const runModelTurn = <Failure, Requirements>({
       return;
     }
     const messages = [...history, ...kind.inputs, ...earlier];
+    const trust = turnTrustOf(kind, earlier);
     const decided = yield* generateWithOutcomeTools({
       eventId: event.eventId,
       earlierMessages: earlier,
@@ -133,7 +127,7 @@ export const runModelTurn = <Failure, Requirements>({
         system,
         messages,
         tools: kind.tools,
-        trustLevel: kind.trustLevel,
+        trust,
         stepLimit: stepsLeft,
       },
       tools: kind.tools,
@@ -151,6 +145,7 @@ export const runModelTurn = <Failure, Requirements>({
       outcomeKind: decided.kind,
       reaction: decided.reaction,
       refusedOutcomeTools: decided.refusedOutcomeTools,
+      trustLevelChange: Option.getOrUndefined(trust.change()),
     };
     const recordTrace = (delivered: boolean) =>
       traces.record(kind.traceOf({ ...traceInput, delivered }));
