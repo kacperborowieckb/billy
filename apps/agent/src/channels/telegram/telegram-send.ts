@@ -149,6 +149,11 @@ export const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
 export const approvalNotSentStatus =
   "Cancelled: the reply did not send in full, so nothing waits for your Approval.";
 
+const statusLineSeparator = "\n\n";
+
+export const approvalTextLimit =
+  telegramTextLimit - statusLineSeparator.length - approvalNotSentStatus.length;
+
 interface SentApprovalMessage {
   readonly conversationId: string;
   readonly channelMessageId: string;
@@ -165,7 +170,7 @@ const editMessageTextRequest = (
     body: JSON.stringify({
       chat_id: Number(message.conversationId),
       message_id: Number(message.channelMessageId),
-      text: `${message.text}\n\n${approvalNotSentStatus}`,
+      text: `${message.text}${statusLineSeparator}${approvalNotSentStatus}`,
     }),
   });
 
@@ -188,7 +193,7 @@ export const sendWithApprovals = (config: TelegramConfig) =>
         return approvalsNotSent(sentText.reason);
       }
     }
-    const blocks = approvalBlocksOf(message.approvals, telegramTextLimit);
+    const blocks = approvalBlocksOf(message.approvals, approvalTextLimit);
     const approvalMessages: ApprovalMessage[] = [];
     const sentMessages: SentApprovalMessage[] = [];
     let channelMessageId = "";

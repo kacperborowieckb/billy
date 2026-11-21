@@ -690,6 +690,7 @@ describe("Drafts of a Turn whose Delivery does not show them", () => {
         text: `${shown?.body.text}\n\n${approvalNotSentStatus}`,
       },
     ]);
+    expect(fakeTelegram.edits[0]?.body.text.length).toBeLessThanOrEqual(4096);
   });
 
   it("become pending after a reset when the send started and Telegram did not confirm it", async () => {
