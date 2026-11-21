@@ -2,10 +2,13 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import type { ApprovalMessage } from "../channels/channel.ts";
-import type { ApprovalAnswer } from "../event.ts";
 import { Journal } from "../journal/journal.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { pendingApprovalStates } from "../personal-agent/storage-values.ts";
+import type {
+  ApprovalAnswering,
+  ApprovalRunRecord,
+} from "./approval-answering.ts";
 import { pendingApprovals } from "./pending-approvals-schema.ts";
 
 export const PendingApprovalSchema = Schema.Struct({
@@ -49,22 +52,6 @@ export interface DraftRequest {
 export interface SentDrafts {
   readonly turnEventId: string;
   readonly approvalMessages: readonly ApprovalMessage[];
-}
-
-export interface ApprovalAnswering {
-  readonly eventId: string;
-  readonly pendingApprovalId: string;
-  readonly answer: ApprovalAnswer;
-}
-
-export type ApprovalRunOutcome =
-  | { readonly result: "executed"; readonly output: unknown }
-  | { readonly result: "failed"; readonly reason: string };
-
-export interface ApprovalRunRecord {
-  readonly eventId: string;
-  readonly pendingApprovalId: string;
-  readonly outcome: ApprovalRunOutcome;
 }
 
 export interface DraftApproval {
@@ -185,7 +172,6 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
         yield* journalOpened(turnEventId, opened);
       })
     );
-
 
   const byId = (pendingApprovalId: string) =>
     database

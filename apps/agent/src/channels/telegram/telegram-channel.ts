@@ -3,14 +3,12 @@ import { Effect, Layer, Schema } from "effect";
 import { Channel } from "../channel.ts";
 import type { OutgoingReaction, ReactionDelivery } from "../channel.ts";
 import { TypingNotShown } from "../typing-not-shown.ts";
-import { telegramReactionFor } from "./telegram-reactions.ts";
 import {
   answerPress,
   editApprovalMessage,
-  failed,
-  send,
-  sendWithApprovals,
-} from "./telegram-send.ts";
+} from "./telegram-approval-answer.ts";
+import { telegramReactionFor } from "./telegram-reactions.ts";
+import { failed, send, sendWithApprovals } from "./telegram-send.ts";
 import type { TelegramConfig } from "./telegram-send.ts";
 
 const TrueResponseSchema = Schema.Union([

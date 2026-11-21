@@ -1,15 +1,13 @@
 import { DateTime, Effect, Option } from "effect";
 
+import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import {
   conversationEntryOf,
   lateNoticeOf,
   statusOfApproval,
 } from "../approval/approval-status.ts";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
-import type {
-  ApprovalRunOutcome,
-  PendingApproval,
-} from "../approval/pending-approvals.ts";
+import type { PendingApproval } from "../approval/pending-approvals.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { Channel } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
