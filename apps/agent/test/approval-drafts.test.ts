@@ -2,8 +2,8 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
-  maxSummaryCharacters,
-  summaryWithinLimit,
+  fitsOneApprovalRow,
+  maxSummaryLength,
 } from "../src/approval/approval-summary.ts";
 import { holdsOperatorSecret } from "../src/approval/draft-approval.ts";
 import { approvalBlocksOf } from "../src/channels/telegram/approval-keyboard.ts";
@@ -28,8 +28,9 @@ describe("A draft Pending Approval", () => {
   });
 
   it("splits the Approval rows into messages within the Telegram limit and keeps one numbering", () => {
-    const summary = summaryWithinLimit("x".repeat(maxSummaryCharacters * 2));
-    expect([...summary]).toHaveLength(maxSummaryCharacters);
+    const summary = "x".repeat(maxSummaryLength);
+    expect(fitsOneApprovalRow(summary)).toBe(true);
+    expect(fitsOneApprovalRow(`${summary}x`)).toBe(false);
     const approvals = Array.from({ length: 3 }, (_, index) => ({
       pendingApprovalId: `id-${index}`,
       summary,

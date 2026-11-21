@@ -315,7 +315,7 @@ describe("Approval for a forwarded message", () => {
     const [approval] = await pendingApprovalsOf(ownerId);
     expect(approval).toMatchObject({
       tool_name: captureNoteToolName,
-      summary: 'Keep Note "dinner", link to Note note-of-owner',
+      summary: `Keep Note "${forwardedInvitation}", link to Note note-of-owner`,
     });
   });
 
@@ -415,6 +415,27 @@ describe("Approval for a forwarded message", () => {
     ).toHaveLength(1);
     const journal = await journalKindsOf(ownerId);
     expect(journal.map((entry) => entry.kind)).not.toContain("StayedSilent");
+  });
+
+  it("creates no Pending Approval for a call whose summary is too long for one Approval message", async () => {
+    const ownerId = await addOwner(9113);
+    scriptModel([
+      {
+        callTool: setScheduleToolName,
+        input: {
+          ...reminderInput,
+          action: { _tag: "SendText", text: "Call Ana ".repeat(450) },
+        },
+      },
+      { say: "I could not do that." },
+    ]);
+
+    await forward(9113);
+    await waitForSends(1);
+
+    expect(await pendingApprovalsOf(ownerId)).toEqual([]);
+    expect(fakeTelegram.sent[0]?.body.reply_markup).toBeUndefined();
+    expect(toolResultsSentToModel()).toContain("too long to show to the Owner");
   });
 
   it("creates no Pending Approval for a call whose input holds an Operator secret, and tells the model", async () => {

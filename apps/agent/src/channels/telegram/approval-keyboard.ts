@@ -52,44 +52,42 @@ export interface ApprovalBlock {
   readonly pendingApprovalIds: readonly string[];
 }
 
-interface OpenBlock {
-  readonly lines: readonly string[];
-  readonly rows: InlineKeyboard;
-  readonly pendingApprovalIds: readonly string[];
+interface ApprovalRow {
+  readonly line: string;
+  readonly buttons: readonly InlineKeyboardButton[];
+  readonly pendingApprovalId: string;
 }
 
-const closed = (block: OpenBlock): ApprovalBlock => ({
-  text: block.lines.join("\n"),
-  keyboard: block.rows,
-  pendingApprovalIds: block.pendingApprovalIds,
+const blockOf = (
+  header: readonly string[],
+  rows: readonly ApprovalRow[]
+): ApprovalBlock => ({
+  text: [...header, ...rows.map(({ line }) => line)].join("\n"),
+  keyboard: rows.map(({ buttons }) => buttons),
+  pendingApprovalIds: rows.map(({ pendingApprovalId }) => pendingApprovalId),
 });
 
 export const approvalBlocksOf = (
   approvals: readonly ApprovalRequest[],
   textLimit: number
 ): readonly ApprovalBlock[] => {
+  const rows = approvals.map((approval, index): ApprovalRow => ({
+    line: lineOf(approval, index, approvals),
+    buttons: rowOf(approval, index, approvals),
+    pendingApprovalId: approval.pendingApprovalId,
+  }));
   const blocks: ApprovalBlock[] = [];
-  let open: OpenBlock = {
-    lines: [headerOf(approvals)],
-    rows: [],
-    pendingApprovalIds: [],
-  };
-  for (const [index, approval] of approvals.entries()) {
-    const line = lineOf(approval, index, approvals);
-    const grown = [...open.lines, line].join("\n");
-    if (open.rows.length > 0 && grown.length > textLimit) {
-      blocks.push(closed(open));
-      open = { lines: [], rows: [], pendingApprovalIds: [] };
+  let header: readonly string[] = [headerOf(approvals)];
+  let open: readonly ApprovalRow[] = [];
+  for (const row of rows) {
+    const grown = blockOf(header, [...open, row]);
+    if (open.length > 0 && grown.text.length > textLimit) {
+      blocks.push(blockOf(header, open));
+      header = [];
+      open = [];
     }
-    open = {
-      lines: [...open.lines, line],
-      rows: [...open.rows, rowOf(approval, index, approvals)],
-      pendingApprovalIds: [
-        ...open.pendingApprovalIds,
-        approval.pendingApprovalId,
-      ],
-    };
+    open = [...open, row];
   }
-  blocks.push(closed(open));
+  blocks.push(blockOf(header, open));
   return blocks;
 };

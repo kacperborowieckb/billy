@@ -4,7 +4,7 @@ import { toolNamed } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ApprovalRequestedCall } from "../model-gateway/model-step.ts";
 import { Redactor } from "../tracing/redactor.ts";
-import { summaryWithinLimit } from "./approval-summary.ts";
+import { fitsOneApprovalRow } from "./approval-summary.ts";
 import { PendingApprovals } from "./pending-approvals.ts";
 import type { DraftApproval } from "./pending-approvals.ts";
 
@@ -16,6 +16,9 @@ export const operatorSecretRefusal =
 
 export const approvalUnavailableRefusal =
   "This call needs the Owner's Approval, which this Turn cannot ask for, so it did not run. Tell the Owner that you could not do it.";
+
+export const summaryTooLongRefusal =
+  "This call is too long to show to the Owner for Approval, so it did not run. Tell the Owner that you could not do it, and ask for a shorter request.";
 
 export const noSummaryRefusal =
   "This call cannot be shown to the Owner for Approval, so it did not run. Tell the Owner that you could not do it.";
@@ -69,13 +72,17 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
   if (Option.isNone(summary)) {
     return refused(noSummaryRefusal);
   }
+  const shownSummary = redactor.redact(summary.value);
+  if (!fitsOneApprovalRow(shownSummary)) {
+    return refused(summaryTooLongRefusal);
+  }
   const now = yield* DateTime.now;
   const draft = yield* pendingApprovals.draft({
     turnEventId,
     toolCallId: call.callId,
     toolName: call.name,
     frozenInput: call.input,
-    summary: summaryWithinLimit(redactor.redact(summary.value)),
+    summary: shownSummary,
     expiresAt: DateTime.addDuration(now, Duration.millis(expiryMillis)),
   });
   return { _tag: "Drafted", draft } satisfies DraftOutcome;

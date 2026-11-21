@@ -18,25 +18,13 @@ export const approvalSummaryOf =
       ? summary.of(input).pipe(Effect.map(Option.some))
       : Effect.succeed(Option.none());
 
-export const maxQuotedCharacters = 300;
-
-export const maxSummaryCharacters = 3500;
-
-const oneLineCutAt = (text: string, limit: number) => {
-  const characters = [...text.replaceAll(/\s+/gu, " ").trim()];
-  return characters.length > limit
-    ? `${characters
-        .slice(0, limit - 1)
-        .join("")
-        .trimEnd()}…`
-    : characters.join("");
-};
+export const maxSummaryLength = 3500;
 
 export const quoted = (text: string) =>
-  `"${oneLineCutAt(text, maxQuotedCharacters)}"`;
+  `"${text.replaceAll(/\s+/gu, " ").trim()}"`;
 
-export const summaryWithinLimit = (summary: string) =>
-  oneLineCutAt(summary, maxSummaryCharacters);
+export const fitsOneApprovalRow = (summary: string) =>
+  summary.length <= maxSummaryLength;
 
 export const countOf = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;

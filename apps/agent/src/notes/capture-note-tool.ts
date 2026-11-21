@@ -63,6 +63,15 @@ const CaptureNoteInput = Schema.Struct({
 const keptTextOf = (source: NoteSource, text: string) =>
   source.forwardedText ?? text;
 
+const keptTextOfCall = (
+  burst: Burst,
+  text: string,
+  message: number | undefined
+) => {
+  const chosen = noteSourceOfBurst(burst, message);
+  return chosen._tag === "Named" ? keptTextOf(chosen.source, text) : text;
+};
+
 const sourceOrRefusal = (
   chosen: BurstNoteSource,
   message: number | undefined
@@ -89,11 +98,11 @@ export const captureNoteTool = (
       riskClass: "change",
       marksItsWorkUntrusted: ({ linkedNoteIds }) =>
         (linkedNoteIds ?? []).length === 0,
-      approvalSummary: ({ text, url, openLoop, linkedNoteIds = [] }) =>
+      approvalSummary: ({ text, url, message, openLoop, linkedNoteIds = [] }) =>
         storedNoteTexts(notes, linkedNoteIds).pipe(
           Effect.map((linked) =>
             [
-              `Keep Note ${quoted(text)}`,
+              `Keep Note ${quoted(keptTextOfCall(burst, text, message))}`,
               ...(url === undefined ? [] : [`with link ${url}`]),
               ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
               ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),

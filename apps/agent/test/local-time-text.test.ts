@@ -34,10 +34,8 @@ describe("Plain words for an Approval summary", () => {
     ).toBe("on the last day of each month at 18:00");
   });
 
-  it("quotes text on one line and cuts it at the limit", () => {
+  it("quotes text on one line and keeps all of it", () => {
     expect(quoted("Call\n  Ana")).toBe('"Call Ana"');
-    const cut = quoted("a".repeat(400));
-    expect([...cut]).toHaveLength(302);
-    expect(cut.endsWith('…"')).toBe(true);
+    expect(quoted("a".repeat(400))).toBe(`"${"a".repeat(400)}"`);
   });
 });
