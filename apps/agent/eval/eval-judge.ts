@@ -1,5 +1,6 @@
 import { Effect, Layer, Option, Schema } from "effect";
 
+import { fixedTurnTrust } from "../src/approval/turn-trust.ts";
 import { ModelGateway } from "../src/model-gateway/model-gateway.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import type { Usage } from "../src/model-gateway/usage-ledger.ts";
@@ -87,7 +88,7 @@ export const judgeExchanges = Effect.fnUntraced(function* judgeExchanges(
     Effect.flatMap((gateway) =>
       gateway.generate({
         task: "eval_judge",
-        trustLevel: "owner",
+        trust: fixedTurnTrust("owner"),
         system: judgeInstructions(request.rubric),
         messages: [
           {

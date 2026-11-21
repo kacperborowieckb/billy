@@ -1,12 +1,12 @@
 import type { ToolApprovalStatus } from "ai";
 
 import { gateDecisionOf } from "../approval/tool-gate.ts";
-import type { TrustLevel } from "../notes/note.ts";
+import type { TurnTrust } from "../approval/turn-trust.ts";
 import { toolNamed } from "./agent-tool.ts";
 import type { AgentTools } from "./agent-tool.ts";
 
 export const approvalStatusOf =
-  (tools: AgentTools, trustLevel: TrustLevel) =>
+  (tools: AgentTools, trust: TurnTrust) =>
   ({
     toolCall,
   }: {
@@ -19,7 +19,7 @@ export const approvalStatusOf =
     const decision = gateDecisionOf({
       tool,
       input: toolCall.input,
-      trustLevel,
+      trustLevel: trust.current(),
     });
     if (decision._tag === "Deny") {
       return { type: "denied", reason: decision.reason };

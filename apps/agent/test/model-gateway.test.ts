@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import type { RiskClass } from "../src/approval/risk-class.ts";
 import { blockedCallReason } from "../src/approval/tool-gate.ts";
+import { fixedTurnTrust } from "../src/approval/turn-trust.ts";
 import { agentTool, runToolEffect } from "../src/model-gateway/agent-tool.ts";
 import {
   aiGatewayHeaders,
@@ -151,7 +152,7 @@ describe("Model Gateway transport", () => {
             task: "reply",
             system: "Be brief.",
             messages: [{ role: "user", content: "Hi" }],
-            trustLevel: "owner",
+            trust: fixedTurnTrust("owner"),
             stepLimit: 4,
           })
         ),
@@ -261,7 +262,7 @@ describe("The gate in the Model Gateway", () => {
               system: "Be brief.",
               messages: [{ role: "user", content: "Keep secret" }],
               tools: { keep_word: tool },
-              trustLevel: "owner",
+              trust: fixedTurnTrust("owner"),
               stepLimit: 4,
             })
           ),
@@ -302,7 +303,7 @@ describe("The gate in the Model Gateway", () => {
             system: "Be brief.",
             messages: [{ role: "user", content: "Keep secret" }],
             tools: { keep_word: keepWordTool(kept, "blocked") },
-            trustLevel: "owner",
+            trust: fixedTurnTrust("owner"),
             stepLimit: 4,
           })
         ),
@@ -359,7 +360,7 @@ describe("The gate in the Model Gateway", () => {
             system: "Be brief.",
             messages: [{ role: "user", content: "Keep secret" }],
             tools: { keep_word: keepWordTool(kept, "blocked") },
-            trustLevel: "owner",
+            trust: fixedTurnTrust("owner"),
             stepLimit: 4,
           })
         ),
@@ -415,7 +416,7 @@ describe("The gate in the Model Gateway", () => {
             system: "Be brief.",
             messages: [{ role: "user", content: "Keep milk" }],
             tools: { keep_word: keepWordTool(kept, "change") },
-            trustLevel: "owner",
+            trust: fixedTurnTrust("owner"),
             stepLimit: 4,
           })
         ),
@@ -442,7 +443,7 @@ describe("The gate in the Model Gateway", () => {
             system: "Be brief.",
             messages: [{ role: "user", content: "Keep milk" }],
             tools: { keep_word: keepWordTool(kept, "change") },
-            trustLevel: "untrusted",
+            trust: fixedTurnTrust("untrusted"),
             stepLimit: 4,
           })
         ),

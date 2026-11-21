@@ -62,6 +62,13 @@ const modelTraceFields = {
     Schema.withDecodingDefaultKey(Effect.succeed([]))
   ),
   restart: Schema.optionalKey(RestartRecordSchema),
+  trustLevelChange: Schema.optionalKey(
+    Schema.Struct({
+      trustLevel: Schema.Literal("untrusted"),
+      toolCallId: Schema.String,
+      toolName: Schema.String,
+    })
+  ),
 };
 
 const ReplyTraceBodySchema = Schema.Struct({

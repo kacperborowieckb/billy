@@ -1,5 +1,4 @@
 import type { ModelMessage } from "ai";
-import { Clock, Effect } from "effect";
 
 import {
   attemptTimeoutMillis,
@@ -11,9 +10,6 @@ import type { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
 import type { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import type { Usage } from "../model-gateway/usage-ledger.ts";
-import type { OwnerId } from "../owner-id.ts";
-import { OperatorMetrics } from "../tracing/operator-metrics.ts";
-import type { OperatorMetric } from "../tracing/operator-metrics.ts";
 import type { Redactor } from "../tracing/redactor.ts";
 import type {
   ProactiveTurnTrace,
@@ -57,7 +53,7 @@ const unknownUsage: Usage = {
   costUsd: undefined,
 };
 
-const usageOfOutcome = (outcome: ModelOutcome): Usage | undefined => {
+export const usageOfOutcome = (outcome: ModelOutcome): Usage | undefined => {
   if (outcome._tag === "Replied") {
     return outcome.reply.usage;
   }
@@ -99,6 +95,7 @@ export interface ModelTraceInput {
   readonly reaction?: ReactionOutcome | undefined;
   readonly refusedOutcomeTools?: readonly string[];
   readonly restart?: ReplyTurnTrace["restart"];
+  readonly trustLevelChange?: ReplyTurnTrace["trustLevelChange"];
 }
 
 const traceOutcomeOf = (
@@ -131,6 +128,7 @@ const modelTraceOf = ({
   reaction,
   refusedOutcomeTools = [],
   restart,
+  trustLevelChange,
 }: ModelTraceInput) => {
   const reasoningEffort =
     outcome._tag === "Replied"
@@ -149,6 +147,7 @@ const modelTraceOf = ({
     outcome: traceOutcomeOf(outcomeKind, reaction, redactor),
     refusedOutcomeTools: [...refusedOutcomeTools],
     ...(restart === undefined ? {} : { restart }),
+    ...(trustLevelChange === undefined ? {} : { trustLevelChange }),
   } as const;
   if (outcome._tag === "Replied") {
     return {
@@ -223,46 +222,6 @@ export const proactiveTraceOf = ({
       ? "proactive_message_sent"
       : "proactive_message_failed",
 });
-
-interface TurnMetricInput {
-  readonly ownerId: OwnerId;
-  readonly eventId: string;
-  readonly outcome: ModelOutcome;
-  readonly result: Extract<OperatorMetric, { kind: "turn" }>["result"];
-  readonly outcomeKind?: OutcomeKind | undefined;
-  readonly startedAt: number;
-  readonly restartCount?: number;
-}
-
-export const recordTurnMetric = ({
-  ownerId,
-  eventId,
-  outcome,
-  result,
-  outcomeKind,
-  startedAt,
-  restartCount = 0,
-}: TurnMetricInput) =>
-  Effect.gen(function* recordTurnMetricEffect() {
-    const metrics = yield* OperatorMetrics;
-    const now = yield* Clock.currentTimeMillis;
-    yield* metrics.record({
-      kind: "turn",
-      ownerId,
-      eventId,
-      result,
-      outcome: outcomeKind,
-      latencyMillis: now - startedAt,
-      modelId:
-        outcome._tag === "Replied"
-          ? outcome.reply.modelId
-          : outcome.error.modelId,
-      usage: usageOfOutcome(outcome),
-      stepCount: stepsOf(outcome).length,
-      toolCallCount: stepsOf(outcome).flatMap((step) => step.toolCalls).length,
-      restartCount,
-    });
-  });
 
 export const responseMessagesOf = (outcome: ModelOutcome) =>
   stepsOf(outcome).flatMap((step) => step.responseMessages);
