@@ -13,10 +13,11 @@ export const notesNotReadMessage =
 
 export const storedNotes = (
   notes: Notes["Service"],
-  noteIds: readonly string[],
+  requestedIds: readonly string[],
   consequence: string
-) =>
-  notes.byIds(noteIds).pipe(
+) => {
+  const noteIds = [...new Set(requestedIds)];
+  return notes.byIds(noteIds).pipe(
     Effect.mapError(() => new ToolFailed({ message: notesNotReadMessage })),
     Effect.flatMap((found) => {
       const unknown = noteIds.filter(
@@ -35,6 +36,7 @@ export const storedNotes = (
           );
     })
   );
+};
 
 export const storedNoteTexts = (
   notes: Notes["Service"],

@@ -375,7 +375,10 @@ describe("Approval for a forwarded message", () => {
     scriptModel([
       {
         callTool: captureNoteToolName,
-        input: { text: "dinner", linkedNoteIds: [owned?.note_id] },
+        input: {
+          text: "dinner",
+          linkedNoteIds: [owned?.note_id, owned?.note_id],
+        },
       },
       { say: "Waiting for you." },
     ]);
