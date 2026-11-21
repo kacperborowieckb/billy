@@ -8,20 +8,17 @@ import {
   LocalDueTimeSchema,
 } from "../time/local-due-time.ts";
 import { RecurrenceRuleSchema } from "../time/recurrence-rule.ts";
-import type { RecurrenceRule } from "../time/recurrence-rule.ts";
 import { refuseAtScheduledTaskLimit } from "./active-scheduled-task-limit-reached.ts";
 import { ScheduleActionInputSchema } from "./schedule-action-input.ts";
-import type { ScheduleAction } from "./schedule-action.ts";
 import { resolveScheduleDue } from "./schedule-due.ts";
 import {
   noActiveScheduleMessage,
   scheduleOf,
 } from "./schedule-presentation.ts";
 import {
-  activeSchedule,
-  activeScheduleTextOf,
   scheduleActionText,
   scheduleDueText,
+  storedScheduleText,
 } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
 
@@ -74,12 +71,6 @@ const ChangeScheduleInput = Schema.Struct({
   ),
 });
 
-interface ScheduleChangeCheck {
-  readonly action?: ScheduleAction | undefined;
-  readonly localDueTime?: string | undefined;
-  readonly repeat?: RecurrenceRule | undefined;
-}
-
 export const changeScheduleTool = (
   {
     schedules,
@@ -89,69 +80,27 @@ export const changeScheduleTool = (
     maxActiveScheduledTasks,
   }: ScheduleToolServices,
   eventId: string
-) => {
-  const checkedChange = Effect.fnUntraced(function* checkedChange({
-    action,
-    localDueTime,
-    repeat,
-  }: ScheduleChangeCheck) {
-    if (
-      action === undefined &&
-      localDueTime === undefined &&
-      repeat === undefined
-    ) {
-      return yield* new ToolFailed({ message: nothingToChangeMessage });
-    }
-    const timeZone = yield* ownerTimeZone;
-    if (Option.isNone(timeZone)) {
-      return yield* new ToolFailed({
-        message: noTimeZoneForChangeMessage,
-      });
-    }
-    const due = yield* resolveScheduleDue(
-      { localDueTime, repeat },
-      timeZone.value,
-      {
-        bothGiven: newDueAndRepeatGivenMessage,
-        invalidLocalDueTime: invalidNewDueTimeMessage,
-        localDueTimeInThePast: newDueTimeInThePastMessage,
-      }
-    );
-    return { timeZone: timeZone.value, due };
-  });
-
-  return recordedTool(
+) =>
+  recordedTool(
     { eventId, progress, redactor },
     {
       name: changeScheduleToolName,
       riskClass: "change",
-      approvalSummary: Effect.fnUntraced(function* changeSummaryEffect({
-        scheduleId,
-        action,
-        localDueTime,
-        repeat,
-      }) {
-        const { timeZone } = yield* checkedChange({
-          action,
-          localDueTime,
-          repeat,
-        });
-        const schedule = yield* activeSchedule(schedules, scheduleId);
-        const stopsRepeating =
-          schedule.repeat !== undefined &&
-          localDueTime !== undefined &&
-          repeat === undefined;
-        const due = scheduleDueText(
-          { localDueTime, repeat },
-          Option.some(timeZone)
-        );
-        return [
-          `Change ${activeScheduleTextOf(schedule, Option.some(timeZone))}`,
-          ...(action === undefined ? [] : [`to ${scheduleActionText(action)}`]),
-          ...(due === "" ? [] : [`due ${due}`]),
-          ...(stopsRepeating ? ["so it stops repeating"] : []),
-        ].join(", ");
-      }),
+      approvalSummary: ({ scheduleId, action, localDueTime, repeat }) =>
+        storedScheduleText(schedules, scheduleId).pipe(
+          Effect.map((schedule) => {
+            const due = scheduleDueText({ localDueTime, repeat });
+            const changes = [
+              ...(action === undefined
+                ? []
+                : [`to ${scheduleActionText(action)}`]),
+              ...(due === "" ? [] : [`due ${due}`]),
+            ];
+            return changes.length === 0
+              ? `Change ${schedule} with no new value`
+              : `Change ${schedule} ${changes.join(", ")}`;
+          })
+        ),
       description:
         "Change the Action, the local due time or the repeat rule, or both the Action and one of those, of an active Schedule of the Owner. The Action can change between SendText and RunPrompt, or keep its kind with new text or a new prompt. The Schedule fires at the new time and not at the old time. Fails with a message, and changes nothing, in these cases. No active Schedule has the id. The time zone is not known. The new time is in the past or is not real. The change would make a new Scheduled Task, and the limit of active Scheduled Tasks is reached. Say that the Schedule is changed only after this succeeded, and give the local date, weekday, and time that it returns.",
       inputSchema: ChangeScheduleInput,
@@ -162,11 +111,28 @@ export const changeScheduleTool = (
         localDueTime,
         repeat,
       }) {
-        const { timeZone, due } = yield* checkedChange({
-          action,
-          localDueTime,
-          repeat,
-        });
+        if (
+          action === undefined &&
+          localDueTime === undefined &&
+          repeat === undefined
+        ) {
+          return yield* new ToolFailed({ message: nothingToChangeMessage });
+        }
+        const timeZone = yield* ownerTimeZone;
+        if (Option.isNone(timeZone)) {
+          return yield* new ToolFailed({
+            message: noTimeZoneForChangeMessage,
+          });
+        }
+        const due = yield* resolveScheduleDue(
+          { localDueTime, repeat },
+          timeZone.value,
+          {
+            bothGiven: newDueAndRepeatGivenMessage,
+            invalidLocalDueTime: invalidNewDueTimeMessage,
+            localDueTimeInThePast: newDueTimeInThePastMessage,
+          }
+        );
         const result = yield* schedules
           .change({
             scheduleId,
@@ -189,10 +155,9 @@ export const changeScheduleTool = (
           });
         }
         return {
-          ...scheduleOf(result.value, timeZone),
-          timeZone: DateTime.zoneToString(timeZone),
+          ...scheduleOf(result.value, timeZone.value),
+          timeZone: DateTime.zoneToString(timeZone.value),
         };
       }),
     }
   );
-};

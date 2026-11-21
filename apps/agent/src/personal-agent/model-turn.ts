@@ -151,7 +151,6 @@ export const runModelTurn = <Failure, Requirements>({
       outcomeKind: decided.kind,
       reaction: decided.reaction,
       refusedOutcomeTools: decided.refusedOutcomeTools,
-      stoppedAfterDrafts: decided.stoppedAfterDrafts,
     };
     const recordTrace = (delivered: boolean) =>
       traces.record(kind.traceOf({ ...traceInput, delivered }));

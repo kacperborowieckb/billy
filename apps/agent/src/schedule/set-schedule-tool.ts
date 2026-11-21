@@ -9,15 +9,13 @@ import {
   LocalDueTimeSchema,
 } from "../time/local-due-time.ts";
 import { RecurrenceRuleSchema } from "../time/recurrence-rule.ts";
-import type { RecurrenceRule } from "../time/recurrence-rule.ts";
 import { refuseAtAgentScheduleLimit } from "./active-agent-schedule-limit-reached.ts";
 import { refuseAtScheduledTaskLimit } from "./active-scheduled-task-limit-reached.ts";
 import { refuseNotOpenLoops } from "./not-open-loops.ts";
 import { ScheduleActionInputSchema } from "./schedule-action-input.ts";
-import type { ScheduleAction } from "./schedule-action.ts";
 import { resolveScheduleDue } from "./schedule-due.ts";
 import { scheduleOf } from "./schedule-presentation.ts";
-import { scheduleDueText, setScheduleSummaryText } from "./schedule-summary.ts";
+import { scheduleActionText, scheduleDueText } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
 
 export const maxOpenLoopIdsPerSchedule = 20;
@@ -87,34 +85,11 @@ const SetScheduleInput = Schema.Struct({
   ),
 });
 
-const isFollowUpCall = (
-  turnOrigin: ScheduleToolServices["turnOrigin"],
-  {
-    openLoopIds = [],
-    ownerAskedForSchedule,
-  }: {
-    readonly openLoopIds?: readonly string[] | undefined;
-    readonly ownerAskedForSchedule?: boolean | undefined;
-  }
-) =>
-  turnOrigin === "proactive" ||
-  (openLoopIds.length > 0 && ownerAskedForSchedule !== true);
-
-interface ScheduleCheck {
-  readonly action: ScheduleAction;
-  readonly openLoopIds?: readonly string[] | undefined;
-  readonly ownerAskedForSchedule?: boolean | undefined;
-  readonly localDueTime?: string | undefined;
-  readonly repeat?: RecurrenceRule | undefined;
-}
-
 export const setScheduleTool = (
   {
     schedules,
     ownerTimeZone,
     mutedAmong,
-    noteTexts,
-    openLoopTexts,
     progress,
     redactor,
     maxActiveScheduledTasks,
@@ -122,87 +97,16 @@ export const setScheduleTool = (
     turnOrigin,
   }: ScheduleToolServices,
   eventId: string
-) => {
-  const checkedSchedule = Effect.fnUntraced(function* checkedSchedule({
-    action,
-    openLoopIds,
-    ownerAskedForSchedule,
-    localDueTime,
-    repeat,
-  }: ScheduleCheck) {
-    const hasOpenLoops = openLoopIds !== undefined && openLoopIds.length > 0;
-    const isFollowUp = isFollowUpCall(turnOrigin, {
-      openLoopIds,
-      ownerAskedForSchedule,
-    });
-    if (isFollowUp && (!hasOpenLoops || action._tag !== "RunPrompt")) {
-      return yield* new ToolFailed({
-        message: followUpNeedsOpenLoopsMessage,
-      });
-    }
-    if (isFollowUp) {
-      const muted = yield* mutedAmong(openLoopIds ?? []);
-      if (muted.length > 0) {
-        return yield* new ToolFailed({
-          message: mutedOpenLoopsMessage(muted),
-        });
-      }
-    }
-    const timeZone = yield* ownerTimeZone;
-    if (Option.isNone(timeZone)) {
-      return yield* new ToolFailed({
-        message: noTimeZoneForScheduleMessage,
-      });
-    }
-    const due = yield* resolveScheduleDue(
-      { localDueTime, repeat },
-      timeZone.value,
-      {
-        bothGiven: dueAndRepeatGivenMessage,
-        invalidLocalDueTime: invalidLocalDueTimeMessage,
-        localDueTimeInThePast: dueTimeInThePastMessage,
-      }
-    );
-    if (Option.isNone(due)) {
-      return yield* new ToolFailed({ message: noDueGivenMessage });
-    }
-    return { isFollowUp, timeZone: timeZone.value, due: due.value };
-  });
-
-  return recordedTool(
+) =>
+  recordedTool(
     { eventId, progress, redactor },
     {
       name: setScheduleToolName,
       riskClass: "change",
-      approvalSummary: Effect.fnUntraced(function* setSummaryEffect(input) {
-        const { isFollowUp, timeZone } = yield* checkedSchedule(input).pipe(
-          Effect.mapError((failure) =>
-            failure instanceof ToolFailed
-              ? failure
-              : new ToolFailed({ message: scheduleNotSetMessage })
-          )
-        );
-        const openLoopIds = [...new Set(input.openLoopIds)];
-        yield* noteTexts(
-          input.noteId === undefined
-            ? openLoopIds
-            : [input.noteId, ...openLoopIds]
-        );
-        const about = yield* noteTexts(
-          input.noteId === undefined ? [] : [input.noteId]
-        );
-        const followedUp = yield* openLoopTexts(openLoopIds);
-        return setScheduleSummaryText({
-          action: input.action,
-          due: scheduleDueText(
-            { localDueTime: input.localDueTime, repeat: input.repeat },
-            Option.some(timeZone)
-          ),
-          followUp: isFollowUp,
-          about,
-          followedUp,
-        });
-      }),
+      approvalSummary: ({ action, localDueTime, repeat }) =>
+        Effect.succeed(
+          `Set ${scheduleActionText(action)}, ${scheduleDueText({ localDueTime, repeat }) || "with no due time"}`
+        ),
       description:
         "Set a Schedule for the Owner, one-time with localDueTime or repeating with repeat. The action says what happens at the due time. With SendText, the saved text is sent to the Owner in the chat; use it for fixed words for the Owner, such as a Reminder. With RunPrompt, the agent runs the saved prompt at the due time and sends the result. This is a Scheduled Task. A follow-up is a RunPrompt Schedule that you set yourself with openLoopIds, when the Owner did not ask for a Schedule (leave out ownerAskedForSchedule): set one before the due date of an Open Loop, and one when an Open Loop had no change for about a day. When a follow-up fires, you can set the next one the same way. Use it for work to do at the due time, such as listing open tasks from the Notes of that day. Give times as the local time of the Owner. Fails with a message when the time zone is not known, neither or both of localDueTime and repeat are given, the time is in the past, or the time is not real. Say that the Schedule is set only after it succeeded, and give the local date, weekday, and time of the first due time that it returns, and for a repeating Schedule how it repeats.",
       inputSchema: SetScheduleInput,
@@ -219,21 +123,50 @@ export const setScheduleTool = (
         openLoopIds,
         ownerAskedForSchedule,
       }) {
-        const { isFollowUp, timeZone, due } = yield* checkedSchedule({
-          action,
-          openLoopIds,
-          ownerAskedForSchedule,
-          localDueTime,
-          repeat,
-        });
+        const hasOpenLoops =
+          openLoopIds !== undefined && openLoopIds.length > 0;
+        const isFollowUp =
+          turnOrigin === "proactive" ||
+          (hasOpenLoops && ownerAskedForSchedule !== true);
+        if (isFollowUp && (!hasOpenLoops || action._tag !== "RunPrompt")) {
+          return yield* new ToolFailed({
+            message: followUpNeedsOpenLoopsMessage,
+          });
+        }
+        if (isFollowUp) {
+          const muted = yield* mutedAmong(openLoopIds ?? []);
+          if (muted.length > 0) {
+            return yield* new ToolFailed({
+              message: mutedOpenLoopsMessage(muted),
+            });
+          }
+        }
+        const timeZone = yield* ownerTimeZone;
+        if (Option.isNone(timeZone)) {
+          return yield* new ToolFailed({
+            message: noTimeZoneForScheduleMessage,
+          });
+        }
+        const due = yield* resolveScheduleDue(
+          { localDueTime, repeat },
+          timeZone.value,
+          {
+            bothGiven: dueAndRepeatGivenMessage,
+            invalidLocalDueTime: invalidLocalDueTimeMessage,
+            localDueTimeInThePast: dueTimeInThePastMessage,
+          }
+        );
+        if (Option.isNone(due)) {
+          return yield* new ToolFailed({ message: noDueGivenMessage });
+        }
         const { schedule: stored, alreadySet } = yield* schedules
           .set({
             action,
             setBy: isFollowUp ? "agent" : "owner",
             noteId,
             openLoopIds,
-            dueAt: due.dueAt,
-            repeat: due.repeat,
+            dueAt: due.value.dueAt,
+            repeat: due.value.repeat,
             sourceEventId: eventId,
             activeScheduledTaskLimit: maxActiveScheduledTasks,
             activeAgentScheduleLimit: maxActiveAgentSchedules,
@@ -244,11 +177,10 @@ export const setScheduleTool = (
             refuseNotOpenLoops
           );
         return {
-          ...scheduleOf(stored, timeZone),
-          timeZone: DateTime.zoneToString(timeZone),
+          ...scheduleOf(stored, timeZone.value),
+          timeZone: DateTime.zoneToString(timeZone.value),
           alreadySet,
         };
       }),
     }
   );
-};

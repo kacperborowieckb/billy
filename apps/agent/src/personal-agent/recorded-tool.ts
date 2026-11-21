@@ -26,9 +26,7 @@ export type RecordedToolApproval<Input> =
   | {
       readonly riskClass: RiskClass;
       readonly riskClassOfInput?: (input: Input) => RiskClass;
-      readonly approvalSummary: (
-        input: Input
-      ) => Effect.Effect<string, ToolFailed>;
+      readonly approvalSummary: (input: Input) => Effect.Effect<string>;
     };
 
 export type RecordedToolDefinition<

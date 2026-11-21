@@ -10,19 +10,13 @@ import type {
   ModelRequest,
 } from "../model-gateway/model-gateway.ts";
 import type { ModelStep } from "../model-gateway/model-step.ts";
+import { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
+import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import { answerApprovalRequests } from "./approval-step.ts";
 import type { ApprovalAsking } from "./approval-step.ts";
 import {
-  approvalsWithoutModelText,
-  modelFailed,
-  stepLimitReachedIn,
-  withEarlierSteps,
-} from "./decided-outcome.ts";
-import type { DecidedOutcome } from "./decided-outcome.ts";
-import {
   defaultReactionAllowed,
-  outcomeAfterRefusedCallMessage,
   outcomeWhileApprovalWaitsMessage,
   refusalOfOutcomeTool,
 } from "./outcome-refusal.ts";
@@ -34,7 +28,37 @@ import {
 import { silenceAcceptedOutput } from "./stay-silent-tool.ts";
 import { closeLastStep, sameOutputFor } from "./step-closing.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import type { ModelFailure, ReactionOutcome } from "./turn-record.ts";
+import type {
+  ModelFailure,
+  ModelOutcome,
+  ReactionOutcome,
+} from "./turn-record.ts";
+
+export interface DecidedOutcome {
+  readonly outcome: ModelOutcome;
+  readonly kind: OutcomeKind | undefined;
+  readonly reaction?: ReactionOutcome;
+  readonly refusedOutcomeTools: readonly string[];
+  readonly drafts: readonly DraftApproval[];
+}
+
+const withEarlierSteps = (
+  error: ModelFailure,
+  earlier: readonly ModelStep[]
+): ModelFailure =>
+  error._tag === "StepLimitReached"
+    ? new StepLimitReached({
+        modelId: error.modelId,
+        reasoningEffort: error.reasoningEffort,
+        stepLimit: error.stepLimit,
+        steps: [...earlier, ...error.steps],
+      })
+    : new ModelUnavailable({
+        modelId: error.modelId,
+        reasoningEffort: error.reasoningEffort,
+        cause: error.cause,
+        steps: [...earlier, ...error.steps],
+      });
 
 interface OutcomeGeneration {
   readonly eventId: string;
@@ -59,17 +83,23 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     let earlier: readonly ModelStep[] = [];
     const refused: string[] = [];
     const drafts: DraftApproval[] = [];
-    let lastReply: ModelReply | undefined;
-    const settled = () => ({ refusedOutcomeTools: refused, drafts });
-    const stoppedModel = (
-      error: ModelFailure,
-      reply: ModelReply | undefined
-    ): DecidedOutcome =>
-      drafts.length > 0 && reply !== undefined
-        ? approvalsWithoutModelText(reply, error, settled())
-        : modelFailed(error, settled());
-    const stepLimitFailure = (reply: ModelReply, steps: readonly ModelStep[]) =>
-      stoppedModel(stepLimitReachedIn(reply, steps, request.stepLimit), reply);
+    const stepLimitFailure = (
+      reply: ModelReply,
+      steps: readonly ModelStep[]
+    ): DecidedOutcome => ({
+      outcome: {
+        _tag: "ModelFailed",
+        error: new StepLimitReached({
+          modelId: reply.modelId,
+          reasoningEffort: reply.reasoningEffort,
+          stepLimit: request.stepLimit,
+          steps,
+        }),
+      },
+      kind: undefined,
+      refusedOutcomeTools: refused,
+      drafts,
+    });
 
     for (;;) {
       const stepLimit = request.stepLimit - earlier.length;
@@ -92,13 +122,17 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           })
         );
       if (generated._tag === "ModelFailed") {
-        return stoppedModel(
-          withEarlierSteps(generated.error, earlier),
-          lastReply
-        );
+        return {
+          outcome: {
+            _tag: "ModelFailed",
+            error: withEarlierSteps(generated.error, earlier),
+          },
+          kind: undefined,
+          refusedOutcomeTools: refused,
+          drafts,
+        } satisfies DecidedOutcome;
       }
       const { reply } = generated;
-      lastReply = reply;
       const steps = [...earlier, ...reply.steps];
       const replied = (
         finalSteps: readonly ModelStep[],
@@ -121,24 +155,14 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
       const calls = reply.endedWith;
       if (reply.awaitingApproval.length > 0) {
         const answered = yield* answerApprovalRequests(
-          {
-            asking: approvalAsking,
-            turnEventId: eventId,
-            tools,
-          },
+          { asking: approvalAsking, turnEventId: eventId, tools },
           reply.awaitingApproval
         );
         drafts.push(...answered.drafts);
         refused.push(...calls.map((call) => call.name));
         earlier = closeLastStep(steps, [
           ...answered.results,
-          ...sameOutputFor(
-            calls,
-            drafts.length > 0
-              ? outcomeWhileApprovalWaitsMessage
-              : outcomeAfterRefusedCallMessage,
-            true
-          ),
+          ...sameOutputFor(calls, outcomeWhileApprovalWaitsMessage, true),
         ]);
         if (earlier.length >= request.stepLimit) {
           return stepLimitFailure(reply, earlier);

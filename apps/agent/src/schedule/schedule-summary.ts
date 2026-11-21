@@ -1,19 +1,9 @@
-import { DateTime, Effect, Option } from "effect";
+import { Effect, Option } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
-import { ToolFailed } from "../model-gateway/agent-tool.ts";
-import { storedNoteLabel, storedNotes } from "../notes/note-summary.ts";
-import type { Notes } from "../notes/notes.ts";
-import {
-  instantText,
-  localDueTimeText,
-  recurrenceText,
-} from "../time/local-time-text.ts";
+import { localDueTimeText, recurrenceText } from "../time/local-time-text.ts";
 import type { RecurrenceRule } from "../time/recurrence-rule.ts";
-import { notOpenLoopsMessage } from "./not-open-loops.ts";
 import type { ScheduleAction } from "./schedule-action.ts";
-import { noActiveScheduleMessage } from "./schedule-presentation.ts";
-import type { Schedule } from "./schedule.ts";
 import type { Schedules } from "./schedules.ts";
 
 export const scheduleActionText = (action: ScheduleAction) =>
@@ -26,90 +16,22 @@ export interface ScheduleDueInput {
   readonly repeat?: RecurrenceRule | undefined;
 }
 
-export const scheduleDueText = (
-  { localDueTime, repeat }: ScheduleDueInput,
-  timeZone: Option.Option<DateTime.TimeZone>
-) =>
+export const scheduleDueText = ({ localDueTime, repeat }: ScheduleDueInput) =>
   [
-    ...(localDueTime === undefined
-      ? []
-      : [localDueTimeText(localDueTime, timeZone)]),
+    ...(localDueTime === undefined ? [] : [localDueTimeText(localDueTime)]),
     ...(repeat === undefined ? [] : [recurrenceText(repeat)]),
   ].join(", ");
 
-export const schedulesNotReadMessage =
-  "The Schedules could not be read, so nothing waits for the Owner's Approval. Tell the Owner that you could not do it.";
-
-export const activeScheduleTextOf = (
-  schedule: Schedule,
-  timeZone: Option.Option<DateTime.TimeZone>
-) => {
-  const zoneName = DateTime.zoneToString(
-    schedule.repeat?.timeZone ??
-      Option.getOrElse(timeZone, () => DateTime.zoneMakeNamedUnsafe("UTC"))
-  );
-  return [
-    scheduleActionText(schedule.action),
-    `next due ${instantText(schedule.nextDueAt, zoneName)}`,
-    ...(schedule.repeat === undefined
-      ? []
-      : [recurrenceText(schedule.repeat.rule)]),
-    `id ${schedule.scheduleId}`,
-  ].join(", ");
-};
-
-export const activeSchedule = (
+export const storedScheduleText = (
   schedules: Schedules["Service"],
   scheduleId: string
 ) =>
   schedules.byId(scheduleId).pipe(
-    Effect.mapError(() => new ToolFailed({ message: schedulesNotReadMessage })),
-    Effect.flatMap((found) =>
-      Option.isSome(found) && found.value.state === "active"
-        ? Effect.succeed(found.value)
-        : Effect.fail(
-            new ToolFailed({ message: noActiveScheduleMessage(scheduleId) })
-          )
-    )
-  );
-
-export interface SetScheduleSummary {
-  readonly action: ScheduleAction;
-  readonly due: string;
-  readonly followUp: boolean;
-  readonly about: readonly string[];
-  readonly followedUp: readonly string[];
-}
-
-export const setScheduleSummaryText = ({
-  action,
-  due,
-  followUp,
-  about,
-  followedUp,
-}: SetScheduleSummary) =>
-  [
-    followUp
-      ? `Set a follow-up of the agent, ${scheduleActionText(action)}`
-      : `Set ${scheduleActionText(action)}`,
-    due,
-    ...(about.length === 0 ? [] : [`about ${about.join(", ")}`]),
-    ...(followedUp.length === 0
-      ? []
-      : [`to follow up ${followedUp.join(", ")}`]),
-  ].join(", ");
-
-export const openLoopTextsOf = (
-  notes: Notes["Service"],
-  noteIds: readonly string[]
-) =>
-  storedNotes(notes, noteIds, "No Schedule was set.").pipe(
-    Effect.flatMap((found) => {
-      const notOpen = found
-        .filter((note) => note.openLoop?._tag !== "Open")
-        .map((note) => note.noteId);
-      return notOpen.length > 0
-        ? Effect.fail(new ToolFailed({ message: notOpenLoopsMessage(notOpen) }))
-        : Effect.succeed(found.map(storedNoteLabel));
-    })
+    Effect.map(
+      Option.match({
+        onNone: () => `Schedule ${scheduleId}`,
+        onSome: (schedule) => scheduleActionText(schedule.action),
+      })
+    ),
+    Effect.orElseSucceed(() => `Schedule ${scheduleId}`)
   );

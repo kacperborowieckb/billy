@@ -1,7 +1,6 @@
 import { Cause, Effect, Option, Schema } from "effect";
 
 import type { Journal } from "../journal/journal.ts";
-import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import type { TurnProgress } from "../personal-agent/turn-progress.ts";
 import { ensureBrief } from "../schedule/brief.ts";
@@ -35,13 +34,10 @@ const SetTimeZoneInput = Schema.Struct({
   ),
 });
 
-const invalidTimeZoneMessage = (name: string) =>
-  `${JSON.stringify(name)} is not an IANA time zone name. The time zone was not changed. Tell the Owner that you could not set it, and ask for their city or an IANA name such as Europe/Warsaw.`;
-
 const failureMessageOf = (cause: Cause.Cause<unknown>) => {
   const error = Cause.findErrorOption(cause);
   if (Option.isSome(error) && error.value instanceof InvalidTimeZone) {
-    return invalidTimeZoneMessage(error.value.name);
+    return `${JSON.stringify(error.value.name)} is not an IANA time zone name. The time zone was not changed. Tell the Owner that you could not set it, and ask for their city or an IANA name such as Europe/Warsaw.`;
   }
   return timeZoneNotChangedMessage;
 };
@@ -63,13 +59,7 @@ export const setTimeZoneTool = (
       name: setTimeZoneToolName,
       riskClass: "change",
       approvalSummary: ({ timeZone }) =>
-        Option.isSome(namedTimeZone(timeZone))
-          ? Effect.succeed(
-              `Set the time zone to ${timeZone}. Repeating Schedules keep their local time in the new time zone, and a daily Brief is set only when none was ever set`
-            )
-          : Effect.fail(
-              new ToolFailed({ message: invalidTimeZoneMessage(timeZone) })
-            ),
+        Effect.succeed(`Set the time zone to ${timeZone}`),
       description:
         "Set the time zone of the Owner. It decides the local date and time that you see in every Turn, and the repeating Reminders keep their local time in the new time zone. Call it when the Owner says where they live or gives their time zone, also when they change it. Fails with a message when the name is not an IANA time zone name, and then nothing changes.",
       inputSchema: SetTimeZoneInput,

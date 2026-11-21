@@ -1,15 +1,13 @@
 import { Effect, Option } from "effect";
 
-import type { ToolFailed } from "../model-gateway/agent-tool.ts";
-
 export interface InputApprovalSummary<Input> {
   readonly isInput: (value: unknown) => value is Input;
-  readonly of: (input: Input) => Effect.Effect<string, ToolFailed>;
+  readonly of: (input: Input) => Effect.Effect<string>;
 }
 
 export type ApprovalSummaryOf = (
   input: unknown
-) => Effect.Effect<Option.Option<string>, ToolFailed>;
+) => Effect.Effect<Option.Option<string>>;
 
 export const approvalSummaryOf =
   <Input>(

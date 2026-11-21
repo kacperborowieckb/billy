@@ -6,7 +6,7 @@ import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { profileEntryKinds } from "../personal-agent/storage-values.ts";
 import { ProfileFull } from "./profile-full.ts";
 import type { ProfileToolServices } from "./profile-tool-services.ts";
-import { charactersUsedBy } from "./profile.ts";
+import type { ProfileEntry } from "./profile.ts";
 import { UnknownProfileEntry } from "./unknown-profile-entry.ts";
 
 export const updateProfileToolName = "update_profile";
@@ -52,53 +52,16 @@ const UpdateProfileInput = Schema.Struct({
   ),
 });
 
-const profileFullMessage = (charactersUsed: number, characterLimit: number) =>
-  `The Profile is full: it has ${charactersUsed} of ${characterLimit} characters. Nothing was added. Tell the Owner that the Profile is full and that they can ask you to remove an entry first.`;
-
-const unknownProfileEntryMessage = (entryId: string) =>
-  `The Profile has no entry with the id ${entryId}. Nothing was removed. Use an entry id from the Profile.`;
-
-type ProfileChange =
-  | {
-      readonly _tag: "Add";
-      readonly kind: (typeof profileEntryKinds)[number];
-      readonly text: string;
-    }
-  | { readonly _tag: "Remove"; readonly entryId: string };
-
-const checkedProfileChange = ({
-  action,
-  kind,
-  text,
-  entryId,
-}: typeof UpdateProfileInput.Type) => {
-  if (action === "add") {
-    return kind === undefined || text === undefined
-      ? Effect.fail(
-          new ToolFailed({ message: profileEntryMissingFieldMessage.add })
-        )
-      : Effect.succeed<ProfileChange>({ _tag: "Add", kind, text: text.trim() });
-  }
-  return entryId === undefined
-    ? Effect.fail(
-        new ToolFailed({ message: profileEntryMissingFieldMessage.remove })
-      )
-    : Effect.succeed<ProfileChange>({ _tag: "Remove", entryId });
-};
-
 const failureMessageOf = (cause: Cause.Cause<unknown>) => {
   const error = Cause.findErrorOption(cause);
   if (Option.isNone(error)) {
     return profileNotChangedMessage;
   }
   if (error.value instanceof ProfileFull) {
-    return profileFullMessage(
-      error.value.charactersUsed,
-      error.value.characterLimit
-    );
+    return `The Profile is full: it has ${error.value.charactersUsed} of ${error.value.characterLimit} characters. Nothing was added. Tell the Owner that the Profile is full and that they can ask you to remove an entry first.`;
   }
   if (error.value instanceof UnknownProfileEntry) {
-    return unknownProfileEntryMessage(error.value.entryId);
+    return `The Profile has no entry with the id ${error.value.entryId}. Nothing was removed. Use an entry id from the Profile.`;
   }
   return profileNotChangedMessage;
 };
@@ -112,45 +75,46 @@ export const updateProfileTool = (
     {
       name: updateProfileToolName,
       riskClass: "change",
-      approvalSummary: Effect.fnUntraced(function* profileSummaryEffect(input) {
-        const change = yield* checkedProfileChange(input);
-        const entries = yield* profile.read.pipe(
-          Effect.mapError(
-            () => new ToolFailed({ message: profileNotChangedMessage })
-          )
-        );
-        if (change._tag === "Add") {
-          const kept = entries.some(
-            (entry) => entry.kind === change.kind && entry.text === change.text
-          );
-          const charactersUsed = charactersUsedBy(entries);
-          if (!kept && charactersUsed + change.text.length > characterLimit) {
-            return yield* new ToolFailed({
-              message: profileFullMessage(charactersUsed, characterLimit),
-            });
-          }
-          return `Add to the Profile${change.kind === "style_rule" ? " as a style rule" : ""}: ${quoted(change.text)}`;
-        }
-        const entry = entries.find(
-          (candidate) => candidate.entryId === change.entryId
-        );
-        if (entry === undefined) {
-          return yield* new ToolFailed({
-            message: unknownProfileEntryMessage(change.entryId),
-          });
-        }
-        return `Remove the ${entry.kind === "style_rule" ? "style rule" : "fact"} ${quoted(entry.text)} from the Profile (id ${entry.entryId})`;
-      }),
+      approvalSummary: ({ action, kind, text, entryId }) =>
+        action === "add"
+          ? Effect.succeed(
+              `Add to the Profile${kind === "style_rule" ? " as a style rule" : ""}: ${quoted(text ?? "")}`
+            )
+          : profile.read.pipe(
+              Effect.map((entries) =>
+                Option.fromNullishOr(
+                  entries.find((entry) => entry.entryId === entryId)
+                )
+              ),
+              Effect.orElseSucceed(() => Option.none<ProfileEntry>()),
+              Effect.map(
+                Option.match({
+                  onNone: () =>
+                    `Remove from the Profile: entry ${entryId ?? ""}`,
+                  onSome: (entry) =>
+                    `Remove from the Profile: ${quoted(entry.text)}`,
+                })
+              )
+            ),
       description:
         "Add or remove one entry of the Profile: a core fact or a style rule about the Owner. The Profile is in every Turn, so keep only what the Owner states about themselves or asks for, and keep it short. Fails when the Profile has no room.",
       inputSchema: UpdateProfileInput,
       failureMessage: failureMessageOf,
-      work: Effect.fnUntraced(function* updateProfileEffect(input) {
-        const change = yield* checkedProfileChange(input);
-        if (change._tag === "Add") {
+      work: Effect.fnUntraced(function* updateProfileEffect({
+        action,
+        kind,
+        text,
+        entryId,
+      }) {
+        if (action === "add") {
+          if (kind === undefined || text === undefined) {
+            return yield* new ToolFailed({
+              message: profileEntryMissingFieldMessage.add,
+            });
+          }
           const { entry, alreadyKept, charactersUsed } = yield* profile.add({
-            kind: change.kind,
-            text: change.text,
+            kind,
+            text: text.trim(),
             eventId,
             characterLimit,
           });
@@ -163,10 +127,12 @@ export const updateProfileTool = (
             characterLimit,
           };
         }
-        const entry = yield* profile.remove({
-          entryId: change.entryId,
-          eventId,
-        });
+        if (entryId === undefined) {
+          return yield* new ToolFailed({
+            message: profileEntryMissingFieldMessage.remove,
+          });
+        }
+        const entry = yield* profile.remove({ entryId, eventId });
         return { entryId: entry.entryId, removed: true };
       }),
     }

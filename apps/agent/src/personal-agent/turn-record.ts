@@ -22,7 +22,6 @@ import type {
 } from "../tracing/turn-trace.ts";
 import type { InboxEvent, ScheduleFiredEvent } from "./inbox.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import { traceOutcomeOf } from "./trace-outcome.ts";
 
 export type ModelFailure = ModelUnavailable | StepLimitReached;
 
@@ -100,8 +99,27 @@ export interface ModelTraceInput {
   readonly reaction?: ReactionOutcome | undefined;
   readonly refusedOutcomeTools?: readonly string[];
   readonly restart?: ReplyTurnTrace["restart"];
-  readonly stoppedAfterDrafts?: ModelFailure | undefined;
 }
+
+const traceOutcomeOf = (
+  outcomeKind: OutcomeKind | undefined,
+  reaction: ReactionOutcome | undefined,
+  redactor: Redactor["Service"]
+): ReplyTurnTrace["outcome"] => {
+  if (outcomeKind === undefined) {
+    return null;
+  }
+  if (outcomeKind !== "reaction" || reaction === undefined) {
+    return { kind: outcomeKind };
+  }
+  return {
+    kind: outcomeKind,
+    emoji: reaction.emoji,
+    ...(reaction.requestedEmoji === undefined
+      ? {}
+      : { requestedEmoji: redactor.redact(reaction.requestedEmoji) }),
+  };
+};
 
 const modelTraceOf = ({
   system,
@@ -113,7 +131,6 @@ const modelTraceOf = ({
   reaction,
   refusedOutcomeTools = [],
   restart,
-  stoppedAfterDrafts,
 }: ModelTraceInput) => {
   const reasoningEffort =
     outcome._tag === "Replied"
@@ -138,10 +155,7 @@ const modelTraceOf = ({
       ...base,
       modelId: outcome.reply.modelId,
       reply: redactor.redact(outcome.reply.text),
-      error:
-        stoppedAfterDrafts === undefined
-          ? null
-          : modelFailureReason(stoppedAfterDrafts, redactor),
+      error: null,
       usage: traceUsageOf(outcome.reply.usage),
     };
   }

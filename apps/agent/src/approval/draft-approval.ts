@@ -68,16 +68,7 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
   if (holdsOperatorSecret(redactor, call.input)) {
     return refused(operatorSecretRefusal);
   }
-  const checked = yield* tool.approvalSummaryOf(call.input).pipe(
-    Effect.map((summary) => ({ _tag: "Checked", summary }) as const),
-    Effect.catchTag("ToolFailed", (failure) =>
-      Effect.succeed({ _tag: "Refused", reason: failure.message } as const)
-    )
-  );
-  if (checked._tag === "Refused") {
-    return refused(checked.reason);
-  }
-  const { summary } = checked;
+  const summary = yield* tool.approvalSummaryOf(call.input);
   if (Option.isNone(summary)) {
     return refused(noSummaryRefusal);
   }
