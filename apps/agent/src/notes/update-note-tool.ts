@@ -101,14 +101,17 @@ export const updateNoteTool = (
           [input.noteId],
           consequence
         );
-        const linked = yield* storedNoteTexts(
+        const linkedIds = [...new Set(input.linkedNoteIds)];
+        const unlinkedIds = [...new Set(input.unlinkedNoteIds)];
+        yield* storedNoteTexts(
           notes,
-          input.linkedNoteIds ?? [],
+          [...linkedIds, ...unlinkedIds],
           consequence
         );
+        const linked = yield* storedNoteTexts(notes, linkedIds, consequence);
         const unlinked = yield* storedNoteTexts(
           notes,
-          input.unlinkedNoteIds ?? [],
+          unlinkedIds,
           consequence
         );
         const timeZone = yield* ownerTimeZone;

@@ -50,5 +50,5 @@ export const openLoopText = (
   timeZone: Option.Option<DateTime.TimeZone>
 ) =>
   localDueTime === undefined
-    ? `Open Loop ${quoted(kind)}`
+    ? `Open Loop ${quoted(kind)} with no due time`
     : `Open Loop ${quoted(kind)} due ${localDueTimeText(localDueTime, timeZone)}`;
