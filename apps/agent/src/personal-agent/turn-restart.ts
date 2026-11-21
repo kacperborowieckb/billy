@@ -1,5 +1,6 @@
 import { DateTime, Effect, Option } from "effect";
 
+import { PendingApprovals } from "../approval/pending-approvals.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import {
   answeringTurnEventIdOf,
@@ -94,16 +95,21 @@ export const recordSuperseded = Effect.fnUntraced(function* recordSuperseded(
   const { database } = yield* AgentStorage;
   const journal = yield* Journal;
   const traces = yield* TurnTraces;
+  const pendingApprovals = yield* PendingApprovals;
   yield* database.transaction(() =>
-    journal
-      .append({
-        _tag: "EventReceived",
-        eventId,
-        restart: {
-          coveredEventIds: restart.coveredEventIds,
-          newEventIds: restart.newEventIds,
-        },
-      })
-      .pipe(Effect.andThen(traces.record(trace)))
+    pendingApprovals.dropDrafts(eventId).pipe(
+      Effect.andThen(
+        journal
+          .append({
+            _tag: "EventReceived",
+            eventId,
+            restart: {
+              coveredEventIds: restart.coveredEventIds,
+              newEventIds: restart.newEventIds,
+            },
+          })
+          .pipe(Effect.andThen(traces.record(trace)))
+      )
+    )
   );
 });

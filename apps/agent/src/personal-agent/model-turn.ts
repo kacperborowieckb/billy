@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { Clock, Effect, Option } from "effect";
 
+import { dropDraftsOf } from "../approval/pending-approvals.ts";
 import { turnTrustOf } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
@@ -190,6 +191,7 @@ export const runModelTurn = <Failure, Requirements>({
       outcome,
     });
     if (outcome._tag === "ModelFailed") {
+      yield* dropDraftsOf(event.eventId);
       yield* remember;
       yield* kind.whenFailed(modelFailureReason(outcome.error, redactor));
       yield* recordMetric("model_failed");

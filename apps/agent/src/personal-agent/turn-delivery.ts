@@ -48,11 +48,8 @@ const sendWithDrafts = Effect.fnUntraced(function* sendWithDrafts(
     approvals,
     replyTo,
   });
-  if (delivery._tag === "Confirmed") {
-    yield* pendingApprovals.openDrafts({
-      turnEventId: event.eventId,
-      approvalMessages: delivery.approvalMessages,
-    });
+  if (delivery._tag === "Failed") {
+    yield* pendingApprovals.dropDrafts(event.eventId);
   }
   return delivery;
 });
