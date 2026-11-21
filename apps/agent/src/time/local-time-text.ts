@@ -1,32 +1,60 @@
 import { DateTime, Option } from "effect";
 
-import { realLocalDueTimeOf } from "./local-due-time.ts";
+import { instantOfLocalDueTime, realLocalDueTimeOf } from "./local-due-time.ts";
 import type { RecurrenceRule } from "./recurrence-rule.ts";
 
-const localDueTimeFormat = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
+const formatIn = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
 
 const partOf = (
   parts: readonly Intl.DateTimeFormatPart[],
   type: Intl.DateTimeFormatPartTypes
 ) => parts.find((part) => part.type === type)?.value ?? "";
 
-export const localDueTimeText = (localDueTime: string) =>
+const instantText = (instant: DateTime.DateTime, timeZone: string) => {
+  const parts = formatIn(timeZone).formatToParts(
+    DateTime.toEpochMillis(instant)
+  );
+  return `${partOf(parts, "weekday")} ${partOf(parts, "day")} ${partOf(parts, "month")} ${partOf(parts, "year")}, ${partOf(parts, "hour")}:${partOf(parts, "minute")}`;
+};
+
+const textInZone = (
+  localDueTime: string,
+  asWritten: string,
+  timeZone: DateTime.TimeZone
+) =>
+  Option.match(instantOfLocalDueTime(localDueTime, timeZone), {
+    onNone: () => asWritten,
+    onSome: (instant) => {
+      const zoneName = DateTime.zoneToString(timeZone);
+      const dueText = instantText(instant, zoneName);
+      return dueText === asWritten
+        ? asWritten
+        : `${asWritten} (this time does not exist in ${zoneName}, so it is due ${dueText})`;
+    },
+  });
+
+export const localDueTimeText = (
+  localDueTime: string,
+  timeZone: Option.Option<DateTime.TimeZone>
+) =>
   Option.match(realLocalDueTimeOf(localDueTime), {
     onNone: () => `${localDueTime} (not a real date and time)`,
-    onSome: (dueTime) => {
-      const parts = localDueTimeFormat.formatToParts(
-        DateTime.toEpochMillis(dueTime)
-      );
-      return `${partOf(parts, "weekday")} ${partOf(parts, "day")} ${partOf(parts, "month")} ${partOf(parts, "year")}, ${partOf(parts, "hour")}:${partOf(parts, "minute")}`;
+    onSome: (asUtc) => {
+      const asWritten = instantText(asUtc, "UTC");
+      return Option.match(timeZone, {
+        onNone: () => asWritten,
+        onSome: (zone) => textInZone(localDueTime, asWritten, zone),
+      });
     },
   });
 

@@ -1,4 +1,5 @@
 import { Effect, Option } from "effect";
+import type { DateTime } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
 import { localDueTimeText, recurrenceText } from "../time/local-time-text.ts";
@@ -16,9 +17,14 @@ export interface ScheduleDueInput {
   readonly repeat?: RecurrenceRule | undefined;
 }
 
-export const scheduleDueText = ({ localDueTime, repeat }: ScheduleDueInput) =>
+export const scheduleDueText = (
+  { localDueTime, repeat }: ScheduleDueInput,
+  timeZone: Option.Option<DateTime.TimeZone>
+) =>
   [
-    ...(localDueTime === undefined ? [] : [localDueTimeText(localDueTime)]),
+    ...(localDueTime === undefined
+      ? []
+      : [localDueTimeText(localDueTime, timeZone)]),
     ...(repeat === undefined ? [] : [recurrenceText(repeat)]),
   ].join(", ");
 

@@ -99,12 +99,14 @@ export const captureNoteTool = (
       marksItsWorkUntrusted: ({ linkedNoteIds }) =>
         (linkedNoteIds ?? []).length === 0,
       approvalSummary: ({ text, url, message, openLoop, linkedNoteIds = [] }) =>
-        storedNoteTexts(notes, linkedNoteIds).pipe(
-          Effect.map((linked) =>
+        Effect.all([storedNoteTexts(notes, linkedNoteIds), ownerTimeZone]).pipe(
+          Effect.map(([linked, timeZone]) =>
             [
               `Keep Note ${quoted(keptTextOfCall(burst, text, message))}`,
               ...(url === undefined ? [] : [`with link ${url}`]),
-              ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
+              ...(openLoop === undefined
+                ? []
+                : [openLoopText(openLoop, timeZone)]),
               ...(linked.length === 0 ? [] : [`link to ${linked.join(", ")}`]),
             ].join(", ")
           )

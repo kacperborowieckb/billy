@@ -114,11 +114,13 @@ export const setScheduleTool = (
         Effect.all([
           noteTexts(noteId === undefined ? [] : [noteId]),
           noteTexts(openLoopIds ?? []),
+          ownerTimeZone,
         ]).pipe(
-          Effect.map(([about, followedUp]) =>
+          Effect.map(([about, followedUp, timeZone]) =>
             [
               `Set ${scheduleActionText(action)}`,
-              scheduleDueText({ localDueTime, repeat }) || "with no due time",
+              scheduleDueText({ localDueTime, repeat }, timeZone) ||
+                "with no due time",
               ...(about.length === 0 ? [] : [`about ${about.join(", ")}`]),
               ...(followedUp.length === 0
                 ? []

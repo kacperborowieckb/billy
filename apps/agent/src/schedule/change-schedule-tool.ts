@@ -87,9 +87,12 @@ export const changeScheduleTool = (
       name: changeScheduleToolName,
       riskClass: "change",
       approvalSummary: ({ scheduleId, action, localDueTime, repeat }) =>
-        storedScheduleText(schedules, scheduleId).pipe(
-          Effect.map((schedule) => {
-            const due = scheduleDueText({ localDueTime, repeat });
+        Effect.all([
+          storedScheduleText(schedules, scheduleId),
+          ownerTimeZone,
+        ]).pipe(
+          Effect.map(([schedule, timeZone]) => {
+            const due = scheduleDueText({ localDueTime, repeat }, timeZone);
             const changes = [
               ...(action === undefined
                 ? []

@@ -78,8 +78,9 @@ export const updateNoteTool = (
           storedNoteText(notes, noteId),
           storedNoteTexts(notes, linkedNoteIds),
           storedNoteTexts(notes, unlinkedNoteIds),
+          ownerTimeZone,
         ]).pipe(
-          Effect.map(([note, linked, unlinked]) =>
+          Effect.map(([note, linked, unlinked, timeZone]) =>
             [
               `Change ${note}`,
               ...(text === undefined ? [] : [`new text ${quoted(text)}`]),
@@ -87,7 +88,9 @@ export const updateNoteTool = (
               ...(unlinked.length === 0
                 ? []
                 : [`unlink from ${unlinked.join(", ")}`]),
-              ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
+              ...(openLoop === undefined
+                ? []
+                : [openLoopText(openLoop, timeZone)]),
             ].join(", ")
           )
         ),

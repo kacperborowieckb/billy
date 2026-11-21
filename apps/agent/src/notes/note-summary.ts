@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import type { DateTime, Option } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
 import { localDueTimeText } from "../time/local-time-text.ts";
@@ -26,7 +27,10 @@ export const storedNoteText = (notes: Notes["Service"], noteId: string) =>
     Effect.map((texts) => texts[0] ?? `Note ${noteId}`)
   );
 
-export const openLoopText = ({ kind, localDueTime }: OpenLoopInput) =>
+export const openLoopText = (
+  { kind, localDueTime }: OpenLoopInput,
+  timeZone: Option.Option<DateTime.TimeZone>
+) =>
   localDueTime === undefined
     ? `Open Loop ${quoted(kind)}`
-    : `Open Loop ${quoted(kind)} due ${localDueTimeText(localDueTime)}`;
+    : `Open Loop ${quoted(kind)} due ${localDueTimeText(localDueTime, timeZone)}`;
