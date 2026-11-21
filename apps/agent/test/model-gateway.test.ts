@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import type { RiskClass } from "../src/approval/risk-class.ts";
 import { blockedCallReason } from "../src/approval/tool-gate.ts";
-import { agentTool } from "../src/model-gateway/agent-tool.ts";
+import { agentTool, runToolEffect } from "../src/model-gateway/agent-tool.ts";
 import {
   aiGatewayHeaders,
   aiGatewayModelProvider,
@@ -376,6 +376,23 @@ describe("The gate in the Model Gateway", () => {
     expect(toolOutputs).toEqual([
       { type: "execution-denied", reason: blockedCallReason },
     ]);
+  });
+
+  it("never runs the work of a blocked tool, even when execute is called without the gate", async () => {
+    const kept: string[] = [];
+    const { execute } = keepWordTool(kept, "blocked").toAiSdkTool(
+      runToolEffect(Effect.runPromise)
+    );
+
+    await expect(
+      Promise.resolve(
+        execute?.(
+          { word: "secret" },
+          { toolCallId: "call-1", messages: [], context: {} }
+        )
+      )
+    ).rejects.toThrow(blockedCallReason);
+    expect(kept).toEqual([]);
   });
 
   it("runs a change tool as before", async () => {
