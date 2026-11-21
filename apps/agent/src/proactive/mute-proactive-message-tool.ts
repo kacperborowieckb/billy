@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
@@ -141,30 +141,39 @@ export const muteProactiveMessageTool = (
     }
   );
 
-  const muteSummaryOf = Effect.fnUntraced(function* muteSummaryOf({
-    action,
-    scope,
-    openLoopIds,
-    kind,
-  }: typeof MuteInput.Type) {
-    if (action === "list") {
-      return "Show what is muted";
-    }
-    const verb = action === "mute" ? "Mute" : "Remove the Mute of";
-    if (scope === "kind" && kind !== undefined) {
-      return `${verb} all Open Loops of kind ${quoted(kind)}`;
-    }
-    const connected = yield* connectedProactiveMessage().pipe(Effect.option);
-    const noteIds =
-      openLoopIds ?? Option.getOrUndefined(connected)?.openLoopIds ?? [];
-    if (noteIds.length === 0) {
-      return `${verb} nothing: the call names no Open Loops, and this message answers no Proactive Message`;
-    }
-    const texts = yield* storedNoteTexts(notes, noteIds);
-    return scope === "kind"
-      ? `${verb} all Open Loops of the kinds of ${texts.join(", ")}`
-      : `${verb} ${texts.join(", ")}`;
+  const callTargetsOf = Effect.fnUntraced(function* callTargetsOf(
+    input: typeof MuteInput.Type
+  ) {
+    const requested = yield* targetsOf(input);
+    return input.action === "undo" && input.scope === "kind"
+      ? yield* withMutedOpenLoopsOfKinds(requested)
+      : requested;
   });
+
+  const targetsText = Effect.fnUntraced(function* targetsText({
+    kinds,
+    openLoopIds,
+  }: ProactiveMutes) {
+    const loops = yield* storedNoteTexts(notes, openLoopIds);
+    return [
+      ...kinds.map((kind) => `all Open Loops of kind ${quoted(kind)}`),
+      ...loops,
+    ].join(", ");
+  });
+
+  const muteSummaryOf = (input: typeof MuteInput.Type) => {
+    if (input.action === "list") {
+      return Effect.succeed("Show what is muted");
+    }
+    const verb = input.action === "mute" ? "Mute" : "Remove the Mute of";
+    return callTargetsOf(input).pipe(
+      Effect.flatMap(targetsText),
+      Effect.map((targets) => `${verb} ${targets}`),
+      Effect.orElseSucceed(
+        () => `${verb} nothing: this call fails and changes nothing`
+      )
+    );
+  };
 
   return recordedTool(
     { eventId, progress, redactor },
@@ -188,11 +197,7 @@ export const muteProactiveMessageTool = (
             })),
           };
         }
-        const requested = yield* targetsOf(input);
-        const targets =
-          input.action === "undo" && input.scope === "kind"
-            ? yield* withMutedOpenLoopsOfKinds(requested)
-            : requested;
+        const targets = yield* callTargetsOf(input);
         const result = yield* preferences.changeProactiveMutes(
           {
             change: input.action === "mute" ? "muted" : "unmuted",

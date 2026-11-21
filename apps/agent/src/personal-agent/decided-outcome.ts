@@ -17,6 +17,7 @@ export interface DecidedOutcome {
   readonly reaction?: ReactionOutcome;
   readonly refusedOutcomeTools: readonly string[];
   readonly drafts: readonly DraftApproval[];
+  readonly stoppedAfterDrafts?: ModelFailure;
 }
 
 type TurnSoFar = Pick<DecidedOutcome, "refusedOutcomeTools" | "drafts">;
@@ -41,7 +42,7 @@ export const withEarlierSteps = (
 
 export const approvalsWithoutModelText = (
   reply: ModelReply,
-  steps: readonly ModelStep[],
+  stopped: ModelFailure,
   soFar: TurnSoFar
 ): DecidedOutcome => ({
   outcome: {
@@ -49,28 +50,32 @@ export const approvalsWithoutModelText = (
     reply: {
       ...reply,
       text: "",
-      steps,
-      usage: sumUsage(steps.map((step) => step.usage)),
+      steps: stopped.steps,
+      usage: sumUsage(stopped.steps.map((step) => step.usage)),
     },
   },
   kind: "reply",
+  stoppedAfterDrafts: stopped,
   ...soFar,
 });
 
-export const stepLimitReached = (
+export const stepLimitReachedIn = (
   reply: ModelReply,
   steps: readonly ModelStep[],
-  { stepLimit, ...soFar }: TurnSoFar & { readonly stepLimit: number }
+  stepLimit: number
+) =>
+  new StepLimitReached({
+    modelId: reply.modelId,
+    reasoningEffort: reply.reasoningEffort,
+    stepLimit,
+    steps,
+  });
+
+export const modelFailed = (
+  error: ModelFailure,
+  soFar: TurnSoFar
 ): DecidedOutcome => ({
-  outcome: {
-    _tag: "ModelFailed",
-    error: new StepLimitReached({
-      modelId: reply.modelId,
-      reasoningEffort: reply.reasoningEffort,
-      stepLimit,
-      steps,
-    }),
-  },
+  outcome: { _tag: "ModelFailed", error },
   kind: undefined,
   ...soFar,
 });

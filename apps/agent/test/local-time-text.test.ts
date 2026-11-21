@@ -50,8 +50,8 @@ describe("Plain words for an Approval summary", () => {
     ).toBe("on the last day of each month at 18:00");
   });
 
-  it("quotes text on one line and keeps all of it", () => {
-    expect(quoted("Call\n  Ana")).toBe('"Call Ana"');
+  it("quotes text exactly, with all of its characters and spaces", () => {
+    expect(quoted("Call\n  Ana ")).toBe('"Call\n  Ana "');
     expect(quoted("a".repeat(400))).toBe(`"${"a".repeat(400)}"`);
   });
 });

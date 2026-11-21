@@ -85,6 +85,19 @@ const SetScheduleInput = Schema.Struct({
   ),
 });
 
+const isFollowUpCall = (
+  turnOrigin: ScheduleToolServices["turnOrigin"],
+  {
+    openLoopIds = [],
+    ownerAskedForSchedule,
+  }: {
+    readonly openLoopIds?: readonly string[] | undefined;
+    readonly ownerAskedForSchedule?: boolean | undefined;
+  }
+) =>
+  turnOrigin === "proactive" ||
+  (openLoopIds.length > 0 && ownerAskedForSchedule !== true);
+
 export const setScheduleTool = (
   {
     schedules,
@@ -110,6 +123,7 @@ export const setScheduleTool = (
         repeat,
         noteId,
         openLoopIds,
+        ownerAskedForSchedule,
       }) =>
         Effect.all([
           noteTexts(noteId === undefined ? [] : [noteId]),
@@ -118,7 +132,9 @@ export const setScheduleTool = (
         ]).pipe(
           Effect.map(([about, followedUp, timeZone]) =>
             [
-              `Set ${scheduleActionText(action)}`,
+              isFollowUpCall(turnOrigin, { openLoopIds, ownerAskedForSchedule })
+                ? `Set a follow-up of the agent, ${scheduleActionText(action)}`
+                : `Set ${scheduleActionText(action)}`,
               scheduleDueText({ localDueTime, repeat }, timeZone) ||
                 "with no due time",
               ...(about.length === 0 ? [] : [`about ${about.join(", ")}`]),
@@ -146,9 +162,10 @@ export const setScheduleTool = (
       }) {
         const hasOpenLoops =
           openLoopIds !== undefined && openLoopIds.length > 0;
-        const isFollowUp =
-          turnOrigin === "proactive" ||
-          (hasOpenLoops && ownerAskedForSchedule !== true);
+        const isFollowUp = isFollowUpCall(turnOrigin, {
+          openLoopIds,
+          ownerAskedForSchedule,
+        });
         if (isFollowUp && (!hasOpenLoops || action._tag !== "RunPrompt")) {
           return yield* new ToolFailed({
             message: followUpNeedsOpenLoopsMessage,

@@ -15,7 +15,8 @@ import { answerApprovalRequests } from "./approval-step.ts";
 import type { ApprovalAsking } from "./approval-step.ts";
 import {
   approvalsWithoutModelText,
-  stepLimitReached,
+  modelFailed,
+  stepLimitReachedIn,
   withEarlierSteps,
 } from "./decided-outcome.ts";
 import type { DecidedOutcome } from "./decided-outcome.ts";
@@ -32,7 +33,7 @@ import {
 import { silenceAcceptedOutput } from "./stay-silent-tool.ts";
 import { closeLastStep, sameOutputFor } from "./step-closing.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import type { ReactionOutcome } from "./turn-record.ts";
+import type { ModelFailure, ReactionOutcome } from "./turn-record.ts";
 
 interface OutcomeGeneration {
   readonly eventId: string;
@@ -59,20 +60,15 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     const drafts: DraftApproval[] = [];
     let lastReply: ModelReply | undefined;
     const settled = () => ({ refusedOutcomeTools: refused, drafts });
-    const approvalsWithoutText = (
-      reply: ModelReply,
-      steps: readonly ModelStep[]
-    ) => approvalsWithoutModelText(reply, steps, settled());
-    const stepLimitFailure = (
-      reply: ModelReply,
-      steps: readonly ModelStep[]
+    const stoppedModel = (
+      error: ModelFailure,
+      reply: ModelReply | undefined
     ): DecidedOutcome =>
-      drafts.length > 0
-        ? approvalsWithoutText(reply, steps)
-        : stepLimitReached(reply, steps, {
-            ...settled(),
-            stepLimit: request.stepLimit,
-          });
+      drafts.length > 0 && reply !== undefined
+        ? approvalsWithoutModelText(reply, error, settled())
+        : modelFailed(error, settled());
+    const stepLimitFailure = (reply: ModelReply, steps: readonly ModelStep[]) =>
+      stoppedModel(stepLimitReachedIn(reply, steps, request.stepLimit), reply);
 
     for (;;) {
       const stepLimit = request.stepLimit - earlier.length;
@@ -94,26 +90,11 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
               Effect.succeed({ _tag: "ModelFailed", error } as const),
           })
         );
-      if (
-        generated._tag === "ModelFailed" &&
-        lastReply !== undefined &&
-        drafts.length > 0
-      ) {
-        return approvalsWithoutText(lastReply, [
-          ...earlier,
-          ...generated.error.steps,
-        ]);
-      }
       if (generated._tag === "ModelFailed") {
-        return {
-          outcome: {
-            _tag: "ModelFailed",
-            error: withEarlierSteps(generated.error, earlier),
-          },
-          kind: undefined,
-          refusedOutcomeTools: refused,
-          drafts,
-        } satisfies DecidedOutcome;
+        return stoppedModel(
+          withEarlierSteps(generated.error, earlier),
+          lastReply
+        );
       }
       const { reply } = generated;
       lastReply = reply;

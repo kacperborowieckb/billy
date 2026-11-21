@@ -486,6 +486,38 @@ describe("An Owner message Turn with Trust Level owner", () => {
   });
 });
 
+describe("Summaries that follow execution", () => {
+  it("says what a partial Quiet Hours call and an agent follow-up really do", async () => {
+    const ownerId = await addOwner(9114);
+    scriptModel([
+      {
+        callTools: [
+          { tool: quietHoursToolName, input: { end: "09:00" } },
+          {
+            tool: setScheduleToolName,
+            input: {
+              action: { _tag: "RunPrompt", prompt: "Ask about the dinner" },
+              localDueTime: "2026-11-26T09:00",
+              openLoopIds: ["loop-1"],
+            },
+          },
+        ],
+      },
+      { say: "These wait for your Approval." },
+    ]);
+
+    await forward(9114);
+    await waitForSends(2);
+    await waitForPendingApprovals(ownerId, 2);
+
+    const approvals = await pendingApprovalsOf(ownerId);
+    expect(approvals.map((row) => row.summary)).toEqual([
+      "Change nothing: the Quiet Hours need both a valid start and a valid end",
+      'Set a follow-up of the agent, Scheduled Task "Ask about the dinner", Thu 26 Nov 2026, 09:00, to follow up Note loop-1',
+    ]);
+  });
+});
+
 describe("Drafts at the limits of a Turn", () => {
   it("splits long Approval rows over several messages, each Pending Approval with the id of its own message", async () => {
     const ownerId = await addOwner(9109);
@@ -533,6 +565,14 @@ describe("Drafts at the limits of a Turn", () => {
     );
     const journal = await journalKindsOf(ownerId);
     expect(journal.map((entry) => entry.kind)).not.toContain("TurnFailed");
+    const [trace] = await rowsOf<{ result: string; record: string }>(
+      ownerId,
+      "SELECT result, record FROM turn_traces"
+    );
+    expect(trace?.result).toBe("model_replied");
+    expect(JSON.parse(trace?.record ?? "{}")).toMatchObject({
+      error: expect.stringContaining("did not give a final answer"),
+    });
   });
 
   it("opens only the drafts that the sent message shows", async () => {
