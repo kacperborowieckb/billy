@@ -57,6 +57,7 @@ export const setTimeZoneTool = (
     { eventId, progress, redactor },
     {
       name: setTimeZoneToolName,
+      riskClass: "change",
       description:
         "Set the time zone of the Owner. It decides the local date and time that you see in every Turn, and the repeating Reminders keep their local time in the new time zone. Call it when the Owner says where they live or gives their time zone, also when they change it. Fails with a message when the name is not an IANA time zone name, and then nothing changes.",
       inputSchema: SetTimeZoneInput,

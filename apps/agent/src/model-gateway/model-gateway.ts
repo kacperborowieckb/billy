@@ -1,7 +1,8 @@
 import { isStepCount, ToolLoopAgent, wrapLanguageModel } from "ai";
-import type { LanguageModelUsage, ModelMessage, StepResult, ToolSet } from "ai";
+import type { ModelMessage, StepResult, ToolSet } from "ai";
 import { Context, Effect, Layer, Schedule } from "effect";
 
+import type { TrustLevel } from "../notes/note.ts";
 import { noTools, runToolEffect } from "./agent-tool.ts";
 import type { AgentTools, RunToolEffect } from "./agent-tool.ts";
 import { ModelCallFailed } from "./model-call-failed.ts";
@@ -12,13 +13,11 @@ import type {
   ReasoningEffort,
   ResolvedRoute,
 } from "./model-provider.ts";
-import type {
-  ModelStep,
-  ModelToolCall,
-  PendingToolCall,
-} from "./model-step.ts";
+import { modelStepOf, pendingToolCallsOf } from "./model-step-of.ts";
+import type { ModelStep, PendingToolCall } from "./model-step.ts";
 import { ModelUnavailable } from "./model-unavailable.ts";
 import { StepLimitReached } from "./step-limit-reached.ts";
+import { approvalStatusOf } from "./tool-approval.ts";
 import { sumUsage, UsageLedger } from "./usage-ledger.ts";
 import type { Usage } from "./usage-ledger.ts";
 
@@ -27,6 +26,7 @@ export interface ModelRequest {
   readonly system: string;
   readonly messages: readonly ModelMessage[];
   readonly tools?: AgentTools;
+  readonly trustLevel: TrustLevel;
   readonly stepLimit: number;
 }
 
@@ -41,75 +41,6 @@ export interface ModelReply {
 
 const attemptTimeout = `${attemptTimeoutMillis} millis` as const;
 const firstRetryDelay = "1 second";
-
-const usageOf = (usage: LanguageModelUsage): Usage => ({
-  inputTokens: usage.inputTokens,
-  outputTokens: usage.outputTokens,
-  cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
-  costUsd: undefined,
-});
-
-const stringify = (value: unknown) =>
-  typeof value === "string" ? value : (JSON.stringify(value) ?? "null");
-
-const errorMessageOf = (error: unknown) =>
-  error instanceof Error ? error.message : stringify(error);
-
-const toolCallsOf = (step: StepResult<ToolSet>): readonly ModelToolCall[] =>
-  step.content.flatMap((part): ModelToolCall[] => {
-    if (part.type === "tool-result") {
-      return [
-        {
-          callId: part.toolCallId,
-          name: part.toolName,
-          input: stringify(part.input),
-          output: stringify(part.output),
-          failed: false,
-        },
-      ];
-    }
-    if (part.type === "tool-error") {
-      return [
-        {
-          callId: part.toolCallId,
-          name: part.toolName,
-          input: stringify(part.input),
-          output: errorMessageOf(part.error),
-          failed: true,
-        },
-      ];
-    }
-    return [];
-  });
-
-const pendingToolCallsOf = (
-  step: StepResult<ToolSet>
-): readonly PendingToolCall[] => {
-  const answered = new Set(
-    step.content.flatMap((part) =>
-      part.type === "tool-result" || part.type === "tool-error"
-        ? [part.toolCallId]
-        : []
-    )
-  );
-  return step.content.flatMap((part) =>
-    part.type === "tool-call" && !answered.has(part.toolCallId)
-      ? [
-          {
-            callId: part.toolCallId,
-            name: part.toolName,
-            input: stringify(part.input),
-          },
-        ]
-      : []
-  );
-};
-
-const modelStepOf = (step: StepResult<ToolSet>): ModelStep => ({
-  usage: usageOf(step.usage),
-  toolCalls: toolCallsOf(step),
-  responseMessages: step.response.messages,
-});
 
 const aiSdkToolsOf = (tools: AgentTools, runTool: RunToolEffect) =>
   Object.fromEntries(
@@ -128,6 +59,10 @@ const toolLoopAgentOf = (
     model: retryingModelCalls(route.model),
     instructions: request.system,
     tools: aiSdkToolsOf(request.tools ?? noTools, runTool),
+    toolApproval: approvalStatusOf(
+      request.tools ?? noTools,
+      request.trustLevel
+    ),
     stopWhen: isStepCount(request.stepLimit),
     maxRetries: 0,
   });

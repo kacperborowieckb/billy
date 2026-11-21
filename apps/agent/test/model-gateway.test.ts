@@ -3,7 +3,11 @@ import { env } from "cloudflare:test";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import { Effect, Exit, Layer } from "effect";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import type { RiskClass } from "../src/approval/risk-class.ts";
+import { blockedCallReason } from "../src/approval/tool-gate.ts";
+import { agentTool } from "../src/model-gateway/agent-tool.ts";
 import {
   aiGatewayHeaders,
   aiGatewayModelProvider,
@@ -13,7 +17,7 @@ import { ModelProvider } from "../src/model-gateway/model-provider.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { decodeTurnEnv } from "../src/personal-agent/turn-services.ts";
-import { fakeModel, resetFakes } from "./fakes.ts";
+import { fakeModel, resetFakes, scriptModel } from "./fakes.ts";
 
 const chatCompletion = {
   id: "chatcmpl-1",
@@ -144,6 +148,7 @@ describe("Model Gateway transport", () => {
             task: "reply",
             system: "Be brief.",
             messages: [{ role: "user", content: "Hi" }],
+            trustLevel: "owner",
             stepLimit: 4,
           })
         ),
@@ -153,5 +158,128 @@ describe("Model Gateway transport", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     expect(fakeModel.doGenerateCalls).toHaveLength(1);
+  });
+});
+
+const fakeModelGateway = ModelGateway.layer.pipe(
+  Layer.provide(
+    Layer.succeed(UsageLedger, {
+      record: () => Effect.void,
+      read: Effect.succeed([]),
+      tokensSpent: () => Effect.succeed(0),
+    })
+  ),
+  Layer.provide(
+    Layer.succeed(ModelProvider, {
+      route: () => ({ model: fakeModel, reasoningEffort: "none" }),
+    })
+  )
+);
+
+const keepWordTool = (
+  kept: string[],
+  riskClass: RiskClass,
+  riskClassOfInput?: (input: { readonly word: string }) => RiskClass
+) =>
+  agentTool({
+    description: "Keep a word",
+    inputSchema: z.object({ word: z.string() }),
+    riskClass,
+    ...(riskClassOfInput === undefined ? {} : { riskClassOfInput }),
+    execute: ({ word }) =>
+      Effect.sync(() => {
+        kept.push(word);
+        return { kept: word };
+      }),
+  });
+
+const toolOutputsSentToModel = () =>
+  fakeModel.doGenerateCalls.flatMap((call) =>
+    call.prompt.flatMap((message) =>
+      message.role === "tool"
+        ? message.content.flatMap((part) =>
+            part.type === "tool-result" ? [part.output] : []
+          )
+        : []
+    )
+  );
+
+describe("The gate in the Model Gateway", () => {
+  it.each([
+    { name: "a blocked tool", riskClass: "blocked" as const },
+    {
+      name: "a tool raised to blocked by its input",
+      riskClass: "change" as const,
+    },
+  ])(
+    "never runs $name and gives the model the reason",
+    async ({ riskClass }) => {
+      resetFakes();
+      scriptModel([
+        { callTool: "keep_word", input: { word: "secret" } },
+        { say: "I cannot keep that word." },
+      ]);
+      const kept: string[] = [];
+      const tool = keepWordTool(kept, riskClass, ({ word }) =>
+        word === "secret" ? "blocked" : "read"
+      );
+
+      const reply = await Effect.runPromise(
+        ModelGateway.pipe(
+          Effect.flatMap((models) =>
+            models.generate({
+              task: "reply",
+              system: "Be brief.",
+              messages: [{ role: "user", content: "Keep secret" }],
+              tools: { keep_word: tool },
+              trustLevel: "owner",
+              stepLimit: 4,
+            })
+          ),
+          Effect.provide(fakeModelGateway)
+        )
+      );
+
+      expect(kept).toEqual([]);
+      expect(reply.text).toBe("I cannot keep that word.");
+      expect(reply.endedWith).toEqual([]);
+      expect(reply.steps[0]?.toolCalls).toEqual([
+        expect.objectContaining({
+          name: "keep_word",
+          output: blockedCallReason,
+          failed: true,
+        }),
+      ]);
+      expect(toolOutputsSentToModel()).toEqual([
+        { type: "execution-denied", reason: blockedCallReason },
+      ]);
+    }
+  );
+
+  it("runs a change tool as before", async () => {
+    resetFakes();
+    scriptModel([
+      { callTool: "keep_word", input: { word: "milk" } },
+      { say: "Kept." },
+    ]);
+    const kept: string[] = [];
+
+    await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Keep milk" }],
+            tools: { keep_word: keepWordTool(kept, "change") },
+            trustLevel: "untrusted",
+            stepLimit: 4,
+          })
+        ),
+        Effect.provide(fakeModelGateway)
+      )
+    );
+
+    expect(kept).toEqual(["milk"]);
   });
 });

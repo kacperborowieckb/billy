@@ -96,6 +96,7 @@ export const runScheduledTask = Effect.fnUntraced(function* runScheduledTask({
       event,
       inputs: [scheduledTaskInputMessage(action.prompt)],
       tools: scheduledTaskTools(event.eventId, { ...toolServices, behavior }),
+      trustLevel: "owner",
       prepare: scheduledTaskPreparation(behavior, event, schedule),
       traceOf: (model) => scheduledTaskTraceOf({ event, ...model }),
       checkBeforeFirstStep: (startedAt) =>

@@ -3,6 +3,7 @@ import { Clock, Effect, Option } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { Profile } from "../profile/profile.ts";
 import { ownerCurrentTimeText } from "../time/owner-current-time.ts";
@@ -49,6 +50,7 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly replyTo?: InboxEvent;
   readonly inputs: readonly ModelMessage[];
   readonly tools: AgentTools;
+  readonly trustLevel: TrustLevel;
   readonly traceOf: (model: ModelTraceInput) => TurnTrace;
   readonly restartSection?: string;
   readonly restartBeforeDelivery?: (
@@ -130,6 +132,7 @@ export const runModelTurn = <Failure, Requirements>({
         system,
         messages,
         tools: kind.tools,
+        trustLevel: kind.trustLevel,
         stepLimit: stepsLeft,
       },
       tools: kind.tools,

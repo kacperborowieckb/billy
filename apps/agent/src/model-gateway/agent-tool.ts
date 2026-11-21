@@ -2,6 +2,9 @@ import { jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
 import { Data, Effect, Result, Schema } from "effect";
 
+import { riskClassified } from "../approval/risk-class.ts";
+import type { RiskClass, RiskClassified } from "../approval/risk-class.ts";
+
 export class ToolFailed extends Data.TaggedError("ToolFailed")<{
   readonly message: string;
 }> {}
@@ -12,9 +15,8 @@ export type RunToolEffect = <Output>(
   effect: Effect.Effect<Output, ToolFailed>
 ) => Promise<Output>;
 
-export interface AgentTool {
+export interface AgentTool extends RiskClassified {
   readonly toAiSdkTool: (runEffect: RunToolEffect) => Tool;
-  readonly readsOnly?: boolean;
 }
 
 export type AgentTools = Readonly<Record<string, AgentTool>>;
@@ -38,7 +40,8 @@ export const noTools: AgentTools = {};
 interface AgentToolDefinition<Input, Output> {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;
-  readonly readsOnly?: boolean;
+  readonly riskClass: RiskClass;
+  readonly riskClassOfInput?: (input: Input) => RiskClass;
   readonly execute: (
     input: Input,
     call: { readonly toolCallId: string; readonly modelStepKey: number }
@@ -48,7 +51,7 @@ interface AgentToolDefinition<Input, Output> {
 export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
 ): AgentTool => ({
-  ...(definition.readsOnly === true ? { readsOnly: true } : {}),
+  ...riskClassified(definition.riskClass, definition.riskClassOfInput),
   toAiSdkTool: (runEffect) =>
     tool<Input, unknown, Record<string, unknown>>({
       description: definition.description,
@@ -96,7 +99,7 @@ interface OutcomeToolDefinition<Input> {
 export const outcomeTool = <Input>(
   definition: OutcomeToolDefinition<Input>
 ): AgentTool => ({
-  readsOnly: true,
+  ...riskClassified("read"),
   toAiSdkTool: () =>
     tool<Input, unknown, Record<string, unknown>>({
       description: definition.description,

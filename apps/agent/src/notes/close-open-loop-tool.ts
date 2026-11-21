@@ -49,6 +49,7 @@ export const closeOpenLoopTool = (
     { eventId, progress, redactor },
     {
       name: closeOpenLoopToolName,
+      riskClass: "change",
       description:
         "Close the open Open Loop of one Note when the Owner says that it is done, dropped, or replaced. The Note stays. Fails with a message when no Note has the id or the Note has no open Open Loop. Say that it is closed only after it succeeded.",
       inputSchema: CloseOpenLoopInput,

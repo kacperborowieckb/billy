@@ -16,6 +16,7 @@ import {
   newestEventOf,
   pendingBursts,
   settleBurst,
+  trustLevelOfBurst,
   turnEventOf,
 } from "./burst.ts";
 import type { Burst } from "./burst.ts";
@@ -80,6 +81,7 @@ const answer = (
         replyTo,
         inputs: burstInputs(burst),
         tools: { ...tools, ...ownerTools },
+        trustLevel: trustLevelOfBurst(burst),
         prepare: Effect.succeed({
           ...preparation,
           situation: [

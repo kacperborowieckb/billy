@@ -72,6 +72,7 @@ export const updateProfileTool = (
     { eventId, progress, redactor },
     {
       name: updateProfileToolName,
+      riskClass: "change",
       description:
         "Add or remove one entry of the Profile: a core fact or a style rule about the Owner. The Profile is in every Turn, so keep only what the Owner states about themselves or asks for, and keep it short. Fails when the Profile has no room.",
       inputSchema: UpdateProfileInput,

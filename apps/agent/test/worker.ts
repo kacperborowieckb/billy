@@ -50,6 +50,7 @@ const fakeTools: AgentTools = {
   [fakeTool.name]: agentTool({
     description: "Keep a word",
     inputSchema: z.object({ word: z.string() }),
+    riskClass: "change",
     execute: ({ word }) =>
       fakeTool.failWith === undefined
         ? Effect.sync(() => {

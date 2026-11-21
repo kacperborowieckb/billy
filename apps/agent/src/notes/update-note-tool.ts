@@ -60,6 +60,7 @@ export const updateNoteTool = (
     { eventId, progress, redactor },
     {
       name: updateNoteToolName,
+      riskClass: "change",
       description:
         "Change one existing Note after a follow-up of the Owner: replace its text, link or unlink other Notes, or open or change its Open Loop. Creates no new Note. Search for the Note first when you do not know its id.",
       inputSchema: UpdateNoteInput,

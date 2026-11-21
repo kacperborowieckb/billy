@@ -74,7 +74,7 @@ export const refusalOfOutcomeTool = Effect.fnUntraced(
       ...failedToolNamesOf(earlierMessages),
     ];
     const changeFailed = failedNames.some(
-      (failedName) => tools[failedName]?.readsOnly !== true
+      (failedName) => tools[failedName]?.riskClass !== "read"
     );
     if (changeFailed) {
       return name === reactToolName
