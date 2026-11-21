@@ -72,6 +72,12 @@ export const quietHoursTool = (
     {
       name: quietHoursToolName,
       riskClass: "change",
+      approvalSummary: ({ start, end }) =>
+        Effect.succeed(
+          start === undefined && end === undefined
+            ? "Show the Quiet Hours"
+            : `Set the Quiet Hours from ${start ?? "the current start"} to ${end ?? "the current end"}`
+        ),
       description:
         "Read or change the Quiet Hours of the Owner: the local time when you send no Proactive Message. Call it with no input to read them. To change them, give both start and end as HH:mm in the local time of the Owner. For example, when the Owner says not to message them before 9, keep the start and give end 09:00. The start must differ from the end. Reminders and Scheduled Tasks that the Owner set still arrive in Quiet Hours. It returns the Quiet Hours, their source (owner or default), and whether they changed. A Brief that was at the old end moves to the new end.",
       inputSchema: QuietHoursInput,

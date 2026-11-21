@@ -230,7 +230,7 @@ describe("Owner time zone", () => {
     ).toBe(false);
   });
 
-  it("gives the tool only to an Event of the Owner", async () => {
+  it("gives the tool to an Event of the Owner and to a forwarded Event", async () => {
     await addOwner(8306);
     await telegramWebhook(
       textUpdate({
@@ -248,7 +248,7 @@ describe("Owner time zone", () => {
     });
     await ownerSays(8306, "hello", 2);
 
-    expect(toolNames(0)).not.toContain(setTimeZoneToolName);
+    expect(toolNames(0)).toContain(setTimeZoneToolName);
     expect(toolNames(1)).toContain(setTimeZoneToolName);
   });
 });

@@ -9,6 +9,31 @@ export interface OutgoingMessage {
   readonly text: string;
 }
 
+export interface ApprovalRequest {
+  readonly pendingApprovalId: string;
+  readonly summary: string;
+}
+
+export interface ApprovalMessage {
+  readonly pendingApprovalId: string;
+  readonly channelMessageId: string;
+}
+
+export type ApprovalDelivery =
+  | {
+      readonly _tag: "Confirmed";
+      readonly channelMessageId: string;
+      readonly approvalMessages: readonly ApprovalMessage[];
+    }
+  | { readonly _tag: "Failed"; readonly reason: string };
+
+export interface OutgoingApprovalMessage {
+  readonly conversationId: string;
+  readonly inReplyTo?: string;
+  readonly text: string;
+  readonly approvals: readonly [ApprovalRequest, ...ApprovalRequest[]];
+}
+
 export interface OutgoingReaction {
   readonly conversationId: string;
   readonly channelMessageId: string;
@@ -27,6 +52,9 @@ export class Channel extends Context.Service<
   Channel,
   {
     readonly send: (message: OutgoingMessage) => Effect.Effect<Delivery>;
+    readonly sendWithApprovals: (
+      message: OutgoingApprovalMessage
+    ) => Effect.Effect<ApprovalDelivery>;
     readonly react: (
       reaction: OutgoingReaction
     ) => Effect.Effect<ReactionDelivery>;

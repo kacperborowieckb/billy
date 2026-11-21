@@ -1,20 +1,39 @@
 import type { TrustLevel } from "../notes/note.ts";
-import type { RiskClassified } from "./risk-class.ts";
+import type { RiskClass, RiskClassified } from "./risk-class.ts";
+
+export interface GatedTool extends RiskClassified {
+  readonly marksItsWorkUntrusted: (input: unknown) => boolean;
+}
 
 export interface GatedCall {
-  readonly tool: RiskClassified;
+  readonly tool: GatedTool;
   readonly input: unknown;
   readonly trustLevel: TrustLevel;
 }
 
 export type GateDecision =
   | { readonly _tag: "Run" }
+  | { readonly _tag: "AskOwner" }
   | { readonly _tag: "Deny"; readonly reason: string };
 
 export const blockedCallReason =
   "This tool is blocked, so it did not run. Tell the Owner that you cannot do this.";
 
-export const gateDecisionOf = ({ tool, input }: GatedCall): GateDecision =>
-  tool.riskClassOf(input) === "blocked"
-    ? { _tag: "Deny", reason: blockedCallReason }
-    : { _tag: "Run" };
+const run: GateDecision = { _tag: "Run" };
+
+const askOwner: GateDecision = { _tag: "AskOwner" };
+
+const decisionOfClass: Readonly<
+  Record<RiskClass, (call: GatedCall) => GateDecision>
+> = {
+  read: () => run,
+  change: ({ tool, input, trustLevel }) =>
+    trustLevel === "owner" || tool.marksItsWorkUntrusted(input)
+      ? run
+      : askOwner,
+  approve: () => askOwner,
+  blocked: () => ({ _tag: "Deny", reason: blockedCallReason }),
+};
+
+export const gateDecisionOf = (call: GatedCall): GateDecision =>
+  decisionOfClass[call.tool.riskClassOf(call.input)](call);

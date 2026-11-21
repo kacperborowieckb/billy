@@ -13,14 +13,14 @@ import { TurnTraces } from "../tracing/turn-trace.ts";
 import type { TurnTrace } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { Conversation } from "./conversation.ts";
-import { react } from "./delivery-reaction.ts";
-import { fail, send, staySilent } from "./delivery.ts";
+import { fail, staySilent } from "./delivery.ts";
 import { Inbox } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
 import { generateWithOutcomeTools } from "./outcome-tools.ts";
 import { rememberCompletedSteps } from "./remember-completed-steps.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import { systemPrompt } from "./system-prompt.ts";
+import { approvalAskingOf, deliverTurnOutcome } from "./turn-delivery.ts";
 import { TurnProgress } from "./turn-progress.ts";
 import {
   modelFailureReason,
@@ -51,6 +51,7 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly inputs: readonly ModelMessage[];
   readonly tools: AgentTools;
   readonly trustLevel: TrustLevel;
+  readonly asksOwnerForApproval?: boolean;
   readonly traceOf: (model: ModelTraceInput) => TurnTrace;
   readonly restartSection?: string;
   readonly restartBeforeDelivery?: (
@@ -137,6 +138,7 @@ export const runModelTurn = <Failure, Requirements>({
       },
       tools: kind.tools,
       defaultReaction: behavior.defaultReaction,
+      approvalAsking: approvalAskingOf(behavior, kind.asksOwnerForApproval),
     });
     const { outcome } = decided;
     const modelLatencyMillis = (yield* Clock.currentTimeMillis) - startedAt;
@@ -218,14 +220,13 @@ export const runModelTurn = <Failure, Requirements>({
       return;
     }
     const outcomeKind = decided.reaction === undefined ? "reply" : "reaction";
-    const delivery =
-      decided.reaction === undefined
-        ? yield* send(
-            event,
-            preparation.lateText(redactor.redact(outcome.reply.text)),
-            kind.replyTo
-          )
-        : yield* react(event, decided.reaction.emoji, kind.replyTo);
+    const delivery = yield* deliverTurnOutcome({
+      event,
+      text: preparation.lateText(redactor.redact(outcome.reply.text)),
+      drafts: decided.drafts,
+      reaction: decided.reaction,
+      replyTo: kind.replyTo ?? event,
+    });
     if (delivery._tag === "Failed") {
       yield* remember;
       if (kind.tracesSendFailure === true) {

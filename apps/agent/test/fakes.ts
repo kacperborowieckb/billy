@@ -13,6 +13,12 @@ export interface SentTelegramMessage {
     readonly text: string;
     readonly parse_mode?: string;
     readonly reply_parameters?: { readonly message_id: number };
+    readonly reply_markup?: {
+      readonly inline_keyboard: readonly (readonly {
+        readonly text: string;
+        readonly callback_data: string;
+      }[])[];
+    };
   };
 }
 
@@ -200,9 +206,15 @@ const lastOwnerText = (
   return part?.type === "text" ? part.text : "";
 };
 
+export interface ScriptedToolCall {
+  readonly tool: string;
+  readonly input: Record<string, unknown>;
+}
+
 export type ScriptedModelStep =
   | { readonly say: string }
   | { readonly error: string }
+  | { readonly callTools: readonly ScriptedToolCall[] }
   | {
       readonly callTool: string;
       readonly times?: number;
@@ -235,22 +247,35 @@ export const scriptModel = (steps: readonly ScriptedModelStep[]) => {
   modelScript.splice(0, modelScript.length, ...steps);
 };
 
+const scriptedToolCalls = (calls: readonly ScriptedToolCall[]) =>
+  calls.map((call, index) => ({
+    type: "tool-call" as const,
+    toolCallId: `call-${modelScript.length}-${index}`,
+    toolName: call.tool,
+    input: JSON.stringify(call.input),
+  }));
+
 const scriptedContent = (
   step: Exclude<ScriptedModelStep, { readonly error: string }>,
   prompt: ModelPrompt
-) =>
-  "say" in step
-    ? ([{ type: "text", text: step.say }] as const)
-    : Array.from({ length: step.times ?? 1 }, (_, index) => ({
-        type: "tool-call" as const,
-        toolCallId: `call-${modelScript.length}${index === 0 ? "" : `-${index}`}`,
-        toolName: step.callTool,
-        input: JSON.stringify(
-          typeof step.input === "function"
-            ? step.input(lastToolOutput(prompt))
-            : step.input
-        ),
-      }));
+) => {
+  if ("say" in step) {
+    return [{ type: "text", text: step.say }] as const;
+  }
+  if ("callTools" in step) {
+    return scriptedToolCalls(step.callTools);
+  }
+  return Array.from({ length: step.times ?? 1 }, (_, index) => ({
+    type: "tool-call" as const,
+    toolCallId: `call-${modelScript.length}${index === 0 ? "" : `-${index}`}`,
+    toolName: step.callTool,
+    input: JSON.stringify(
+      typeof step.input === "function"
+        ? step.input(lastToolOutput(prompt))
+        : step.input
+    ),
+  }));
+};
 
 const defaultModelFailureMessage = "The model provider is down";
 
@@ -277,7 +302,9 @@ export const fakeModel = new MockLanguageModelV4({
     if (scripted !== undefined && "error" in scripted) {
       throw new Error(scripted.error);
     }
-    const callsTool = scripted !== undefined && "callTool" in scripted;
+    const callsTool =
+      scripted !== undefined &&
+      ("callTool" in scripted || "callTools" in scripted);
     return {
       content:
         scripted === undefined

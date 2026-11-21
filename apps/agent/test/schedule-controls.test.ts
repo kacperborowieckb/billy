@@ -530,7 +530,7 @@ describe("cancel_schedule", () => {
 });
 
 describe("the Reminder controls", () => {
-  it("are given to an Owner message and not to a forwarded message", async () => {
+  it("are given to an Owner message and to a forwarded message", async () => {
     await ownerInWarsaw(9130);
     scriptModel([{ say: "ok" }]);
     await askAndWaitForReply(9130, "hello");
@@ -562,7 +562,7 @@ describe("the Reminder controls", () => {
       changeScheduleToolName,
       cancelScheduleToolName,
     ]) {
-      expect(forwardedTools).not.toContain(name);
+      expect(forwardedTools).toContain(name);
     }
   });
 });

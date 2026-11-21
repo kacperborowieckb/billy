@@ -54,6 +54,12 @@ const isRealCalendarTime = (parts: LocalParts) => {
   );
 };
 
+export const realLocalDueTimeOf = (local: string) =>
+  partsOf(local).pipe(
+    Option.filter(isRealCalendarTime),
+    Option.map((parts) => DateTime.makeUnsafe(parts))
+  );
+
 export const instantOfLocalDueTime = (
   local: string,
   timeZone: DateTime.TimeZone

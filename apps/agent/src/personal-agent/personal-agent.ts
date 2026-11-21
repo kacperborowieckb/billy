@@ -1,6 +1,7 @@
 import { Agent, getAgentByName } from "agents";
 import { DateTime, Effect, Layer, ManagedRuntime, Option } from "effect";
 
+import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Channel } from "../channels/channel.ts";
@@ -57,6 +58,7 @@ const personalAgentLayer = (
     Profile.layer(ownerId).pipe(Layer.provide(journal)),
     OwnerPreferences.layer.pipe(Layer.provide(journal)),
     ProactiveMessages.layer.pipe(Layer.provide(journal)),
+    PendingApprovals.layer.pipe(Layer.provide(journal)),
     Conversation.layer,
     OwnerChannelConversation.layer,
     TurnProgress.layer,

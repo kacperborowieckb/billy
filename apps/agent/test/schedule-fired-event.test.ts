@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Event } from "../src/event.ts";
 import { Journal } from "../src/journal/journal.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
-import { noOwnerConversationReason } from "../src/personal-agent/delivery.ts";
+import { noOwnerConversationReason } from "../src/personal-agent/delivery-send.ts";
 import { Inbox } from "../src/personal-agent/inbox.ts";
 import type { StoreResult } from "../src/personal-agent/inbox.ts";
 import { OwnerChannelConversation } from "../src/personal-agent/owner-channel-conversation.ts";

@@ -196,6 +196,10 @@ const keepWordTool = (
     description: "Keep a word",
     inputSchema: WordInput,
     riskClass,
+    approvalSummary: {
+      isInput: isWordInput,
+      of: ({ word }) => Effect.succeed(`Keep the word "${word}"`),
+    },
     ...(riskClassOf === undefined
       ? {}
       : { riskClassOfInput: { isInput: isWordInput, of: riskClassOf } }),
@@ -395,7 +399,7 @@ describe("The gate in the Model Gateway", () => {
     expect(kept).toEqual([]);
   });
 
-  it("runs a change tool as before", async () => {
+  it("runs a change tool in an owner Turn", async () => {
     resetFakes();
     scriptModel([
       { callTool: "keep_word", input: { word: "milk" } },
@@ -411,7 +415,7 @@ describe("The gate in the Model Gateway", () => {
             system: "Be brief.",
             messages: [{ role: "user", content: "Keep milk" }],
             tools: { keep_word: keepWordTool(kept, "change") },
-            trustLevel: "untrusted",
+            trustLevel: "owner",
             stepLimit: 4,
           })
         ),
@@ -420,5 +424,42 @@ describe("The gate in the Model Gateway", () => {
     );
 
     expect(kept).toEqual(["milk"]);
+  });
+
+  it("stops a change call in an untrusted Turn before it runs, and returns its decoded input for Approval", async () => {
+    resetFakes();
+    scriptModel([
+      { callTool: "keep_word", input: { word: "milk" } },
+      { say: "Kept." },
+    ]);
+    const kept: string[] = [];
+
+    const reply = await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Keep milk" }],
+            tools: { keep_word: keepWordTool(kept, "change") },
+            trustLevel: "untrusted",
+            stepLimit: 4,
+          })
+        ),
+        Effect.provide(fakeModelGateway)
+      )
+    );
+
+    expect(kept).toEqual([]);
+    expect(fakeModel.doGenerateCalls).toHaveLength(1);
+    expect(reply.endedWith).toEqual([]);
+    expect(reply.awaitingApproval).toEqual([
+      {
+        callId: expect.any(String),
+        name: "keep_word",
+        input: { word: "milk" },
+      },
+    ]);
+    expect(JSON.stringify(reply.steps)).not.toContain("tool-approval");
   });
 });

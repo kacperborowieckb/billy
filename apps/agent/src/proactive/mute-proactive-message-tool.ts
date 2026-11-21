@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
 
+import { quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
+import { storedNoteTexts } from "../notes/note-summary.ts";
 import type { Note, Notes } from "../notes/notes.ts";
 import { textForModel } from "../notes/recalled-note.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
@@ -144,6 +146,26 @@ export const muteProactiveMessageTool = (
     {
       name: muteProactiveMessageToolName,
       riskClass: "change",
+      approvalSummary: ({ action, scope, openLoopIds, kind }) => {
+        if (action === "list") {
+          return Effect.succeed("Show what is muted");
+        }
+        const verb = action === "mute" ? "Mute" : "Remove the Mute of";
+        if (scope === "kind") {
+          return Effect.succeed(
+            kind === undefined
+              ? `${verb} the kinds of the Open Loops of the last Proactive Message`
+              : `${verb} all Open Loops of kind ${quoted(kind)}`
+          );
+        }
+        return openLoopIds === undefined || openLoopIds.length === 0
+          ? Effect.succeed(
+              `${verb} the Open Loops of the last Proactive Message`
+            )
+          : storedNoteTexts(notes, openLoopIds).pipe(
+              Effect.map((texts) => `${verb} ${texts.join(", ")}`)
+            );
+      },
       description:
         'Save, undo, or list the Owner\'s request for less of a kind of Proactive Message. Call it with action mute when the Owner says "less of this", "stop nagging me about this", or similar, as a message right after a Proactive Message. The default scope is the Open Loops of that message. When it is not clear whether the Owner means these Open Loops or all Open Loops of their kind, save the default now and ask one short question; call it again with scope kind and the openLoopIds from the first result only if the Owner says all, because a later message is not connected to the Proactive Message. An undo with scope kind also removes the Open Loop mutes of those kinds. A muted Open Loop or kind gets no follow-up of its own and appears only in the Brief. This means less often, not never. When the Owner wants it to stop for good, close the Open Loop or cancel the Schedule with the other tools instead. Call it with action undo when the Owner wants the mute removed. Say that you changed a mute only after the tool succeeded.',
       inputSchema: MuteInput,

@@ -1,14 +1,16 @@
 import { asSchema, jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
-import { Data, Effect, Result, Schema } from "effect";
+import { Data, Effect, Option, Result, Schema } from "effect";
 
-import { riskClassified } from "../approval/risk-class.ts";
+import { approvalSummaryOf } from "../approval/approval-summary.ts";
 import type {
-  InputRiskClass,
-  RiskClass,
-  RiskClassified,
-} from "../approval/risk-class.ts";
+  ApprovalSummaryOf,
+  InputApprovalSummary,
+} from "../approval/approval-summary.ts";
+import { riskClassified } from "../approval/risk-class.ts";
+import type { InputRiskClass, RiskClass } from "../approval/risk-class.ts";
 import { blockedCallReason } from "../approval/tool-gate.ts";
+import type { GatedTool } from "../approval/tool-gate.ts";
 
 export class ToolFailed extends Data.TaggedError("ToolFailed")<{
   readonly message: string;
@@ -20,7 +22,8 @@ export type RunToolEffect = <Output>(
   effect: Effect.Effect<Output, ToolFailed>
 ) => Promise<Output>;
 
-export interface AgentTool extends RiskClassified {
+export interface AgentTool extends GatedTool {
+  readonly approvalSummaryOf: ApprovalSummaryOf;
   readonly toAiSdkTool: (runEffect: RunToolEffect) => Tool;
 }
 
@@ -40,6 +43,16 @@ export const effectInputSchema = <Input>(
       }),
   });
 
+export interface InputCheck<Input> {
+  readonly isInput: (value: unknown) => value is Input;
+  readonly holds: (input: Input) => boolean;
+}
+
+const inputCheckOf =
+  <Input>(check: InputCheck<Input> | undefined) =>
+  (input: unknown) =>
+    check !== undefined && check.isInput(input) && check.holds(input);
+
 export const noTools: AgentTools = {};
 
 export const toolNamed = (
@@ -48,16 +61,27 @@ export const toolNamed = (
 ): AgentTool | undefined =>
   Object.hasOwn(tools, name) ? tools[name] : undefined;
 
-interface AgentToolDefinition<Input, Output> {
+export type ToolApproval<Input> =
+  | {
+      readonly riskClass: "read";
+      readonly riskClassOfInput?: undefined;
+      readonly approvalSummary?: undefined;
+    }
+  | {
+      readonly riskClass: RiskClass;
+      readonly riskClassOfInput?: InputRiskClass<Input>;
+      readonly approvalSummary: InputApprovalSummary<Input>;
+    };
+
+type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;
-  readonly riskClass: RiskClass;
-  readonly riskClassOfInput?: InputRiskClass<Input>;
+  readonly marksItsWorkUntrusted?: InputCheck<Input>;
   readonly execute: (
     input: Input,
     call: { readonly toolCallId: string; readonly modelStepKey: number }
   ) => Effect.Effect<Output, ToolFailed>;
-}
+};
 
 const anyInputWithSchemaOf = <Input>(
   schema: FlexibleSchema<Input>
@@ -82,6 +106,8 @@ export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
 ): AgentTool => ({
   ...riskClassified(definition.riskClass, definition.riskClassOfInput),
+  marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
+  approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
   toAiSdkTool: (runEffect) =>
     definition.riskClass === "blocked"
       ? blockedAiSdkTool(definition, runEffect)
@@ -132,6 +158,8 @@ export const outcomeTool = <Input>(
   definition: OutcomeToolDefinition<Input>
 ): AgentTool => ({
   ...riskClassified("read"),
+  marksItsWorkUntrusted: () => false,
+  approvalSummaryOf: () => Effect.succeed(Option.none()),
   toAiSdkTool: () =>
     tool<Input, unknown, Record<string, unknown>>({
       description: definition.description,

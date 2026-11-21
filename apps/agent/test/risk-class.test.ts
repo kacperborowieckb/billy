@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { riskClasses, riskClassified } from "../src/approval/risk-class.ts";
-import type { RiskClass } from "../src/approval/risk-class.ts";
+import type { RiskClass, RiskClassified } from "../src/approval/risk-class.ts";
 import {
   blockedCallReason,
   gateDecisionOf,
@@ -80,6 +80,11 @@ const everyToolSet = async (): Promise<Record<string, AgentTools>> =>
       )
   );
 
+const gatedTool = (tool: RiskClassified) => ({
+  ...tool,
+  marksItsWorkUntrusted: () => false,
+});
+
 const WideInput = z.object({ wide: z.boolean() });
 
 const isWideInput = (value: unknown): value is z.infer<typeof WideInput> =>
@@ -126,29 +131,65 @@ describe("Risk Class", () => {
     });
 
     expect(tool.riskClassOf({})).toBe("blocked");
-    expect(gateDecisionOf({ tool, input: {}, trustLevel: "owner" })).toEqual({
+    expect(
+      gateDecisionOf({
+        tool: gatedTool(tool),
+        input: {},
+        trustLevel: "owner",
+      })
+    ).toEqual({
       _tag: "Deny",
       reason: blockedCallReason,
     });
   });
 });
 
+const expectedDecision = {
+  owner: {
+    read: { _tag: "Run" },
+    change: { _tag: "Run" },
+    approve: { _tag: "AskOwner" },
+    blocked: { _tag: "Deny", reason: blockedCallReason },
+  },
+  untrusted: {
+    read: { _tag: "Run" },
+    change: { _tag: "AskOwner" },
+    approve: { _tag: "AskOwner" },
+    blocked: { _tag: "Deny", reason: blockedCallReason },
+  },
+} as const;
+
 describe("The gate", () => {
-  it("denies a blocked call and runs every other class in both Trust Levels", () => {
+  it("decides each Risk Class from the Trust Level of the Turn", () => {
     for (const trustLevel of ["owner", "untrusted"] as const) {
       for (const riskClass of riskClasses) {
         const decision = gateDecisionOf({
-          tool: riskClassified(riskClass),
+          tool: gatedTool(riskClassified(riskClass)),
           input: {},
           trustLevel,
         });
         expect(decision, `${riskClass} in ${trustLevel}`).toEqual(
-          riskClass === "blocked"
-            ? { _tag: "Deny", reason: blockedCallReason }
-            : { _tag: "Run" }
+          expectedDecision[trustLevel][riskClass]
         );
       }
     }
+  });
+
+  it("runs a change call of a tool that marks its work untrusted in an untrusted Turn, and asks for any higher class", () => {
+    const tool = {
+      ...riskClassified("change", {
+        isInput: isWideInput,
+        of: (input) => (input.wide ? "approve" : "change"),
+      }),
+      marksItsWorkUntrusted: () => true,
+    };
+
+    expect(
+      gateDecisionOf({ tool, input: { wide: false }, trustLevel: "untrusted" })
+    ).toEqual({ _tag: "Run" });
+    expect(
+      gateDecisionOf({ tool, input: { wide: true }, trustLevel: "untrusted" })
+    ).toEqual({ _tag: "AskOwner" });
   });
 });
 
@@ -160,15 +201,24 @@ const isWordInput = (value: unknown): value is z.infer<typeof WordInput> =>
 const readWordTool = (
   riskClassOf?: (input: z.infer<typeof WordInput>) => RiskClass
 ) =>
-  agentTool({
-    description: "Read a word",
-    inputSchema: WordInput,
-    riskClass: "read",
-    ...(riskClassOf === undefined
-      ? {}
-      : { riskClassOfInput: { isInput: isWordInput, of: riskClassOf } }),
-    execute: ({ word }) => Effect.succeed({ word }),
-  });
+  riskClassOf === undefined
+    ? agentTool({
+        description: "Read a word",
+        inputSchema: WordInput,
+        riskClass: "read",
+        execute: ({ word }) => Effect.succeed({ word }),
+      })
+    : agentTool({
+        description: "Read a word",
+        inputSchema: WordInput,
+        riskClass: "read",
+        riskClassOfInput: { isInput: isWordInput, of: riskClassOf },
+        approvalSummary: {
+          isInput: isWordInput,
+          of: ({ word }) => Effect.succeed(`Read the word "${word}"`),
+        },
+        execute: ({ word }) => Effect.succeed({ word }),
+      });
 
 const refusalTools = {
   peek: readWordTool(({ word }) => (word === "secret" ? "blocked" : "read")),
@@ -229,6 +279,7 @@ const silenceRefusalAfter = async (
             calls.inThisRun === undefined ? [] : [stepWith(calls.inThisRun)],
           earlierMessages: calls.recorded ?? [],
           tools: refusalTools,
+          approvalWaits: false,
         })
       )
   );

@@ -16,6 +16,12 @@ export interface PendingToolCall {
   readonly input: string;
 }
 
+export interface ApprovalRequestedCall {
+  readonly callId: string;
+  readonly name: string;
+  readonly input: unknown;
+}
+
 export interface ModelStep {
   readonly usage: Usage;
   readonly toolCalls: readonly ModelToolCall[];

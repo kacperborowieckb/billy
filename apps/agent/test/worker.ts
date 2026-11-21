@@ -51,6 +51,11 @@ const fakeTools: AgentTools = {
     description: "Keep a word",
     inputSchema: z.object({ word: z.string() }),
     riskClass: "change",
+    approvalSummary: {
+      isInput: (value): value is { word: string } =>
+        z.object({ word: z.string() }).safeParse(value).success,
+      of: ({ word }) => Effect.succeed(`Keep the word "${word}"`),
+    },
     execute: ({ word }) =>
       fakeTool.failWith === undefined
         ? Effect.sync(() => {

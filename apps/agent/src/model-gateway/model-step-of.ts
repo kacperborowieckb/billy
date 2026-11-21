@@ -1,6 +1,7 @@
 import type { LanguageModelUsage, ModelMessage, StepResult, ToolSet } from "ai";
 
 import type {
+  ApprovalRequestedCall,
   ModelStep,
   ModelToolCall,
   PendingToolCall,
@@ -91,10 +92,34 @@ const answeredCallIdOf = (part: StepContentPart) =>
     ? part.toolCallId
     : deniedCallOf(part)?.toolCall.toolCallId;
 
+const ownerApprovalRequestOf = (part: StepContentPart) =>
+  part.type === "tool-approval-request" && part.isAutomatic !== true
+    ? part.toolCall
+    : undefined;
+
+export const approvalRequestedCallsOf = (
+  step: StepResult<ToolSet>
+): readonly ApprovalRequestedCall[] =>
+  step.content.flatMap((part) => {
+    const toolCall = ownerApprovalRequestOf(part);
+    return toolCall === undefined
+      ? []
+      : [
+          {
+            callId: toolCall.toolCallId,
+            name: toolCall.toolName,
+            input: toolCall.input,
+          },
+        ];
+  });
+
 export const pendingToolCallsOf = (
   step: StepResult<ToolSet>
 ): readonly PendingToolCall[] => {
-  const answered = new Set(step.content.map(answeredCallIdOf));
+  const answered = new Set([
+    ...step.content.map(answeredCallIdOf),
+    ...step.content.map((part) => ownerApprovalRequestOf(part)?.toolCallId),
+  ]);
   return step.content.flatMap((part) =>
     part.type === "tool-call" && !answered.has(part.toolCallId)
       ? [

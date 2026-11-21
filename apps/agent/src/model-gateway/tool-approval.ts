@@ -21,9 +21,10 @@ export const approvalStatusOf =
       input: toolCall.input,
       trustLevel,
     });
-    return decision._tag === "Deny"
-      ? { type: "denied", reason: decision.reason }
-      : "not-applicable";
+    if (decision._tag === "Deny") {
+      return { type: "denied", reason: decision.reason };
+    }
+    return decision._tag === "AskOwner" ? "user-approval" : "not-applicable";
   };
 
 const anyBlockedInput = "{}";

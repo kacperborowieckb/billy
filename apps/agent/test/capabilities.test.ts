@@ -43,7 +43,7 @@ describe("Capabilities in the system prompt", () => {
     expect(prompt).toContain("You cannot open links");
   });
 
-  it("offers stay_silent and react in an Owner message Turn and not in a Turn for an untrusted Event", async () => {
+  it("offers stay_silent and react in an Owner message Turn, also for an untrusted Event", async () => {
     await addOwner(8302);
     await telegramWebhook(textUpdate({ fromUserId: 8302, text: "ok" }));
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1), {
@@ -70,9 +70,9 @@ describe("Capabilities in the system prompt", () => {
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1), {
       timeout: 10_000,
     });
-    expect(toolNamesOfFirstCall()).not.toContain(staySilentToolName);
-    expect(systemPromptOfFirstCall()).not.toContain(staySilentToolName);
-    expect(toolNamesOfFirstCall()).not.toContain(reactToolName);
-    expect(systemPromptOfFirstCall()).not.toContain(`call ${reactToolName}`);
+    expect(toolNamesOfFirstCall()).toContain(staySilentToolName);
+    expect(systemPromptOfFirstCall()).toContain(staySilentToolName);
+    expect(toolNamesOfFirstCall()).toContain(reactToolName);
+    expect(systemPromptOfFirstCall()).toContain(`call ${reactToolName}`);
   });
 });
