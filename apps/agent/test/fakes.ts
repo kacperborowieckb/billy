@@ -41,6 +41,11 @@ export interface TelegramChatAction {
   readonly at: number;
 }
 
+export interface TelegramPressAnswer {
+  readonly callback_query_id: string;
+  readonly text?: string;
+}
+
 export type ChatActionAnswer = "confirm" | "refuse" | "hang" | "hang-first";
 
 const fakeTelegramState = {
@@ -55,6 +60,26 @@ const fakeTelegramState = {
   sendHold: Promise.resolve() as Promise<undefined>,
   refusedFromSend: Number.POSITIVE_INFINITY,
   edits: [] as SentTelegramMessage[],
+  editHold: Promise.resolve() as Promise<undefined>,
+  pressAnswers: [] as TelegramPressAnswer[],
+  pressAnswerHold: Promise.resolve() as Promise<undefined>,
+};
+
+const answerEdit = async (request: Request) => {
+  fakeTelegramState.edits.push({
+    url: request.url,
+    body: await request.json(),
+  });
+  await fakeTelegramState.editHold;
+  return Response.json({ ok: true, result: true });
+};
+
+const answerPressAnswer = async (request: Request) => {
+  fakeTelegramState.pressAnswers.push(
+    await request.json<TelegramPressAnswer>()
+  );
+  await fakeTelegramState.pressAnswerHold;
+  return Response.json({ ok: true, result: true });
 };
 
 const answerChatAction = async (request: Request) => {
@@ -129,6 +154,19 @@ export const fakeTelegram = {
   get edits(): readonly SentTelegramMessage[] {
     return fakeTelegramState.edits;
   },
+  get pressAnswers(): readonly TelegramPressAnswer[] {
+    return fakeTelegramState.pressAnswers;
+  },
+  holdPressAnswers: () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    fakeTelegramState.pressAnswerHold = promise;
+    return () => resolve(undefined);
+  },
+  holdEdits: () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    fakeTelegramState.editHold = promise;
+    return () => resolve(undefined);
+  },
   refuseFromSend: (count: number) => {
     fakeTelegramState.refusedFromSend = count;
   },
@@ -155,11 +193,10 @@ export const fakeTelegram = {
       return answerReaction(request);
     }
     if (request.url.endsWith("/editMessageText")) {
-      fakeTelegramState.edits.push({
-        url: request.url,
-        body: await request.json(),
-      });
-      return Response.json({ ok: true, result: true });
+      return answerEdit(request);
+    }
+    if (request.url.endsWith("/answerCallbackQuery")) {
+      return answerPressAnswer(request);
     }
     fakeTelegramState.chatActionsAtSends.push(
       fakeTelegramState.chatActions.length
@@ -396,6 +433,9 @@ export const resetFakes = () => {
   fakeTelegramState.sendHold = Promise.resolve(undefined);
   fakeTelegramState.refusedFromSend = Number.POSITIVE_INFINITY;
   fakeTelegramState.edits = [];
+  fakeTelegramState.editHold = Promise.resolve(undefined);
+  fakeTelegramState.pressAnswers = [];
+  fakeTelegramState.pressAnswerHold = Promise.resolve(undefined);
   fakeModel.doGenerateCalls.length = 0;
   releaseModel = Promise.resolve();
   callsBeforeHold = 0;

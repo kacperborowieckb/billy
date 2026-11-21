@@ -115,9 +115,14 @@ describe("ScheduleFired Event", () => {
     );
 
     expect(
-      pending.map((event) =>
-        event._tag === "OwnerMessage" ? event.text : event.scheduleId
-      )
+      pending.map((event) => {
+        if (event._tag === "OwnerMessage") {
+          return event.text;
+        }
+        return event._tag === "ScheduleFired"
+          ? event.scheduleId
+          : event.pressId;
+      })
     ).toEqual([
       "first owner message",
       "second owner message",

@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect";
 
-import type { OwnerMessage } from "../../event.ts";
+import type { ApprovalAnswered, OwnerMessage } from "../../event.ts";
+import { approvalPressDataOf } from "./approval-keyboard.ts";
 
 const ForwardOriginSchema = Schema.Union([
   Schema.Struct({
@@ -66,6 +67,19 @@ const TelegramUpdateSchema = Schema.Struct({
       forward_origin: Schema.optionalKey(ForwardOriginSchema),
     })
   ),
+  callback_query: Schema.optionalKey(
+    Schema.Struct({
+      id: Schema.String,
+      from: Schema.Struct({ id: Schema.Int, is_bot: Schema.Boolean }),
+      message: Schema.optionalKey(
+        Schema.Struct({
+          message_id: Schema.Int,
+          chat: Schema.Struct({ id: Schema.Int, type: Schema.String }),
+        })
+      ),
+      data: Schema.optionalKey(Schema.String),
+    })
+  ),
 });
 
 export interface TelegramTextMessage {
@@ -105,6 +119,41 @@ export const textMessageFrom = (
                   singleLine(forwardOriginName(message.forward_origin)) ||
                   unknownForwardOrigin,
               }),
+        },
+      });
+    })
+  );
+
+export interface TelegramApprovalPress {
+  readonly senderId: number;
+  readonly answered: ApprovalAnswered;
+}
+
+export const approvalPressFrom = (
+  body: unknown
+): Option.Option<TelegramApprovalPress> =>
+  Schema.decodeUnknownOption(TelegramUpdateSchema)(body).pipe(
+    Option.flatMap(({ callback_query: press }) => {
+      const data =
+        press?.data === undefined ? undefined : approvalPressDataOf(press.data);
+      if (
+        press?.message === undefined ||
+        data === undefined ||
+        press.from.is_bot ||
+        press.message.chat.type !== "private"
+      ) {
+        return Option.none();
+      }
+      return Option.some({
+        senderId: press.from.id,
+        answered: {
+          _tag: "ApprovalAnswered",
+          channel: "telegram",
+          pressId: press.id,
+          conversationId: String(press.message.chat.id),
+          channelMessageId: String(press.message.message_id),
+          pendingApprovalId: data.pendingApprovalId,
+          answer: data.answer,
         },
       });
     })

@@ -14,6 +14,7 @@ import { valueIn } from "../check-values.ts";
 import type { OwnerMessage } from "../event.ts";
 import type { OwnerId } from "../owner-id.ts";
 import {
+  approvalAnswers,
   eventKinds,
   inboxStates,
   modelTasks,
@@ -41,18 +42,23 @@ export const inboxEvents = sqliteTable(
     sentAt: text("sent_at"),
     scheduleId: text("schedule_id"),
     dueAt: text("due_at"),
+    pressId: text("press_id"),
+    pendingApprovalId: text("pending_approval_id"),
+    answer: text("answer", { enum: approvalAnswers }),
     receivedAt: text("received_at").notNull(),
     state: text("state", { enum: inboxStates }).notNull(),
   },
   (table) => [
     unique().on(table.channel, table.channelUpdateId),
     unique().on(table.scheduleId, table.dueAt),
+    unique().on(table.channel, table.pressId),
     index("inbox_events_state").on(table.state, table.receivedAt),
     check("inbox_events_state_check", valueIn(table.state, inboxStates)),
     check("inbox_events_kind_check", valueIn(table.kind, eventKinds)),
+    check("inbox_events_answer_check", valueIn(table.answer, approvalAnswers)),
     check(
       "inbox_events_fields_check",
-      sql`(${table.kind} = 'OwnerMessage' AND ${table.channel} IS NOT NULL AND ${table.channelUpdateId} IS NOT NULL AND ${table.conversationId} IS NOT NULL AND ${table.channelMessageId} IS NOT NULL AND ${table.text} IS NOT NULL AND ${table.sentAt} IS NOT NULL AND ${table.scheduleId} IS NULL AND ${table.dueAt} IS NULL) OR (${table.kind} = 'ScheduleFired' AND ${table.scheduleId} IS NOT NULL AND ${table.dueAt} IS NOT NULL AND ${table.channel} IS NULL AND ${table.channelUpdateId} IS NULL AND ${table.conversationId} IS NULL AND ${table.channelMessageId} IS NULL AND ${table.text} IS NULL AND ${table.forwardOrigin} IS NULL AND ${table.sentAt} IS NULL)`
+      sql`(${table.kind} = 'OwnerMessage' AND ${table.channel} IS NOT NULL AND ${table.channelUpdateId} IS NOT NULL AND ${table.conversationId} IS NOT NULL AND ${table.channelMessageId} IS NOT NULL AND ${table.text} IS NOT NULL AND ${table.sentAt} IS NOT NULL AND ${table.scheduleId} IS NULL AND ${table.dueAt} IS NULL AND ${table.pressId} IS NULL AND ${table.pendingApprovalId} IS NULL AND ${table.answer} IS NULL) OR (${table.kind} = 'ScheduleFired' AND ${table.scheduleId} IS NOT NULL AND ${table.dueAt} IS NOT NULL AND ${table.channel} IS NULL AND ${table.channelUpdateId} IS NULL AND ${table.conversationId} IS NULL AND ${table.channelMessageId} IS NULL AND ${table.text} IS NULL AND ${table.forwardOrigin} IS NULL AND ${table.sentAt} IS NULL AND ${table.pressId} IS NULL AND ${table.pendingApprovalId} IS NULL AND ${table.answer} IS NULL) OR (${table.kind} = 'ApprovalAnswered' AND ${table.channel} IS NOT NULL AND ${table.pressId} IS NOT NULL AND ${table.conversationId} IS NOT NULL AND ${table.channelMessageId} IS NOT NULL AND ${table.pendingApprovalId} IS NOT NULL AND ${table.answer} IS NOT NULL AND ${table.channelUpdateId} IS NULL AND ${table.text} IS NULL AND ${table.forwardOrigin} IS NULL AND ${table.sentAt} IS NULL AND ${table.scheduleId} IS NULL AND ${table.dueAt} IS NULL)`
     ),
   ]
 );

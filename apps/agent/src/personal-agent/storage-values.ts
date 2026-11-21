@@ -1,4 +1,16 @@
-export const eventKinds = ["OwnerMessage", "ScheduleFired"] as const;
+export const eventKinds = [
+  "OwnerMessage",
+  "ScheduleFired",
+  "ApprovalAnswered",
+] as const;
+
+export const approvalAnswers = ["approve", "reject"] as const;
+
+export const approvalRunResults = [
+  "executed",
+  "failed",
+  "unconfirmed",
+] as const;
 
 export const inboxStates = ["pending", "done", "failed"] as const;
 

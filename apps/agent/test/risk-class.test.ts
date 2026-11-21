@@ -284,6 +284,24 @@ const silenceRefusalAfter = async (
       )
   );
 
+describe("An approved call", () => {
+  it("never runs a frozen input whose input function gives blocked", async () => {
+    const peek = readWordTool(({ word }) =>
+      word === "secret" ? "blocked" : "read"
+    );
+
+    const blocked = await Effect.runPromise(
+      Effect.flip(peek.executeApproved({ word: "secret" }, "approval-1"))
+    );
+    const allowed = await Effect.runPromise(
+      peek.executeApproved({ word: "plain" }, "approval-2")
+    );
+
+    expect(blocked.message).toBe(blockedCallReason);
+    expect(allowed).toEqual({ word: "plain" });
+  });
+});
+
 describe("The outcome-refusal rules", () => {
   it("read the class of a call in this run from its input, so a read tool that its input raised to blocked refuses silence", async () => {
     const refusal = await silenceRefusalAfter("refusal-raised-owner", {

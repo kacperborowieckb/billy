@@ -1,4 +1,6 @@
-import type { ApprovalRequest } from "../channel.ts";
+import type { ApprovalAnswer } from "../../event.ts";
+import { approvalAnswers } from "../../personal-agent/storage-values.ts";
+import type { ApprovalRequest, ShownApproval } from "../channel.ts";
 
 export interface InlineKeyboardButton {
   readonly text: string;
@@ -6,10 +8,6 @@ export interface InlineKeyboardButton {
 }
 
 export type InlineKeyboard = readonly (readonly InlineKeyboardButton[])[];
-
-export const approvalAnswers = ["approve", "reject"] as const;
-
-export type ApprovalAnswer = (typeof approvalAnswers)[number];
 
 export const approvalCallbackData = (
   answer: ApprovalAnswer,
@@ -90,4 +88,62 @@ export const approvalBlocksOf = (
   }
   blocks.push(blockOf(header, open));
   return blocks;
+};
+
+const callbackDataPattern = new RegExp(
+  `^(${approvalAnswers.join("|")}):([A-Za-z0-9_-]{12})$`,
+  "u"
+);
+
+export interface ApprovalPressData {
+  readonly answer: ApprovalAnswer;
+  readonly pendingApprovalId: string;
+}
+
+const isApprovalAnswer = (value: string): value is ApprovalAnswer =>
+  approvalAnswers.some((answer) => answer === value);
+
+export const approvalPressDataOf = (
+  data: string
+): ApprovalPressData | undefined => {
+  const [, answer, pendingApprovalId] = callbackDataPattern.exec(data) ?? [];
+  return answer !== undefined &&
+    pendingApprovalId !== undefined &&
+    isApprovalAnswer(answer)
+    ? { answer, pendingApprovalId }
+    : undefined;
+};
+
+const shownLineOf = (
+  approval: ShownApproval,
+  index: number,
+  turnApprovals: readonly ShownApproval[]
+) =>
+  approval.status === undefined
+    ? lineOf(approval, index, turnApprovals)
+    : `${lineOf(approval, index, turnApprovals)}\n${approval.status}`;
+
+export const editedApprovalBlockOf = (
+  turnApprovals: readonly ShownApproval[],
+  channelMessageId: string
+): ApprovalBlock => {
+  const shown = turnApprovals
+    .map((approval, index) => ({ approval, index }))
+    .filter(({ approval }) => approval.channelMessageId === channelMessageId);
+  const header =
+    turnApprovals[0]?.channelMessageId === channelMessageId
+      ? [headerOf(turnApprovals)]
+      : [];
+  return {
+    text: [
+      ...header,
+      ...shown.map(({ approval, index }) =>
+        shownLineOf(approval, index, turnApprovals)
+      ),
+    ].join("\n"),
+    keyboard: shown
+      .filter(({ approval }) => approval.status === undefined)
+      .map(({ approval, index }) => rowOf(approval, index, turnApprovals)),
+    pendingApprovalIds: shown.map(({ approval }) => approval.pendingApprovalId),
+  };
 };

@@ -18,6 +18,8 @@ const textOf = (event: InboxEvent) =>
       forwardOrigin === undefined ? text : forwardedText(text, forwardOrigin),
     ScheduleFired: ({ scheduleId, dueAt }) =>
       `A Schedule fired. Schedule id: ${scheduleId}. It was due at ${dueAt}.`,
+    ApprovalAnswered: ({ pendingApprovalId, answer }) =>
+      `The Owner pressed ${answer} on the Approval ${pendingApprovalId}.`,
   });
 
 export const eventMessage = (event: InboxEvent): ModelMessage => ({

@@ -9,6 +9,7 @@ import type { RecordedOutcome } from "../proactive/proactive-outcomes.ts";
 import { Schedules } from "../schedule/schedules.ts";
 import { whileAcknowledging } from "./acknowledge.ts";
 import { agentToolServices } from "./agent-tool-services.ts";
+import { handleApprovalAnswered } from "./approval-answer.ts";
 import { burstWaitOf } from "./burst-wait.ts";
 import {
   burstInputs,
@@ -148,6 +149,11 @@ export const takeTurn = (
     yield* recordOutcomesOfFinishedTurns(ownerId);
     const newBurstIsDue = yield* inbox.burstIsDue(wait);
     const events = yield* inbox.pending;
+    for (const event of events) {
+      if (event._tag === "ApprovalAnswered") {
+        yield* handleApprovalAnswered({ behavior, tools }, event);
+      }
+    }
     const ownerMessages = events.filter(
       (event) => event._tag === "OwnerMessage"
     );

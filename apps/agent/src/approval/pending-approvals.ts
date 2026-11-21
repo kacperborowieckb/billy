@@ -1,10 +1,14 @@
-import { and, eq, sql } from "drizzle-orm";
-import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { and, eq, gt, sql } from "drizzle-orm";
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import type { ApprovalMessage } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { pendingApprovalStates } from "../personal-agent/storage-values.ts";
+import type {
+  ApprovalAnswering,
+  ApprovalRunRecord,
+} from "./approval-answering.ts";
 import { pendingApprovals } from "./pending-approvals-schema.ts";
 
 export const PendingApprovalSchema = Schema.Struct({
@@ -169,7 +173,87 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       })
     );
 
-  return { draft, forTurn, openDrafts, dropDrafts, openUnconfirmedDrafts };
+  const byId = (pendingApprovalId: string) =>
+    database
+      .select()
+      .from(pendingApprovals)
+      .where(eq(pendingApprovals.pendingApprovalId, pendingApprovalId))
+      .pipe(
+        Effect.map((rows) =>
+          Option.fromNullishOr(rows.at(0)).pipe(
+            Option.map((row) => decodeRow(row))
+          )
+        )
+      );
+
+  const answerPending = Effect.fnUntraced(function* answerPending({
+    eventId,
+    pendingApprovalId,
+    answer,
+  }: ApprovalAnswering) {
+    const now = DateTime.formatIso(yield* DateTime.now);
+    const answered = yield* database
+      .update(pendingApprovals)
+      .set({ state: answer === "approve" ? "approved" : "rejected" })
+      .where(
+        and(
+          eq(pendingApprovals.pendingApprovalId, pendingApprovalId),
+          eq(pendingApprovals.state, "pending"),
+          gt(pendingApprovals.expiresAt, now)
+        )
+      )
+      .returning({ pendingApprovalId: pendingApprovals.pendingApprovalId });
+    if (answered.length === 0) {
+      return false;
+    }
+    yield* journal.append({
+      _tag: "ApprovalAnswered",
+      eventId,
+      pendingApprovalId,
+      answer,
+    });
+    return true;
+  });
+
+  const recordRun = Effect.fnUntraced(function* recordRun({
+    eventId,
+    pendingApprovalId,
+    outcome,
+  }: ApprovalRunRecord) {
+    yield* database
+      .update(pendingApprovals)
+      .set({
+        state: outcome.result,
+        result:
+          outcome.result === "executed"
+            ? encodeFrozenInput(outcome.output ?? null)
+            : outcome.reason,
+      })
+      .where(
+        and(
+          eq(pendingApprovals.pendingApprovalId, pendingApprovalId),
+          eq(pendingApprovals.state, "approved")
+        )
+      );
+    yield* journal.append({
+      _tag: "ApprovalRun",
+      eventId,
+      pendingApprovalId,
+      result: outcome.result,
+      ...(outcome.result === "failed" ? { reason: outcome.reason } : {}),
+    });
+  });
+
+  return {
+    draft,
+    forTurn,
+    openDrafts,
+    dropDrafts,
+    openUnconfirmedDrafts,
+    byId,
+    answerPending,
+    recordRun,
+  };
 });
 
 export class PendingApprovals extends Context.Service<
