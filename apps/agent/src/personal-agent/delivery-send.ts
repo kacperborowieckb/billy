@@ -1,5 +1,7 @@
 import { Effect } from "effect";
+import type { SqlError } from "effect/sql/SqlError";
 
+import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { Channel } from "../channels/channel.ts";
 import type {
   ApprovalMessage,
@@ -9,16 +11,29 @@ import type {
 } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
 import { Redactor } from "../tracing/redactor.ts";
+import { AgentStorage } from "./agent-storage.ts";
 import type { InboxEvent } from "./inbox.ts";
 import { OwnerChannelConversation } from "./owner-channel-conversation.ts";
 
 export const noOwnerConversationReason =
   "The Owner has no Channel conversation to send to yet";
 
+type SentRecord = ReturnType<Journal["Service"]["append"]>;
+
+type RecordConfirmed = (
+  recordSent: SentRecord
+) => Effect.Effect<void, Effect.Error<SentRecord> | SqlError>;
+
+const recordAsIs: RecordConfirmed = (recordSent) => recordSent;
+
 export const recordSend = Effect.fnUntraced(function* recordSend<
   Attempted extends ReactionDelivery,
   Requirements,
->(event: InboxEvent, attempt: Effect.Effect<Attempted, never, Requirements>) {
+>(
+  event: InboxEvent,
+  attempt: Effect.Effect<Attempted, never, Requirements>,
+  recordConfirmed: RecordConfirmed = recordAsIs
+) {
   const journal = yield* Journal;
   const redactor = yield* Redactor;
 
@@ -37,11 +52,14 @@ export const recordSend = Effect.fnUntraced(function* recordSend<
     });
     return { _tag: "Failed", reason } as const;
   }
-  yield* journal.append({
-    _tag: "ReplySent",
-    eventId: event.eventId,
-    channelMessageId: delivery.channelMessageId,
-  });
+  const { channelMessageId } = delivery;
+  yield* recordConfirmed(
+    journal.append({
+      _tag: "ReplySent",
+      eventId: event.eventId,
+      channelMessageId,
+    })
+  );
   return {
     _tag: "Confirmed",
     channelMessageId: delivery.channelMessageId,
@@ -73,6 +91,7 @@ export interface PlannedSend {
   readonly text: string;
   readonly replyTo: InboxEvent;
   readonly attempt: (destination: Destination) => Effect.Effect<Delivery>;
+  readonly recordConfirmed?: RecordConfirmed;
 }
 
 export const sendPlanned = Effect.fnUntraced(function* sendPlanned({
@@ -80,6 +99,7 @@ export const sendPlanned = Effect.fnUntraced(function* sendPlanned({
   text,
   replyTo,
   attempt,
+  recordConfirmed,
 }: PlannedSend) {
   const journal = yield* Journal;
 
@@ -97,7 +117,7 @@ export const sendPlanned = Effect.fnUntraced(function* sendPlanned({
     });
     return { _tag: "Failed", reason: noOwnerConversationReason } as const;
   }
-  return yield* recordSend(event, attempt(destination));
+  return yield* recordSend(event, attempt(destination), recordConfirmed);
 });
 
 export interface ApprovalSend {
@@ -114,6 +134,8 @@ export const sendWithApprovals = Effect.fnUntraced(function* sendWithApprovals({
   replyTo,
 }: ApprovalSend) {
   const channel = yield* Channel;
+  const pendingApprovals = yield* PendingApprovals;
+  const { database } = yield* AgentStorage;
   let approvalMessages: readonly ApprovalMessage[] = [];
   const delivery = yield* sendPlanned({
     event,
@@ -127,6 +149,17 @@ export const sendWithApprovals = Effect.fnUntraced(function* sendWithApprovals({
               ({ approvalMessages } = sent);
             }
           })
+        )
+      ),
+    recordConfirmed: (recordSent) =>
+      database.transaction(() =>
+        recordSent.pipe(
+          Effect.andThen(
+            pendingApprovals.openDrafts({
+              turnEventId: event.eventId,
+              approvalMessages,
+            })
+          )
         )
       ),
   });

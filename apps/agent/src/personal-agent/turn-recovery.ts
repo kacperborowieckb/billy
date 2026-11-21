@@ -163,9 +163,7 @@ const settleDrafts = Effect.fnUntraced(function* settleDrafts(
   state: DeliveryState
 ) {
   const pendingApprovals = yield* PendingApprovals;
-  const ownerMaySeeDrafts =
-    state._tag === "Sent" || state._tag === "Unconfirmed";
-  yield* ownerMaySeeDrafts
+  yield* state._tag === "Unconfirmed"
     ? pendingApprovals.openUnconfirmedDrafts(event.eventId)
     : pendingApprovals.dropDrafts(event.eventId);
 });
