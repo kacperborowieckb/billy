@@ -12,6 +12,7 @@ Ticket [#146](https://github.com/kacperborowieckb/billy/issues/146) of spec [#13
 - **When the Trust Level changes.** The Model Gateway reads the results of each model step when the step ends, before the next step starts. The gate reads the current Trust Level for each call. The AI SDK decides all calls of a step before it runs them, so a call in the same step as the untrusted result runs with the Trust Level from before that step.
 - **After a reset or a Restart.** The Turn keeps its Turn Event id, and its recorded tool results come back from Turn progress. When one of them returns Untrusted Content, the Turn starts `untrusted`.
 - **Which Turns.** Only an Owner message Turn follows its tool results, because only it can ask the Owner for Approval (0027, Scope). Proactive Turns and Scheduled Task Turns stay `owner`.
+- **The exception of `capture_note`.** The exception of 0027 and 0028 holds only when the Burst is `untrusted`, because only then does code mark the new Note `untrusted`. In a Turn that becomes `untrusted` after a tool result, the Burst is the Owner's own words, so the new Note would be an `owner` Note. Its text can copy the Untrusted Content, so `capture_note` needs Approval in that Turn.
 - **Trace.** The Trace of the Turn records the change in `trustLevelChange`: the new Trust Level and the id and name of the tool call whose result changed it. A Turn that starts `untrusted` from its Burst records no change.
 
 ## Why

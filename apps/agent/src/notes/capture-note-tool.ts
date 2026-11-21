@@ -97,6 +97,7 @@ export const captureNoteTool = (
       name: captureNoteToolName,
       riskClass: "change",
       marksItsWorkUntrusted: ({ linkedNoteIds }) =>
+        trustLevelOfBurst(burst) === "untrusted" &&
         (linkedNoteIds ?? []).length === 0,
       approvalSummary: ({ text, url, message, openLoop, linkedNoteIds = [] }) =>
         storedNoteTexts(notes, linkedNoteIds).pipe(
