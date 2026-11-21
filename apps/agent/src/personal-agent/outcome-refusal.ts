@@ -68,20 +68,32 @@ const toolCallsOf = (messages: readonly ModelMessage[]) =>
       : []
   );
 
+type CallInput = "exact" | "recorded";
+
 const isReadCall = (
   tools: AgentTools,
-  call: { readonly toolName: string; readonly input: unknown }
-) =>
-  Object.hasOwn(tools, call.toolName) &&
-  tools[call.toolName]?.riskClassOf(call.input) === "read";
+  call: { readonly toolName: string; readonly input: unknown },
+  callInput: CallInput
+) => {
+  const tool = Object.hasOwn(tools, call.toolName)
+    ? tools[call.toolName]
+    : undefined;
+  if (tool === undefined) {
+    return false;
+  }
+  return callInput === "exact"
+    ? tool.riskClassOf(call.input) === "read"
+    : tool.readsForEveryInput;
+};
 
 const aChangingCallFailed = (
   tools: AgentTools,
-  messages: readonly ModelMessage[]
+  messages: readonly ModelMessage[],
+  callInput: CallInput
 ) => {
   const failed = failedCallIdsOf(messages);
   return toolCallsOf(messages).some(
-    (call) => failed.has(call.toolCallId) && !isReadCall(tools, call)
+    (call) => failed.has(call.toolCallId) && !isReadCall(tools, call, callInput)
   );
 };
 
@@ -99,10 +111,13 @@ export const refusalOfOutcomeTool = Effect.fnUntraced(
     ) {
       return unknownOutcomeToolMessage;
     }
-    const changeFailed = aChangingCallFailed(tools, [
-      ...earlierMessages,
-      ...steps.flatMap((step) => step.responseMessages),
-    ]);
+    const changeFailed =
+      aChangingCallFailed(tools, earlierMessages, "recorded") ||
+      aChangingCallFailed(
+        tools,
+        steps.flatMap((step) => step.responseMessages),
+        "exact"
+      );
     if (changeFailed) {
       return name === reactToolName
         ? reactionAfterFailureMessage

@@ -13,6 +13,7 @@ import {
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { agentTool } from "../src/model-gateway/agent-tool.ts";
 import type { AgentTools } from "../src/model-gateway/agent-tool.ts";
+import type { ModelStep } from "../src/model-gateway/model-step.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { agentToolServices } from "../src/personal-agent/agent-tool-services.ts";
 import type { Burst } from "../src/personal-agent/burst.ts";
@@ -132,40 +133,64 @@ describe("The gate", () => {
   });
 });
 
-const peekTool = agentTool({
-  description: "Read a word",
-  inputSchema: z.object({ word: z.string() }),
-  riskClass: "read",
-  riskClassOfInput: ({ word }) => (word === "secret" ? "blocked" : "read"),
-  execute: ({ word }) => Effect.succeed({ word }),
-});
+const readWordTool = (
+  riskClassOfInput?: (input: { readonly word: string }) => RiskClass
+) =>
+  agentTool({
+    description: "Read a word",
+    inputSchema: z.object({ word: z.string() }),
+    riskClass: "read",
+    ...(riskClassOfInput === undefined ? {} : { riskClassOfInput }),
+    execute: ({ word }) => Effect.succeed({ word }),
+  });
 
-const failedPeek = (
+const refusalTools = {
+  peek: readWordTool(({ word }) => (word === "secret" ? "blocked" : "read")),
+  look: readWordTool(),
+  [staySilentToolName]: staySilentTool,
+};
+
+const failedCall = (
+  toolName: keyof typeof refusalTools,
   word: string,
   output: ToolResultPart["output"]
 ): readonly ModelMessage[] => [
   {
     role: "assistant",
     content: [
-      {
-        type: "tool-call",
-        toolCallId: "peek-1",
-        toolName: "peek",
-        input: { word },
-      },
+      { type: "tool-call", toolCallId: "call-1", toolName, input: { word } },
     ],
   },
   {
     role: "tool",
-    content: [
-      { type: "tool-result", toolCallId: "peek-1", toolName: "peek", output },
-    ],
+    content: [{ type: "tool-result", toolCallId: "call-1", toolName, output }],
   },
 ];
 
+const deniedOutput = {
+  type: "execution-denied",
+  reason: blockedCallReason,
+} as const;
+
+const errorOutput = { type: "error-text", value: "The store is down" } as const;
+
+const stepWith = (responseMessages: readonly ModelMessage[]): ModelStep => ({
+  usage: {
+    inputTokens: undefined,
+    outputTokens: undefined,
+    cachedInputTokens: undefined,
+    costUsd: undefined,
+  },
+  toolCalls: [],
+  responseMessages,
+});
+
 const silenceRefusalAfter = async (
   ownerId: string,
-  earlierMessages: readonly ModelMessage[]
+  calls: {
+    readonly inThisRun?: readonly ModelMessage[];
+    readonly recorded?: readonly ModelMessage[];
+  }
 ) =>
   runInDurableObject(
     await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
@@ -174,31 +199,43 @@ const silenceRefusalAfter = async (
         refusalOfOutcomeTool({
           eventId: "event-1",
           name: staySilentToolName,
-          steps: [],
-          earlierMessages,
-          tools: { peek: peekTool, [staySilentToolName]: staySilentTool },
+          steps:
+            calls.inThisRun === undefined ? [] : [stepWith(calls.inThisRun)],
+          earlierMessages: calls.recorded ?? [],
+          tools: refusalTools,
         })
       )
   );
 
 describe("The outcome-refusal rules", () => {
-  it("read the class of the call, so a read tool that its input raised to blocked refuses silence", async () => {
-    const refusal = await silenceRefusalAfter(
-      "refusal-raised-owner",
-      failedPeek("secret", {
-        type: "execution-denied",
-        reason: blockedCallReason,
-      })
-    );
+  it("read the class of a call in this run from its input, so a read tool that its input raised to blocked refuses silence", async () => {
+    const refusal = await silenceRefusalAfter("refusal-raised-owner", {
+      inThisRun: failedCall("peek", "secret", deniedOutput),
+    });
 
     expect(refusal).toBe(silenceAfterFailureMessage);
   });
 
-  it("allow silence after a failed read call", async () => {
-    const refusal = await silenceRefusalAfter(
-      "refusal-read-owner",
-      failedPeek("plain", { type: "error-text", value: "The store is down" })
-    );
+  it("allow silence after a failed read call in this run", async () => {
+    const refusal = await silenceRefusalAfter("refusal-read-owner", {
+      inThisRun: failedCall("peek", "plain", errorOutput),
+    });
+
+    expect(refusal).toBeUndefined();
+  });
+
+  it("count a recorded failed call as changing when the class of its tool depends on the input, because the recorded input can differ", async () => {
+    const refusal = await silenceRefusalAfter("refusal-recorded-owner", {
+      recorded: failedCall("peek", "plain", errorOutput),
+    });
+
+    expect(refusal).toBe(silenceAfterFailureMessage);
+  });
+
+  it("allow silence after a recorded failed call of a tool that reads for every input", async () => {
+    const refusal = await silenceRefusalAfter("refusal-recorded-read-owner", {
+      recorded: failedCall("look", "plain", errorOutput),
+    });
 
     expect(refusal).toBeUndefined();
   });

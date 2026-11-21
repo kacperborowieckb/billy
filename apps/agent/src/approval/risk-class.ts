@@ -12,6 +12,7 @@ export const higherRiskClass = (
 export interface RiskClassified {
   readonly riskClass: RiskClass;
   readonly riskClassOf: (input: unknown) => RiskClass;
+  readonly readsForEveryInput: boolean;
 }
 
 export const riskClassified = <Input>(
@@ -23,4 +24,5 @@ export const riskClassified = <Input>(
     riskClassOfInput === undefined
       ? riskClass
       : higherRiskClass(riskClass, riskClassOfInput(input as Input)),
+  readsForEveryInput: riskClass === "read" && riskClassOfInput === undefined,
 });
