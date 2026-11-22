@@ -168,4 +168,24 @@ describe("A draft Pending Approval", () => {
     expect(edited.text).toContain(failure);
     expect(edited.text.isWellFormed()).toBe(true);
   });
+
+  it("keeps every status and every active row of an old message with many rows", () => {
+    const failure = failedStatus("z".repeat(1000));
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      pendingApprovalId: `id-${index}`,
+      summary: "y".repeat(40),
+      channelMessageId: "1",
+      ...(index < 19 ? { status: failure } : {}),
+    }));
+
+    const edited = editedApprovalBlockOf(rows, "1", telegramTextLimit);
+
+    const lines = edited.text.split("\n");
+    expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
+    expect(
+      lines.filter((line) => line.startsWith("Approved, but"))
+    ).toHaveLength(19);
+    expect(lines.some((line) => line.startsWith("20. "))).toBe(true);
+    expect(edited.keyboard).toHaveLength(1);
+  });
 });

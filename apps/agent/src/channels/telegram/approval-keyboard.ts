@@ -122,15 +122,17 @@ export const approvalPressDataOf = (
 
 const answeredSummaryLength = 100;
 
+const compactSummaryLength = 40;
+
+const compactStatusLength = 60;
+
 const wellFormedPrefix = (text: string, length: number) => {
   const prefix = text.slice(0, length);
   return prefix.isWellFormed() ? prefix : prefix.slice(0, -1);
 };
 
-const shortened = (summary: string) =>
-  summary.length <= answeredSummaryLength
-    ? summary
-    : `${wellFormedPrefix(summary, answeredSummaryLength)}...`;
+const shortened = (text: string, length: number) =>
+  text.length <= length ? text : `${wellFormedPrefix(text, length)}...`;
 
 const shownLineOf = (
   approval: ShownApproval,
@@ -141,10 +143,31 @@ const shownLineOf = (
     ? lineOf(approval, index, turnApprovals)
     : `${lineOf(approval, index, turnApprovals)}\n${approval.status}`;
 
-const withShortenedAnswer = (approval: ShownApproval): ShownApproval =>
+type ApprovalShape = (approval: ShownApproval) => ShownApproval;
+
+const asSent: ApprovalShape = (approval) => approval;
+
+const withShortAnsweredSummary: ApprovalShape = (approval) =>
   approval.status === undefined
     ? approval
-    : { ...approval, summary: shortened(approval.summary) };
+    : {
+        ...approval,
+        summary: shortened(approval.summary, answeredSummaryLength),
+      };
+
+const compact: ApprovalShape = (approval) => ({
+  ...approval,
+  summary: shortened(approval.summary, compactSummaryLength),
+  ...(approval.status === undefined
+    ? {}
+    : { status: shortened(approval.status, compactStatusLength) }),
+});
+
+const shapesByDecreasingDetail = [
+  asSent,
+  withShortAnsweredSummary,
+  compact,
+] as const;
 
 export const editedApprovalBlockOf = (
   turnApprovals: readonly ShownApproval[],
@@ -158,15 +181,16 @@ export const editedApprovalBlockOf = (
     turnApprovals[0]?.channelMessageId === channelMessageId
       ? [headerOf(turnApprovals)]
       : [];
-  const textOf = (shape: (approval: ShownApproval) => ShownApproval) =>
+  const textOf = (shape: ApprovalShape) =>
     [
       ...header,
       ...shown.map(({ approval, index }) =>
         shownLineOf(shape(approval), index, turnApprovals)
       ),
     ].join("\n");
-  const full = textOf((approval) => approval);
-  const fitting = full.length <= textLimit ? full : textOf(withShortenedAnswer);
+  const texts = shapesByDecreasingDetail.map(textOf);
+  const fitting =
+    texts.find((text) => text.length <= textLimit) ?? texts.at(-1) ?? "";
   return {
     text: wellFormedPrefix(fitting, textLimit),
     keyboard: shown
