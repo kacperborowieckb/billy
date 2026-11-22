@@ -4,7 +4,7 @@ Status: accepted
 
 Date: 2026-11-22
 
-Ticket [#167](https://github.com/kacperborowieckb/billy/issues/167) of spec [#139](https://github.com/kacperborowieckb/billy/issues/139). It builds on [0027](0027-actions-and-approval.md) and [0029](0029-untrusted-tool-results.md). It supersedes the last "Revisit if" item of 0029, which names two ways that Untrusted Content enters an Owner message Turn and that 0029 does not cover. All other rules of 0027, 0028, and 0029 stay in force.
+Ticket [#167](https://github.com/kacperborowieckb/billy/issues/167) of spec [#139](https://github.com/kacperborowieckb/billy/issues/139). Ticket [#176](https://github.com/kacperborowieckb/billy/issues/176) adds the fourth path. It builds on [0027](0027-actions-and-approval.md) and [0029](0029-untrusted-tool-results.md). It supersedes the last "Revisit if" item of 0029, which names two ways that Untrusted Content enters an Owner message Turn and that 0029 does not cover. All other rules of 0027, 0028, and 0029 stay in force.
 
 ## Decision
 
@@ -12,7 +12,9 @@ Ticket [#167](https://github.com/kacperborowieckb/billy/issues/167) of spec [#13
   - The Open Loops of a connected Proactive Message in the system prompt. For an `untrusted` Note, that text is Untrusted Content.
   - The tool results of earlier Turns in the Conversation.
   - The forwarded messages of earlier Bursts in the Conversation.
-- **How code checks it.** Code looks for the opening Untrusted Content marker in the recent Conversation that the model reads and in the situation part of the system prompt. This is the same check as for a tool result in 0029. The Turn follows the context that the model sees: when the marker leaves the recent Conversation, the Turn can start `owner` again.
+  - An open Pending Approval that a Turn with the `untrusted` Trust Level drafted. Its summary comes from the tool input of that Turn, so it is Untrusted Content in the system prompt for as long as the Approval is `pending` and not expired, also after the forwarded messages leave the recent Conversation.
+- **Trust of a Pending Approval.** Each Pending Approval keeps the Trust Level of its drafting Turn in the column `trust_level`, set when the draft is written (`untrusted` when the Turn was untrusted at that time, also after a tool result changed it). Code reads this column to decide the trust of the next Owner message Turn. It does not look for marker text in the summary. The system prompt also wraps the summary of an `untrusted` Approval in the Untrusted Content marker, so the model reads it as data. A row from before the column existed counts as `untrusted`. The listing of an Approval is status information only: it gives no authority to run a new call, and a typed yes still answers nothing (0027).
+- **How code checks it.** Code looks for the opening Untrusted Content marker in the recent Conversation that the model reads and in the situation part of the system prompt. This is the same check as for a tool result in 0029. The open Pending Approvals add the structured check of the paragraph above. The Turn follows the context that the model sees: when the marker leaves the recent Conversation, the Turn can start `owner` again.
 - **Which Turns.** Only an Owner message Turn, as in 0029. Proactive Turns and Scheduled Task Turns stay `owner`.
 - **Trace.** The Trace records no `trustLevelChange` for such a Turn, as for a Turn that starts `untrusted` from its Burst.
 - **Open Pending Approvals in the prompt.** The system prompt of an Owner message Turn lists the Pending Approvals that are `pending` and not expired. The model then drafts no duplicate, and it tells the Owner to tap the buttons. A typed yes or no never answers an Approval (0027).

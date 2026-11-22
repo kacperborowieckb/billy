@@ -103,6 +103,7 @@ export const turnTrustGiven = (
   context: {
     readonly history: readonly ModelMessage[];
     readonly situation: readonly string[];
+    readonly holdsUntrustedContent?: boolean | undefined;
   },
   earlierMessagesOfTurn: readonly ModelMessage[]
 ): TurnTrust =>
@@ -112,7 +113,8 @@ export const turnTrustGiven = (
       trustLevel:
         source.asksOwnerForApproval === true &&
         source.trustLevel === "owner" &&
-        holdsUntrustedContent(context)
+        (context.holdsUntrustedContent === true ||
+          holdsUntrustedContent(context))
           ? "untrusted"
           : source.trustLevel,
     },

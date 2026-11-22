@@ -3,12 +3,17 @@ import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import type { ApprovalMessage } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
-import { pendingApprovalStates } from "../personal-agent/storage-values.ts";
+import {
+  pendingApprovalStates,
+  trustLevels,
+} from "../personal-agent/storage-values.ts";
 import type {
   ApprovalAnswering,
   ApprovalRunRecord,
 } from "./approval-answering.ts";
+import { newPendingApprovalId } from "./pending-approval-id.ts";
 import { pendingApprovals } from "./pending-approvals-schema.ts";
 
 export const PendingApprovalSchema = Schema.Struct({
@@ -18,6 +23,7 @@ export const PendingApprovalSchema = Schema.Struct({
   toolName: Schema.String,
   frozenInput: Schema.fromJsonString(Schema.Unknown),
   summary: Schema.String,
+  trustLevel: Schema.Literals(trustLevels),
   state: Schema.Literals(pendingApprovalStates),
   createdAt: Schema.String,
   expiresAt: Schema.String,
@@ -48,6 +54,7 @@ export interface DraftRequest {
   readonly toolName: string;
   readonly frozenInput: unknown;
   readonly summary: string;
+  readonly trustLevel: TrustLevel;
   readonly expiresAt: DateTime.Utc;
 }
 
@@ -60,17 +67,6 @@ export interface DraftApproval {
   readonly pendingApprovalId: string;
   readonly summary: string;
 }
-
-const pendingApprovalIdBytes = 9;
-
-export const newPendingApprovalId = () =>
-  btoa(
-    String.fromCodePoint(
-      ...crypto.getRandomValues(new Uint8Array(pendingApprovalIdBytes))
-    )
-  )
-    .replaceAll("+", "-")
-    .replaceAll("/", "_");
 
 const draftsOfTurn = (turnEventId: string) =>
   and(
@@ -91,6 +87,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       toolName: request.toolName,
       frozenInput: encodeFrozenInput(request.frozenInput),
       summary: request.summary,
+      trustLevel: request.trustLevel,
       state: "draft",
       createdAt: DateTime.formatIso(yield* DateTime.now),
       expiresAt: DateTime.formatIso(request.expiresAt),

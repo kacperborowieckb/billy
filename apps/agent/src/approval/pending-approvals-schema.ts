@@ -2,7 +2,10 @@ import { sql } from "drizzle-orm";
 import { check, index, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { valueIn } from "../check-values.ts";
-import { pendingApprovalStates } from "../personal-agent/storage-values.ts";
+import {
+  pendingApprovalStates,
+  trustLevels,
+} from "../personal-agent/storage-values.ts";
 
 export const pendingApprovals = sqliteTable(
   "pending_approvals",
@@ -13,6 +16,9 @@ export const pendingApprovals = sqliteTable(
     toolName: text("tool_name").notNull(),
     frozenInput: text("frozen_input").notNull(),
     summary: text("summary").notNull(),
+    trustLevel: text("trust_level", { enum: trustLevels })
+      .notNull()
+      .default("untrusted"),
     state: text("state", { enum: pendingApprovalStates }).notNull(),
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at").notNull(),
@@ -25,6 +31,10 @@ export const pendingApprovals = sqliteTable(
     check(
       "pending_approvals_state_check",
       valueIn(table.state, pendingApprovalStates)
+    ),
+    check(
+      "pending_approvals_trust_level_check",
+      valueIn(table.trustLevel, trustLevels)
     ),
     check(
       "pending_approvals_draft_check",

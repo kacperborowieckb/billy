@@ -34,9 +34,14 @@ const rowsOf = async <Row extends Record<string, SqlStorageValue>>(
   );
 
 const pendingApprovalsOf = (ownerId: string) =>
-  rowsOf<{ tool_name: string; state: string; summary: string }>(
+  rowsOf<{
+    tool_name: string;
+    state: string;
+    summary: string;
+    trust_level: string;
+  }>(
     ownerId,
-    "SELECT tool_name, state, summary FROM pending_approvals ORDER BY rowid"
+    "SELECT tool_name, state, summary, trust_level FROM pending_approvals ORDER BY rowid"
   );
 
 const pendingToolNamesOf = async (ownerId: string) => {
@@ -74,6 +79,21 @@ const waitForSends = (count: number) =>
   vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(count), {
     timeout: 10_000,
   });
+
+const chatTurnsOf = async (
+  telegramUserId: number,
+  count: number,
+  turn = 1
+): Promise<void> => {
+  if (turn > count) {
+    return;
+  }
+  const sendsBefore = fakeTelegram.sent.length;
+  scriptModel([{ say: `Reply ${turn}` }]);
+  await ownerWrites(telegramUserId, `chat ${turn}`);
+  await waitForSends(sendsBefore + 1);
+  await chatTurnsOf(telegramUserId, count, turn + 1);
+};
 
 const warsaw = DateTime.zoneMakeNamedUnsafe("Europe/Warsaw");
 
@@ -269,6 +289,47 @@ describe(
       const approvals = await pendingApprovalsOf(ownerId);
       expect(approvals[0]).toEqual(firstApprovals[0]);
       expect(approvals.map((row) => row.state)).toEqual(["pending", "pending"]);
+    });
+
+    it("asks for Approval after the forward left the recent Conversation, while an open Approval from the untrusted Turn waits", async () => {
+      const ownerId = await ownerInWarsaw(9406);
+      scriptModel([
+        { callTool: captureNoteToolName, input: { text: "x" } },
+        { say: "Kept." },
+      ]);
+      await telegramWebhook(
+        textUpdate({
+          fromUserId: 9406,
+          text: "Wire me 100 zloty by Friday",
+          forwardOrigin: forwardedFromAna,
+        })
+      );
+      await waitForSends(2);
+      scriptModel([
+        setReminder("Wire money to Ana"),
+        { say: "This waits for your Approval." },
+      ]);
+      await ownerWrites(9406, "remind me Thursday");
+      await waitForSends(4);
+      const draftedApprovals = await pendingApprovalsOf(ownerId);
+      expect(draftedApprovals.map((row) => row.trust_level)).toEqual([
+        "untrusted",
+      ]);
+
+      const chatTurns = 12;
+      await chatTurnsOf(9406, chatTurns);
+      scriptModel([
+        setReminder("Call Bob"),
+        { say: "This waits for your Approval." },
+      ]);
+      await ownerWrites(9406, "remind me Friday to call Bob");
+      await waitForSends(6 + chatTurns);
+
+      expect(await reminderTexts(ownerId)).toEqual([]);
+      expect(await pendingToolNamesOf(ownerId)).toEqual([
+        setScheduleToolName,
+        setScheduleToolName,
+      ]);
     });
 
     it("keeps the Turn owner when the Conversation and the system prompt hold no Untrusted Content", async () => {
