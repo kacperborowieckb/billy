@@ -16,7 +16,7 @@ import { makeScheduleMoves } from "./schedule-moves.ts";
 import { makeScheduleQueries } from "./schedule-queries.ts";
 import type { ScheduleRow } from "./schedule-queries.ts";
 import { makeWriteSchedule } from "./schedule-writer.ts";
-import { recurrenceValuesOf, toSchedule } from "./schedule.ts";
+import { recurrenceValuesOf, requestKeyOf, toSchedule } from "./schedule.ts";
 import type {
   Schedule,
   ScheduleCancelRequest,
@@ -115,6 +115,17 @@ const makeSchedules = Effect.fnUntraced(function* makeSchedules(
     return yield* withLinks(changed);
   });
 
+  const isAlreadySet = (request: SetScheduleRequest) =>
+    queries
+      .findByRequest(
+        request.sourceEventId,
+        requestKeyOf({
+          ...request,
+          openLoopIds: [...new Set(request.openLoopIds)],
+        })
+      )
+      .pipe(Effect.map(Option.isSome));
+
   const change = (request: ScheduleChangeRequest) =>
     rearmedTransaction(changeActive(request));
 
@@ -202,6 +213,7 @@ const makeSchedules = Effect.fnUntraced(function* makeSchedules(
     activeAgentDueBy: queries.activeAgentDueBy,
     agentPromptScheduleId: queries.agentPromptScheduleId,
     requireRoomForScheduledTask,
+    isAlreadySet,
     set,
     change,
     cancel,

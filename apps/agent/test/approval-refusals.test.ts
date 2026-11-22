@@ -12,7 +12,11 @@ import { updateProfileToolName } from "../src/profile/update-profile-tool.ts";
 import { cancelScheduleToolName } from "../src/schedule/cancel-schedule-tool.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
-import { ownerInWarsaw, seedNoteAndReminder } from "./owner-with-data.ts";
+import {
+  closeSeededOpenLoop,
+  ownerInWarsaw,
+  seedNoteAndReminder,
+} from "./owner-with-data.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const forwardedFromAna = {
@@ -180,6 +184,18 @@ describe("A call that its tool would refuse", () => {
 
     await refusedWith(
       { userId: 9309, ownerId },
+      { tool: closeOpenLoopToolName, input: { noteId, reason: "done" } },
+      "has no open Open Loop"
+    );
+  });
+
+  it("gets no Pending Approval to close an Open Loop that an earlier Event closed", async () => {
+    const ownerId = await ownerInWarsaw(9310);
+    const { noteId } = await seedNoteAndReminder(ownerId);
+    await closeSeededOpenLoop(ownerId, noteId);
+
+    await refusedWith(
+      { userId: 9310, ownerId },
       { tool: closeOpenLoopToolName, input: { noteId, reason: "done" } },
       "has no open Open Loop"
     );

@@ -86,12 +86,16 @@ const SetScheduleInput = Schema.Struct({
   ),
 });
 
-const resolveSet = ({
-  notes,
-  ownerTimeZone,
-  mutedAmong,
-  turnOrigin,
-}: ScheduleToolServices) =>
+const resolveSet = (
+  {
+    schedules,
+    notes,
+    ownerTimeZone,
+    mutedAmong,
+    turnOrigin,
+  }: ScheduleToolServices,
+  eventId: string
+) =>
   Effect.fnUntraced(function* resolveSetEffect({
     action,
     localDueTime,
@@ -141,17 +145,31 @@ const resolveSet = ({
         readFailed: scheduleNotSetMessage,
       }
     );
-    const notOpen = yield* closedOpenLoopsAmong(
-      notes,
-      openLoopIds,
-      scheduleNotSetMessage
-    );
+    const setBy = isFollowUp ? ("agent" as const) : ("owner" as const);
+    const alreadySet = yield* schedules
+      .isAlreadySet({
+        action,
+        setBy,
+        noteId,
+        openLoopIds,
+        dueAt: due.value.dueAt,
+        repeat: due.value.repeat,
+        sourceEventId: eventId,
+      })
+      .pipe(
+        Effect.mapError(
+          () => new ToolFailed({ message: scheduleNotSetMessage })
+        )
+      );
+    const notOpen = alreadySet
+      ? []
+      : yield* closedOpenLoopsAmong(notes, openLoopIds, scheduleNotSetMessage);
     if (notOpen.length > 0) {
       return yield* new ToolFailed({ message: notOpenLoopsMessage(notOpen) });
     }
     return {
       action,
-      setBy: isFollowUp ? ("agent" as const) : ("owner" as const),
+      setBy,
       noteId,
       openLoopIds,
       due: due.value,
@@ -176,7 +194,7 @@ export const setScheduleTool = (
     {
       name: setScheduleToolName,
       riskClass: "change",
-      resolve: resolveSet(services),
+      resolve: resolveSet(services, eventId),
       approvalSummary: ({ action, dueText }) =>
         `Set ${scheduleActionText(action)}, ${dueText}`,
       description:

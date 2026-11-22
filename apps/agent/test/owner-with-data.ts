@@ -60,3 +60,20 @@ export const seedNoteAndReminder = async (
         })
       )
   );
+
+export const closeSeededOpenLoop = async (ownerId: string, noteId: string) =>
+  runInDurableObject(
+    await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
+    (instance) =>
+      instance.runtime.runPromise(
+        Notes.pipe(
+          Effect.flatMap((notes) =>
+            notes.closeOpenLoop({
+              noteId,
+              eventId: "seed-close-event",
+              reason: "done",
+            })
+          )
+        )
+      )
+  );

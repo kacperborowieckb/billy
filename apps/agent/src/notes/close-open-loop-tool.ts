@@ -44,7 +44,7 @@ const closeFailureMessage = (cause: Cause.Cause<unknown>) => {
       });
 };
 
-const resolveClose = (notes: NoteToolServices["notes"]) =>
+const resolveClose = (notes: NoteToolServices["notes"], eventId: string) =>
   Effect.fnUntraced(function* resolveCloseEffect({
     noteId,
     reason,
@@ -53,7 +53,19 @@ const resolveClose = (notes: NoteToolServices["notes"]) =>
       consequence: "Nothing was closed.",
       readFailed: openLoopNotClosedMessage,
     });
-    if (note?.openLoop === undefined) {
+    const closedAlready =
+      note?.openLoop?._tag === "Closed" &&
+      (yield* notes
+        .closedInEvent(eventId, noteId)
+        .pipe(
+          Effect.mapError(
+            () => new ToolFailed({ message: openLoopNotClosedMessage })
+          )
+        ));
+    if (
+      note === undefined ||
+      (note.openLoop?._tag !== "Open" && !closedAlready)
+    ) {
       return yield* new ToolFailed({ message: noOpenLoopMessage(noteId) });
     }
     return { note, reason };
@@ -68,7 +80,7 @@ export const closeOpenLoopTool = (
     {
       name: closeOpenLoopToolName,
       riskClass: "change",
-      resolve: resolveClose(notes),
+      resolve: resolveClose(notes, eventId),
       approvalSummary: ({ note, reason }) =>
         `Close the Open Loop of ${noteText(note)} as ${reason}`,
       description:

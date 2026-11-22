@@ -145,6 +145,7 @@ export const makeOpenLoopStore = Effect.fnUntraced(function* makeOpenLoopStore(
 
   return {
     journalOpenLoopChange,
+    closedInEvent,
     closeOpenLoop,
     listOpenLoops,
     openLoopsAmong,
