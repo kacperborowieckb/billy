@@ -2,7 +2,7 @@ import type { ModelMessage } from "ai";
 import { Clock, Effect, Option } from "effect";
 
 import { dropDraftsOf } from "../approval/pending-approvals.ts";
-import { turnTrustOf } from "../approval/turn-trust.ts";
+import { turnTrustGiven } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { TrustLevel } from "../notes/note.ts";
@@ -119,7 +119,7 @@ export const runModelTurn = <Failure, Requirements>({
       return;
     }
     const messages = [...history, ...kind.inputs, ...earlier];
-    const trust = turnTrustOf(kind, earlier);
+    const trust = turnTrustGiven(kind, { history, ...preparation }, earlier);
     const decided = yield* generateWithOutcomeTools({
       eventId: event.eventId,
       earlierMessages: earlier,

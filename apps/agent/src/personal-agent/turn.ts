@@ -26,6 +26,7 @@ import { failWithNotice } from "./delivery.ts";
 import { handleFiredSchedule } from "./fired-schedule.ts";
 import { Inbox } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
+import { openApprovalsSection } from "./open-approvals-section.ts";
 import {
   recordOutcomeMetric,
   recordOutcomeOfConnectedTurn,
@@ -70,6 +71,7 @@ const answer = (
     const silenceServices = yield* Effect.context<Inbox | ProactiveMessages>();
     const settledBySilence: RecordedOutcome[] = [];
     const preparation = yield* connectedProactivePreparation(behavior, burst);
+    const openApprovals = yield* openApprovalsSection;
     const ownerTools = ownerMessageTools(burst, { ...toolServices, behavior });
 
     yield* linkBurst(burst);
@@ -89,6 +91,7 @@ const answer = (
           situation: [
             ...(staySilentToolName in ownerTools ? [staySilentSection] : []),
             ...(reactToolName in ownerTools ? [reactSection] : []),
+            ...openApprovals,
             ...preparation.situation,
           ],
         }),

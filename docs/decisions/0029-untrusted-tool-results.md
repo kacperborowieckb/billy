@@ -15,6 +15,18 @@ Ticket [#146](https://github.com/kacperborowieckb/billy/issues/146) of spec [#13
 - **The exception of `capture_note`.** The exception of 0027 and 0028 holds only when the Burst is `untrusted`, because only then does code mark the new Note `untrusted`. In a Turn that becomes `untrusted` after a tool result, the Burst is the Owner's own words, so the new Note would be an `owner` Note. Its text can copy the Untrusted Content, so `capture_note` needs Approval in that Turn.
 - **Trace.** The Trace of the Turn records the change in `trustLevelChange`: the new Trust Level and the id and name of the tool call whose result changed it. A Turn that starts `untrusted` from its Burst records no change.
 
+## Added by ticket #167: the context of the Turn
+
+The strict rule. An Owner message Turn starts `untrusted` when Untrusted Content reaches it by any of three paths, besides its own Burst:
+
+- The Open Loops of a connected Proactive Message in the system prompt. For an `untrusted` Note, that text is Untrusted Content.
+- The tool results of earlier Turns in the Conversation.
+- The forwarded messages of earlier Bursts in the Conversation.
+
+Code checks the recent Conversation that the model reads and the situation part of the system prompt for the opening Untrusted Content marker, the same check as for a tool result. So the Turn follows the context that the model sees: when the marker leaves the recent Conversation, the Turn can start `owner` again. This decision accepts that a Turn can ask for Approval more often, never less. The Trace records no `trustLevelChange` for such a Turn, as for a Turn that starts `untrusted` from its Burst. Proactive Turns and Scheduled Task Turns stay `owner`.
+
+The system prompt of an Owner message Turn also lists the open Pending Approvals (state `pending`, not expired). The model then drafts no duplicate, and it tells the Owner to tap the buttons. A typed yes or no never answers an Approval (decision 0027).
+
 ## Why
 
 The opening marker is the one place where code turns the stored Trust Level into text for the model. A check of that marker cannot forget a tool, and a list of tools or a flag on each tool can. Reading the results at the end of a step follows the order in which the AI SDK decides and runs calls.
@@ -23,4 +35,4 @@ The opening marker is the one place where code turns the stored Trust Level into
 
 - A tool returns Untrusted Content without the marker, for example the output of an MCP Connection.
 - Proactive Turns or Scheduled Task Turns can ask the Owner for Approval.
-- Untrusted Content enters an Owner message Turn in a way other than its Burst or its own tool results. Today two ways exist, and this decision does not cover them: the Open Loops of a connected Proactive Message in the system prompt, and the tool results of earlier Turns in the Conversation.
+- Untrusted Content enters an Owner message Turn in a way other than the four that this decision covers (its Burst, its own tool results, the Conversation, and the Open Loops of a connected Proactive Message).
