@@ -120,6 +120,18 @@ export const approvalPressDataOf = (
     : undefined;
 };
 
+const answeredSummaryLength = 100;
+
+const wellFormedPrefix = (text: string, length: number) => {
+  const prefix = text.slice(0, length);
+  return prefix.isWellFormed() ? prefix : prefix.slice(0, -1);
+};
+
+const shortened = (summary: string) =>
+  summary.length <= answeredSummaryLength
+    ? summary
+    : `${wellFormedPrefix(summary, answeredSummaryLength)}...`;
+
 const shownLineOf = (
   approval: ShownApproval,
   index: number,
@@ -129,9 +141,15 @@ const shownLineOf = (
     ? lineOf(approval, index, turnApprovals)
     : `${lineOf(approval, index, turnApprovals)}\n${approval.status}`;
 
+const withShortenedAnswer = (approval: ShownApproval): ShownApproval =>
+  approval.status === undefined
+    ? approval
+    : { ...approval, summary: shortened(approval.summary) };
+
 export const editedApprovalBlockOf = (
   turnApprovals: readonly ShownApproval[],
-  channelMessageId: string
+  channelMessageId: string,
+  textLimit: number
 ): ApprovalBlock => {
   const shown = turnApprovals
     .map((approval, index) => ({ approval, index }))
@@ -140,13 +158,17 @@ export const editedApprovalBlockOf = (
     turnApprovals[0]?.channelMessageId === channelMessageId
       ? [headerOf(turnApprovals)]
       : [];
-  return {
-    text: [
+  const textOf = (shape: (approval: ShownApproval) => ShownApproval) =>
+    [
       ...header,
       ...shown.map(({ approval, index }) =>
-        shownLineOf(approval, index, turnApprovals)
+        shownLineOf(shape(approval), index, turnApprovals)
       ),
-    ].join("\n"),
+    ].join("\n");
+  const full = textOf((approval) => approval);
+  const fitting = full.length <= textLimit ? full : textOf(withShortenedAnswer);
+  return {
+    text: wellFormedPrefix(fitting, textLimit),
     keyboard: shown
       .filter(({ approval }) => approval.status === undefined)
       .map(({ approval, index }) => rowOf(approval, index, turnApprovals)),

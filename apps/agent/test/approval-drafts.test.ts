@@ -113,7 +113,11 @@ describe("A draft Pending Approval", () => {
         status: failedStatus("z".repeat(1000)),
       }));
 
-      const edited = editedApprovalBlockOf(shown, channelMessageId);
+      const edited = editedApprovalBlockOf(
+        shown,
+        channelMessageId,
+        telegramTextLimit
+      );
 
       expect(edited.pendingApprovalIds).toEqual(block.pendingApprovalIds);
       expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
@@ -131,9 +135,37 @@ describe("A draft Pending Approval", () => {
           status: failedStatus("z".repeat(1000)),
         },
       ],
-      "1"
+      "1",
+      telegramTextLimit
     );
 
     expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
+  });
+
+  it("shortens answered summaries of a message that was sent before the status room existed", () => {
+    const summary = "x".repeat(2000);
+    const failure = failedStatus("z".repeat(1000));
+    const edited = editedApprovalBlockOf(
+      [
+        {
+          pendingApprovalId: "a",
+          summary,
+          channelMessageId: "1",
+          status: failure,
+        },
+        {
+          pendingApprovalId: "b",
+          summary,
+          channelMessageId: "1",
+          status: failure,
+        },
+      ],
+      "1",
+      telegramTextLimit
+    );
+
+    expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
+    expect(edited.text).toContain(failure);
+    expect(edited.text.isWellFormed()).toBe(true);
   });
 });
