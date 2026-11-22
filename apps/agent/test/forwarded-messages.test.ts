@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
+import { searchNotesToolName } from "../src/notes/search-notes-tool.ts";
 import { updateNoteToolName } from "../src/notes/update-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
@@ -24,21 +25,6 @@ const notesOf = async (ownerId: string) =>
   runInDurableObject(await agentOf(ownerId), (_, state) =>
     state.storage.sql.exec<NoteRow>("SELECT * FROM notes").toArray()
   );
-
-const noteIdsOf = async (ownerId: string) => {
-  const rows = await runInDurableObject(await agentOf(ownerId), (_, state) =>
-    state.storage.sql
-      .exec<{
-        note_id: string;
-        trust_level: string;
-      }>("SELECT note_id, trust_level FROM notes")
-      .toArray()
-  );
-  return {
-    owner: rows.find((row) => row.trust_level === "owner")?.note_id,
-    forwarded: rows.find((row) => row.trust_level === "untrusted")?.note_id,
-  };
-};
 
 const profileOf = async (ownerId: string) =>
   runInDurableObject(await agentOf(ownerId), (instance) =>
@@ -166,8 +152,8 @@ describe("Untrusted Content from forwarded messages", () => {
     expect(result).toContain("[Untrusted Content:");
   });
 
-  it("marks the forwarded text when a later Owner Turn only links that Note", async () => {
-    const ownerId = await addOwner(8208);
+  it("marks the forwarded text when a later Owner Turn reads that Note", async () => {
+    await addOwner(8208);
     scriptModel([
       { callTool: captureNoteToolName, input: { text: "buy milk" } },
       { say: "Kept" },
@@ -188,17 +174,13 @@ describe("Untrusted Content from forwarded messages", () => {
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2), {
       timeout: 10_000,
     });
-    const notes = await noteIdsOf(ownerId);
     scriptModel([
-      {
-        callTool: updateNoteToolName,
-        input: { noteId: notes.forwarded, linkedNoteIds: [notes.owner] },
-      },
-      { say: "Linked" },
+      { callTool: searchNotesToolName, input: { query: "Ignore" } },
+      { say: "Found" },
     ]);
     fakeModel.doGenerateCalls.length = 0;
 
-    await telegramWebhook(textUpdate({ fromUserId: 8208, text: "link them" }));
+    await telegramWebhook(textUpdate({ fromUserId: 8208, text: "find it" }));
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3), {
       timeout: 10_000,
     });
