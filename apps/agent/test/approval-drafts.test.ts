@@ -12,6 +12,7 @@ import {
 } from "../src/approval/approval-summary.ts";
 import { holdsOperatorSecret } from "../src/approval/draft-approval.ts";
 import {
+  allAnsweredNotice,
   approvalBlocksOf,
   editedApprovalBlockOf,
 } from "../src/channels/telegram/approval-keyboard.ts";
@@ -233,5 +234,27 @@ describe("A draft Pending Approval", () => {
     expect(edited.text).toContain(pendingSummary);
     expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
     expect(edited.keyboard).toHaveLength(1);
+  });
+
+  it("sends a non-empty text for a non-first legacy message where every row is answered and none fits", () => {
+    const failure = failedStatus("z".repeat(1000));
+    const rows = [
+      {
+        pendingApprovalId: "first",
+        summary: "f".repeat(50),
+        channelMessageId: "1",
+      },
+      ...Array.from({ length: 60 }, (_, index) => ({
+        pendingApprovalId: `id-${index}`,
+        summary: "a".repeat(60),
+        channelMessageId: "2",
+        status: failure,
+      })),
+    ];
+
+    const edited = editedApprovalBlockOf(rows, "2", telegramTextLimit);
+
+    expect(edited.text).toBe(allAnsweredNotice);
+    expect(edited.keyboard).toEqual([]);
   });
 });

@@ -162,6 +162,8 @@ const compact: AnsweredShape = (approval) => ({
 
 const omitted = "omitted" as const;
 
+export const allAnsweredNotice = "All of these were answered";
+
 const shapesByDecreasingDetail: readonly (AnsweredShape | typeof omitted)[] = [
   asSent,
   withShortSummary,
@@ -181,8 +183,8 @@ export const editedApprovalBlockOf = (
     turnApprovals[0]?.channelMessageId === channelMessageId
       ? [headerOf(turnApprovals)]
       : [];
-  const textOf = (shapeAnswered: AnsweredShape | typeof omitted) =>
-    [
+  const textOf = (shapeAnswered: AnsweredShape | typeof omitted) => {
+    const lines = [
       ...header,
       ...shown.flatMap(({ approval, index }) => {
         if (approval.status === undefined) {
@@ -192,7 +194,9 @@ export const editedApprovalBlockOf = (
           ? []
           : [shownLineOf(shapeAnswered(approval), index, turnApprovals)];
       }),
-    ].join("\n");
+    ];
+    return lines.length === 0 ? allAnsweredNotice : lines.join("\n");
+  };
   const texts = shapesByDecreasingDetail.map(textOf);
   const fitting =
     texts.find((text) => text.length <= textLimit) ?? texts.at(-1) ?? "";
