@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0031](0031-gated-tools-resolve-their-input.md) changes the list of `read` tools under "Risk Class": `quiet_hours` and `proactive_message_budget` are `read` for a call with no value to change.
+
 Date: 2026-11-21
 
 Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. This decision replaces that flag with the Risk Class `read`, and the outcome-refusal rules read the Risk Class of each failed call. For a call in the current model run, the class comes from its tool and its exact input. A call from Turn progress (after a Restart or a reset) has its recorded input. The `recordedInput` function of a tool and the Redactor can change that input, so code counts the call as a read call only when its tool is `read` for every input. All other rules of 0021 stay in force. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
