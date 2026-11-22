@@ -1,6 +1,7 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
 import { updateNoteToolName } from "../src/notes/update-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
@@ -16,6 +17,7 @@ import {
   closeSeededOpenLoop,
   ownerInWarsaw,
   seedNoteAndReminder,
+  seedScheduledTasks,
 } from "./owner-with-data.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
@@ -198,6 +200,27 @@ describe("A call that its tool would refuse", () => {
       { userId: 9310, ownerId },
       { tool: closeOpenLoopToolName, input: { noteId, reason: "done" } },
       "has no open Open Loop"
+    );
+  });
+
+  it("gets no Pending Approval for a Scheduled Task when the limit of active Scheduled Tasks is reached", async () => {
+    const ownerId = await ownerInWarsaw(9311);
+    await seedScheduledTasks(
+      ownerId,
+      defaultBehaviorConfig.maxActiveScheduledTasks
+    );
+
+    await refusedWith(
+      { userId: 9311, ownerId },
+      {
+        tool: setScheduleToolName,
+        input: {
+          action: { _tag: "RunPrompt", prompt: "List my notes" },
+          localDueTime: "2099-11-26T09:00",
+          ownerAskedForSchedule: true,
+        },
+      },
+      `${defaultBehaviorConfig.maxActiveScheduledTasks} active Scheduled Tasks`
     );
   });
 });

@@ -77,3 +77,23 @@ export const closeSeededOpenLoop = async (ownerId: string, noteId: string) =>
         )
       )
   );
+
+export const seedScheduledTasks = async (ownerId: string, count: number) =>
+  runInDurableObject(
+    await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
+    (instance) =>
+      instance.runtime.runPromise(
+        Schedules.pipe(
+          Effect.flatMap((schedules) =>
+            Effect.forEach(Array.from({ length: count }), (_, index) =>
+              schedules.set({
+                action: { _tag: "RunPrompt", prompt: `Seeded task ${index}` },
+                setBy: "owner",
+                dueAt: DateTime.makeUnsafe("2099-11-26T08:00:00Z"),
+                sourceEventId: `seed-task-${index}`,
+              })
+            )
+          )
+        )
+      )
+  );

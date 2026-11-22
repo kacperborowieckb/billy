@@ -213,6 +213,7 @@ const makeSchedules = Effect.fnUntraced(function* makeSchedules(
     activeAgentDueBy: queries.activeAgentDueBy,
     agentPromptScheduleId: queries.agentPromptScheduleId,
     requireRoomForScheduledTask,
+    requireRoomForAgentSchedule: queries.requireRoomForAgentSchedule,
     isAlreadySet,
     set,
     change,

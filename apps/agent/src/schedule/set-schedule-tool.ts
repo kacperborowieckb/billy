@@ -16,6 +16,10 @@ import { notOpenLoopsMessage, refuseNotOpenLoops } from "./not-open-loops.ts";
 import { ScheduleActionInputSchema } from "./schedule-action-input.ts";
 import { resolveScheduleDue } from "./schedule-due.ts";
 import { scheduleOf } from "./schedule-presentation.ts";
+import {
+  requireRoomForAgentSchedule,
+  requireRoomForScheduledTask,
+} from "./schedule-room.ts";
 import { scheduleActionText, scheduleDueText } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
 
@@ -93,6 +97,8 @@ const resolveSet = (
     ownerTimeZone,
     mutedAmong,
     turnOrigin,
+    maxActiveScheduledTasks,
+    maxActiveAgentSchedules,
   }: ScheduleToolServices,
   eventId: string
 ) =>
@@ -161,11 +167,28 @@ const resolveSet = (
           () => new ToolFailed({ message: scheduleNotSetMessage })
         )
       );
-    const notOpen = alreadySet
-      ? []
-      : yield* closedOpenLoopsAmong(notes, openLoopIds, scheduleNotSetMessage);
-    if (notOpen.length > 0) {
-      return yield* new ToolFailed({ message: notOpenLoopsMessage(notOpen) });
+    if (!alreadySet) {
+      const notOpen = yield* closedOpenLoopsAmong(
+        notes,
+        openLoopIds,
+        scheduleNotSetMessage
+      );
+      if (notOpen.length > 0) {
+        return yield* new ToolFailed({ message: notOpenLoopsMessage(notOpen) });
+      }
+      if (setBy === "agent") {
+        yield* requireRoomForAgentSchedule(
+          schedules,
+          maxActiveAgentSchedules,
+          scheduleNotSetMessage
+        );
+      } else if (action._tag === "RunPrompt") {
+        yield* requireRoomForScheduledTask(
+          schedules,
+          maxActiveScheduledTasks,
+          scheduleNotSetMessage
+        );
+      }
     }
     return {
       action,

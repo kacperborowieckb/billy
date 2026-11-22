@@ -16,6 +16,7 @@ import {
   noActiveScheduleMessage,
   scheduleOf,
 } from "./schedule-presentation.ts";
+import { requireRoomForScheduledTask } from "./schedule-room.ts";
 import {
   scheduleActionText,
   scheduleDueText,
@@ -72,7 +73,11 @@ const ChangeScheduleInput = Schema.Struct({
   ),
 });
 
-const resolveChange = ({ schedules, ownerTimeZone }: ScheduleToolServices) =>
+const resolveChange = ({
+  schedules,
+  ownerTimeZone,
+  maxActiveScheduledTasks,
+}: ScheduleToolServices) =>
   Effect.fnUntraced(function* resolveChangeEffect({
     scheduleId,
     action,
@@ -106,6 +111,13 @@ const resolveChange = ({ schedules, ownerTimeZone }: ScheduleToolServices) =>
       scheduleId,
       scheduleNotChangedMessage
     );
+    if (action?._tag === "RunPrompt" && schedule.action._tag !== "RunPrompt") {
+      yield* requireRoomForScheduledTask(
+        schedules,
+        maxActiveScheduledTasks,
+        scheduleNotChangedMessage
+      );
+    }
     return {
       schedule,
       action,
