@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 import { DateTime, Effect } from "effect";
 
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
@@ -17,6 +17,6 @@ export const openApprovals = Effect.gen(function* openApprovalsEffect() {
         gt(pendingApprovals.expiresAt, now)
       )
     )
-    .orderBy(sql`rowid`);
+    .orderBy(asc(pendingApprovals.position));
   return rows.map((row) => decodePendingApproval(row));
 });

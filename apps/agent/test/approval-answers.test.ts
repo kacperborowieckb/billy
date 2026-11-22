@@ -52,7 +52,7 @@ const rowsOf = async <Row extends Record<string, SqlStorageValue>>(
 const pendingApprovalsOf = (ownerId: string) =>
   rowsOf<PendingApprovalRow>(
     ownerId,
-    "SELECT * FROM pending_approvals ORDER BY rowid"
+    "SELECT * FROM pending_approvals ORDER BY position"
   );
 
 const countOf = async (ownerId: string, table: string) => {

@@ -43,12 +43,7 @@ const burstOfTurn = Effect.fnUntraced(function* burstOfTurn(
 ) {
   const journal = yield* Journal;
   const inbox = yield* Inbox;
-  const linkedEventIds = (yield* journal.readOfKind("AnsweredByTurn")).flatMap(
-    ({ record }) =>
-      record._tag === "AnsweredByTurn" && record.turnEventId === turnEventId
-        ? [record.eventId]
-        : []
-  );
+  const linkedEventIds = yield* journal.eventIdsAnsweredByTurn(turnEventId);
   const events = yield* inbox.ownerMessagesWithIds([
     turnEventId,
     ...linkedEventIds,

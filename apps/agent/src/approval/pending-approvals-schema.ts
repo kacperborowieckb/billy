@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { check, index, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  check,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 import { valueIn } from "../check-values.ts";
 import {
@@ -11,6 +18,7 @@ export const pendingApprovals = sqliteTable(
   "pending_approvals",
   {
     pendingApprovalId: text("pending_approval_id").primaryKey(),
+    position: integer("position").notNull(),
     turnEventId: text("turn_event_id").notNull(),
     toolCallId: text("tool_call_id").notNull(),
     toolName: text("tool_name").notNull(),
@@ -26,6 +34,7 @@ export const pendingApprovals = sqliteTable(
     result: text("result"),
   },
   (table) => [
+    uniqueIndex("pending_approvals_position").on(table.position),
     index("pending_approvals_turn").on(table.turnEventId, table.state),
     index("pending_approvals_state_expiry").on(table.state, table.expiresAt),
     check(
