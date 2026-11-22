@@ -3,6 +3,7 @@ import { DateTime, Duration, Effect, Option, Result } from "effect";
 import { toolNamed } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ApprovalRequestedCall } from "../model-gateway/model-step.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import { fitsOneApprovalRow } from "./approval-summary.ts";
 import { PendingApprovals } from "./pending-approvals.ts";
@@ -29,6 +30,7 @@ export type DraftOutcome =
 
 export interface ApprovalDrafting {
   readonly turnEventId: string;
+  readonly trustLevel: TrustLevel;
   readonly tools: AgentTools;
   readonly expiryMillis: number;
 }
@@ -56,7 +58,7 @@ export const holdsOperatorSecret = (
 };
 
 export const draftApproval = Effect.fnUntraced(function* draftApproval(
-  { turnEventId, tools, expiryMillis }: ApprovalDrafting,
+  { turnEventId, trustLevel, tools, expiryMillis }: ApprovalDrafting,
   call: ApprovalRequestedCall
 ) {
   const redactor = yield* Redactor;
@@ -90,6 +92,7 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
     toolName: call.name,
     frozenInput: call.input,
     summary: shownSummary,
+    trustLevel,
     expiresAt: DateTime.addDuration(
       now,
       Duration.millis(tool.approvalExpiryMillis ?? expiryMillis)

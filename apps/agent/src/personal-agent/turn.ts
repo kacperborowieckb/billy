@@ -88,10 +88,11 @@ const answer = (
         asksOwnerForApproval: true,
         prepare: Effect.succeed({
           ...preparation,
+          holdsUntrustedContent: openApprovals.holdsUntrustedContent,
           situation: [
             ...(staySilentToolName in ownerTools ? [staySilentSection] : []),
             ...(reactToolName in ownerTools ? [reactSection] : []),
-            ...openApprovals,
+            ...openApprovals.situation,
             ...preparation.situation,
           ],
         }),

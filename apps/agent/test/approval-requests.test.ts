@@ -559,6 +559,7 @@ describe("Approval messages", () => {
                 toolName: setScheduleToolName,
                 frozenInput: reminderInput,
                 summary: reminderSummary,
+                trustLevel: "owner" as const,
                 expiresAt: DateTime.makeUnsafe("2026-11-22T09:00:00Z"),
               };
               yield* pendingApprovals.draft({ ...request, toolCallId: "a" });
