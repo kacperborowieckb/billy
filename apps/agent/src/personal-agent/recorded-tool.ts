@@ -17,18 +17,20 @@ export interface RecordedToolServices {
   readonly redactor: Redactor["Service"];
 }
 
-export type RecordedToolApproval<Input, Target> =
+export type RecordedToolApproval<Input, Output, Failure, Target> =
   | {
       readonly riskClass: "read";
       readonly riskClassOfInput?: undefined;
       readonly resolve?: undefined;
       readonly approvalSummary?: undefined;
+      readonly work: (input: Input) => Effect.Effect<Output, Failure>;
     }
   | {
       readonly riskClass: RiskClass;
       readonly riskClassOfInput?: (input: Input) => RiskClass;
       readonly resolve: (input: Input) => Effect.Effect<Target, ToolFailed>;
       readonly approvalSummary: (target: Target) => string;
+      readonly work: (target: Target) => Effect.Effect<Output, Failure>;
     };
 
 export type RecordedToolDefinition<
@@ -36,14 +38,13 @@ export type RecordedToolDefinition<
   Output extends JSONValue,
   Failure,
   Target = Input,
-> = RecordedToolApproval<Input, Target> & {
+> = RecordedToolApproval<Input, Output, Failure, Target> & {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Schema.Codec<Input, unknown>;
   readonly failureMessage: string | ((cause: Cause.Cause<unknown>) => string);
   readonly recordedInput?: (input: Input) => JSONValue;
   readonly marksItsWorkUntrusted?: (input: Input) => boolean;
-  readonly work: (target: Target) => Effect.Effect<Output, Failure>;
 };
 
 const toolFailedFrom =
@@ -62,8 +63,13 @@ const toolFailedFrom =
       )
     );
 
-const approvalOf = <Input extends JSONValue, Target>(
-  definition: RecordedToolApproval<Input, Target> & {
+const approvalOf = <
+  Input extends JSONValue,
+  Output extends JSONValue,
+  Failure,
+  Target,
+>(
+  definition: RecordedToolApproval<Input, Output, Failure, Target> & {
     readonly inputSchema: Schema.Codec<Input, unknown>;
   }
 ): ToolApproval<Input> => {
@@ -96,7 +102,7 @@ const workOf = <
   input: Input
 ) =>
   definition.resolve === undefined
-    ? definition.work(input as unknown as Target)
+    ? definition.work(input)
     : definition.resolve(input).pipe(Effect.flatMap(definition.work));
 
 export const recordedTool = <
