@@ -141,16 +141,7 @@ export const muteProactiveMessageTool = (
     }
   );
 
-  const resolveMute = (input: typeof MuteInput.Type) =>
-    resolveMuteEffect(input).pipe(
-      Effect.mapError((error) =>
-        error instanceof ToolFailed
-          ? error
-          : new ToolFailed({ message: muteNotChangedMessage })
-      )
-    );
-
-  const resolveMuteEffect = Effect.fnUntraced(function* resolveMuteEffect(
+  const resolveMuteTargets = Effect.fnUntraced(function* resolveMuteTargets(
     input: typeof MuteInput.Type
   ) {
     if (input.action === "list") {
@@ -170,6 +161,15 @@ export const muteProactiveMessageTool = (
       ),
     } as const;
   });
+
+  const resolveMute = (input: typeof MuteInput.Type) =>
+    resolveMuteTargets(input).pipe(
+      Effect.mapError((failure) =>
+        failure instanceof ToolFailed
+          ? failure
+          : new ToolFailed({ message: muteNotChangedMessage })
+      )
+    );
 
   return recordedTool(
     { eventId, progress, redactor },

@@ -40,14 +40,21 @@ type BudgetRequest =
   | { readonly _tag: "Read" }
   | { readonly _tag: "Set"; readonly sends: number };
 
-const requestedBudget = ({ sends }: typeof ProactiveMessageBudgetInput.Type) =>
-  sends === undefined
-    ? Effect.succeed<BudgetRequest>({ _tag: "Read" })
-    : Schema.is(ProactiveMessageBudgetSchema)(sends)
-      ? Effect.succeed<BudgetRequest>({ _tag: "Set", sends })
-      : Effect.fail(
-          new ToolFailed({ message: invalidProactiveMessageBudgetMessage })
-        );
+const requestedBudget = ({
+  sends,
+}: typeof ProactiveMessageBudgetInput.Type): Effect.Effect<
+  BudgetRequest,
+  ToolFailed
+> => {
+  if (sends === undefined) {
+    return Effect.succeed({ _tag: "Read" });
+  }
+  return Schema.is(ProactiveMessageBudgetSchema)(sends)
+    ? Effect.succeed({ _tag: "Set", sends })
+    : Effect.fail(
+        new ToolFailed({ message: invalidProactiveMessageBudgetMessage })
+      );
+};
 
 export const proactiveMessageBudgetTool = (
   {

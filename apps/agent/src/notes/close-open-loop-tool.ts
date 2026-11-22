@@ -53,7 +53,7 @@ const resolveClose = (notes: NoteToolServices["notes"]) =>
       consequence: "Nothing was closed.",
       readFailed: openLoopNotClosedMessage,
     });
-    if (note?.openLoop?._tag !== "Open") {
+    if (note?.openLoop === undefined) {
       return yield* new ToolFailed({ message: noOpenLoopMessage(noteId) });
     }
     return { note, reason };
