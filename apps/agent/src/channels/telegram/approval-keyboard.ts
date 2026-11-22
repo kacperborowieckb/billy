@@ -143,19 +143,16 @@ const shownLineOf = (
     ? lineOf(approval, index, turnApprovals)
     : `${lineOf(approval, index, turnApprovals)}\n${approval.status}`;
 
-type ApprovalShape = (approval: ShownApproval) => ShownApproval;
+type AnsweredShape = (approval: ShownApproval) => ShownApproval;
 
-const asSent: ApprovalShape = (approval) => approval;
+const asSent: AnsweredShape = (approval) => approval;
 
-const withShortAnsweredSummary: ApprovalShape = (approval) =>
-  approval.status === undefined
-    ? approval
-    : {
-        ...approval,
-        summary: shortened(approval.summary, answeredSummaryLength),
-      };
+const withShortSummary: AnsweredShape = (approval) => ({
+  ...approval,
+  summary: shortened(approval.summary, answeredSummaryLength),
+});
 
-const compact: ApprovalShape = (approval) => ({
+const compact: AnsweredShape = (approval) => ({
   ...approval,
   summary: shortened(approval.summary, compactSummaryLength),
   ...(approval.status === undefined
@@ -163,11 +160,14 @@ const compact: ApprovalShape = (approval) => ({
     : { status: shortened(approval.status, compactStatusLength) }),
 });
 
-const shapesByDecreasingDetail = [
+const omitted = "omitted" as const;
+
+const shapesByDecreasingDetail: readonly (AnsweredShape | typeof omitted)[] = [
   asSent,
-  withShortAnsweredSummary,
+  withShortSummary,
   compact,
-] as const;
+  omitted,
+];
 
 export const editedApprovalBlockOf = (
   turnApprovals: readonly ShownApproval[],
@@ -181,18 +181,23 @@ export const editedApprovalBlockOf = (
     turnApprovals[0]?.channelMessageId === channelMessageId
       ? [headerOf(turnApprovals)]
       : [];
-  const textOf = (shape: ApprovalShape) =>
+  const textOf = (shapeAnswered: AnsweredShape | typeof omitted) =>
     [
       ...header,
-      ...shown.map(({ approval, index }) =>
-        shownLineOf(shape(approval), index, turnApprovals)
-      ),
+      ...shown.flatMap(({ approval, index }) => {
+        if (approval.status === undefined) {
+          return [shownLineOf(approval, index, turnApprovals)];
+        }
+        return shapeAnswered === omitted
+          ? []
+          : [shownLineOf(shapeAnswered(approval), index, turnApprovals)];
+      }),
     ].join("\n");
   const texts = shapesByDecreasingDetail.map(textOf);
   const fitting =
     texts.find((text) => text.length <= textLimit) ?? texts.at(-1) ?? "";
   return {
-    text: wellFormedPrefix(fitting, textLimit),
+    text: fitting,
     keyboard: shown
       .filter(({ approval }) => approval.status === undefined)
       .map(({ approval, index }) => rowOf(approval, index, turnApprovals)),

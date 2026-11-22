@@ -21,6 +21,8 @@ import { Redactor } from "../src/tracing/redactor.ts";
 const redactorWith = (secrets: readonly string[]) =>
   Effect.runSync(Redactor.pipe(Effect.provide(Redactor.layer(secrets))));
 
+const summaryOf = (index: number) => `${index}: ${"y".repeat(80)}`;
+
 describe("A draft Pending Approval", () => {
   it("finds an Operator secret in any string or key of the input, also one that JSON would escape", () => {
     const redactor = redactorWith(['se"cr\\et']);
@@ -186,6 +188,50 @@ describe("A draft Pending Approval", () => {
       lines.filter((line) => line.startsWith("Approved, but"))
     ).toHaveLength(19);
     expect(lines.some((line) => line.startsWith("20. "))).toBe(true);
+    expect(edited.keyboard).toHaveLength(1);
+  });
+
+  it("keeps the full summary of every pending row of a legacy message with 40 rows and failed statuses", () => {
+    const failure = failedStatus("z".repeat(1000));
+    const rows = Array.from({ length: 40 }, (_, index) => ({
+      pendingApprovalId: `id-${index}`,
+      summary: summaryOf(index),
+      channelMessageId: "1",
+      ...(index < 30 ? { status: failure } : {}),
+    }));
+
+    const edited = editedApprovalBlockOf(rows, "1", telegramTextLimit);
+
+    expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
+    expect(edited.keyboard).toHaveLength(10);
+    for (let index = 30; index < 40; index += 1) {
+      expect(edited.text).toContain(`${index + 1}. ${summaryOf(index)}`);
+    }
+  });
+
+  it("keeps the full summary of a pending row when the answered rows cannot be shown", () => {
+    const failure = failedStatus("z".repeat(1000));
+    const pendingSummary = "p".repeat(3500);
+    const edited = editedApprovalBlockOf(
+      [
+        ...Array.from({ length: 5 }, (_, index) => ({
+          pendingApprovalId: `id-${index}`,
+          summary: "a".repeat(100),
+          channelMessageId: "1",
+          status: failure,
+        })),
+        {
+          pendingApprovalId: "id-pending",
+          summary: pendingSummary,
+          channelMessageId: "1",
+        },
+      ],
+      "1",
+      telegramTextLimit
+    );
+
+    expect(edited.text).toContain(pendingSummary);
+    expect(edited.text.length).toBeLessThanOrEqual(telegramTextLimit);
     expect(edited.keyboard).toHaveLength(1);
   });
 });
