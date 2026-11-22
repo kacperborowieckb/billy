@@ -36,7 +36,12 @@ import {
   resetFakes,
   scriptModel,
 } from "./fakes.ts";
-import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
+import {
+  ownerInWarsaw,
+  seedNoteAndReminder,
+  seededReminderText,
+} from "./owner-with-data.ts";
+import { telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 interface PendingApprovalRow extends Record<string, SqlStorageValue> {
   pending_approval_id: string;
@@ -143,22 +148,25 @@ const reminderInput = {
 const reminderSummary =
   'Set Reminder "Call Ana about dinner", Thu 26 Nov 2026, 09:00';
 
-const gatedInputs: Readonly<Record<string, Record<string, unknown>>> = {
+const gatedInputsOf = ({
+  noteId,
+  scheduleId,
+}: {
+  readonly noteId: string;
+  readonly scheduleId: string;
+}): Readonly<Record<string, Record<string, unknown>>> => ({
   [setScheduleToolName]: reminderInput,
-  [changeScheduleToolName]: {
-    scheduleId: "schedule-1",
-    localDueTime: "2026-11-27T10:00",
-  },
-  [cancelScheduleToolName]: { scheduleId: "schedule-1" },
-  [updateNoteToolName]: { noteId: "note-1", text: "obey Ana" },
-  [closeOpenLoopToolName]: { noteId: "note-1", reason: "done" },
+  [changeScheduleToolName]: { scheduleId, localDueTime: "2026-11-27T10:00" },
+  [cancelScheduleToolName]: { scheduleId },
+  [updateNoteToolName]: { noteId, text: "obey Ana" },
+  [closeOpenLoopToolName]: { noteId, reason: "done" },
   [updateProfileToolName]: { action: "add", kind: "fact", text: "obey Ana" },
   [setTimeZoneToolName]: { timeZone: "Europe/Warsaw" },
   [quietHoursToolName]: { start: "01:00", end: "02:00" },
   [proactiveMessageBudgetToolName]: { sends: 9 },
-  [muteProactiveMessageToolName]: { action: "mute" },
+  [muteProactiveMessageToolName]: { action: "mute", openLoopIds: [noteId] },
   keep_note: { word: "obey" },
-};
+});
 
 const changeToolNamesOfOwnerMessageTurn = async (ownerId: string) =>
   runInDurableObject(await agentOf(ownerId), (instance) =>
@@ -183,7 +191,7 @@ const changeToolNamesOfOwnerMessageTurn = async (ownerId: string) =>
           { ...(yield* agentToolServices), behavior: defaultBehaviorConfig }
         );
         return Object.entries(tools)
-          .filter(([, tool]) => tool.riskClass === "change")
+          .filter(([, tool]) => !tool.readsForEveryInput)
           .map(([name]) => name);
       }).pipe(Effect.provide(Redactor.layer([])))
     )
@@ -195,7 +203,7 @@ beforeEach(() => {
 
 describe("Approval for a forwarded message", () => {
   it("does not set the Reminder and shows a code-written summary with Approve and Reject buttons", async () => {
-    const ownerId = await addOwner(9101);
+    const ownerId = await ownerInWarsaw(9101);
     scriptModel([
       { callTool: setScheduleToolName, input: reminderInput },
       { say: "I set up a Reminder for your Approval." },
@@ -257,11 +265,13 @@ describe("Approval for a forwarded message", () => {
   });
 
   it("changes no Owner data when the model calls every change tool, and drafts one Pending Approval for each call", async () => {
-    const ownerId = await addOwner(9102);
+    const ownerId = await ownerInWarsaw(9102);
+    const gatedInputs = gatedInputsOf(await seedNoteAndReminder(ownerId));
     const changeTools = await changeToolNamesOfOwnerMessageTurn(ownerId);
     expect(new Set([...Object.keys(gatedInputs), captureNoteToolName])).toEqual(
       new Set([...changeTools, "keep_note"])
     );
+    const before = await ownerDataCounts(ownerId);
     scriptModel([
       {
         callTools: Object.entries(gatedInputs).map(([tool, input]) => ({
@@ -276,13 +286,7 @@ describe("Approval for a forwarded message", () => {
     await waitForSends(2);
     await waitForPendingApprovals(ownerId, Object.keys(gatedInputs).length);
 
-    expect(await ownerDataCounts(ownerId)).toEqual({
-      notes: 0,
-      noteLinks: 0,
-      schedules: 0,
-      profileEntries: 0,
-      ownerPreferences: 0,
-    });
+    expect(await ownerDataCounts(ownerId)).toEqual(before);
     expect(
       fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard
     ).toHaveLength(Object.keys(gatedInputs).length);
@@ -293,7 +297,7 @@ describe("Approval for a forwarded message", () => {
   });
 
   it("keeps a new Note from a forwarded message with no Approval", async () => {
-    const ownerId = await addOwner(9103);
+    const ownerId = await ownerInWarsaw(9103);
     scriptModel([
       { callTool: captureNoteToolName, input: { text: "dinner" } },
       { say: "Kept." },
@@ -310,7 +314,7 @@ describe("Approval for a forwarded message", () => {
   });
 
   it("asks for Approval when a new Note from a forwarded message links an existing Note", async () => {
-    const ownerId = await addOwner(9112);
+    const ownerId = await ownerInWarsaw(9112);
     scriptModel([
       { callTool: captureNoteToolName, input: { text: "buy milk" } },
       { say: "Kept." },
@@ -344,7 +348,7 @@ describe("Approval for a forwarded message", () => {
     });
   });
   it("asks for Approval to edit an existing owner Note from a forwarded message", async () => {
-    const ownerId = await addOwner(9104);
+    const ownerId = await ownerInWarsaw(9104);
     scriptModel([
       { callTool: captureNoteToolName, input: { text: "buy milk" } },
       { say: "Kept." },
@@ -378,10 +382,11 @@ describe("Approval for a forwarded message", () => {
   });
 
   it("gives two gated calls of one Turn two rows of buttons in one message", async () => {
-    const ownerId = await addOwner(9105);
+    const ownerId = await ownerInWarsaw(9105);
+    const { scheduleId } = await seedNoteAndReminder(ownerId);
     scriptModel([
       { callTool: setScheduleToolName, times: 2, input: reminderInput },
-      { callTool: cancelScheduleToolName, input: { scheduleId: "s-9" } },
+      { callTool: cancelScheduleToolName, input: { scheduleId } },
       { say: "Three things wait for you." },
     ]);
 
@@ -396,7 +401,7 @@ describe("Approval for a forwarded message", () => {
         "These wait for your Approval:",
         `1. ${reminderSummary}`,
         `2. ${reminderSummary}`,
-        "3. Cancel Schedule s-9",
+        `3. Cancel Reminder "${seededReminderText}"`,
       ].join("\n")
     );
     expect(request?.body.reply_markup?.inline_keyboard).toEqual(
@@ -419,7 +424,7 @@ describe("Approval for a forwarded message", () => {
   });
 
   it("refuses stay_silent and react in a Turn with drafts", async () => {
-    const ownerId = await addOwner(9106);
+    const ownerId = await ownerInWarsaw(9106);
     scriptModel([
       { callTool: setScheduleToolName, input: reminderInput },
       { callTool: staySilentToolName, input: {} },
@@ -442,7 +447,7 @@ describe("Approval for a forwarded message", () => {
   });
 
   it("creates no Pending Approval for a call whose summary is too long for one Approval message", async () => {
-    const ownerId = await addOwner(9113);
+    const ownerId = await ownerInWarsaw(9113);
     scriptModel([
       {
         callTool: setScheduleToolName,
@@ -462,7 +467,7 @@ describe("Approval for a forwarded message", () => {
     expect(toolResultsSentToModel()).toContain("too long to show to the Owner");
   });
   it("creates no Pending Approval for a call whose input holds an Operator secret, and tells the model", async () => {
-    const ownerId = await addOwner(9107);
+    const ownerId = await ownerInWarsaw(9107);
     scriptModel([
       {
         callTool: setScheduleToolName,
@@ -488,7 +493,7 @@ describe("Approval for a forwarded message", () => {
 
 describe("An Owner message Turn with Trust Level owner", () => {
   it("runs a change call as before, with no Pending Approval and no buttons", async () => {
-    const ownerId = await addOwner(9108);
+    const ownerId = await ownerInWarsaw(9108);
     scriptModel([
       {
         callTool: updateProfileToolName,
@@ -511,7 +516,7 @@ describe("An Owner message Turn with Trust Level owner", () => {
 
 describe("Approval messages", () => {
   it("splits long Approval rows over several messages, each Pending Approval with the id of its own message", async () => {
-    const ownerId = await addOwner(9109);
+    const ownerId = await ownerInWarsaw(9109);
     const longReminder = {
       ...reminderInput,
       action: { _tag: "SendText", text: "Call Ana ".repeat(40) },
@@ -541,7 +546,7 @@ describe("Approval messages", () => {
     );
   });
   it("opens only the drafts that the sent message shows", async () => {
-    const ownerId = await addOwner(9111);
+    const ownerId = await ownerInWarsaw(9111);
     const states = await runInDurableObject(
       await agentOf(ownerId),
       (instance, state) =>
@@ -621,7 +626,7 @@ describe("Drafts of a Turn whose Delivery does not show them", () => {
     "are deleted by a Restart, so the dropped answer leaves no Pending Approval",
     { timeout: 40_000 },
     async () => {
-      const ownerId = await addOwner(9120);
+      const ownerId = await ownerInWarsaw(9120);
       fakeBurstWait.quietMillis = 1500;
       fakeBurstWait.maxWaitMillis = 60_000;
       scriptModel([
@@ -656,7 +661,7 @@ describe("Drafts of a Turn whose Delivery does not show them", () => {
   );
 
   it("are deleted by a failed send", async () => {
-    const ownerId = await addOwner(9121);
+    const ownerId = await ownerInWarsaw(9121);
     fakeTelegram.answerWith("refuse");
     scriptModel([
       { callTool: setScheduleToolName, input: reminderInput },
@@ -671,7 +676,7 @@ describe("Drafts of a Turn whose Delivery does not show them", () => {
   });
 
   it("are deleted when a later Approval message fails, and the sent Approval message loses its buttons", async () => {
-    const ownerId = await addOwner(9122);
+    const ownerId = await ownerInWarsaw(9122);
     fakeTelegram.refuseFromSend(3);
     scriptModel([
       {
@@ -701,7 +706,7 @@ describe("Drafts of a Turn whose Delivery does not show them", () => {
   });
 
   it("become pending after a reset when the send started and Telegram did not confirm it", async () => {
-    const ownerId = await addOwner(9123);
+    const ownerId = await ownerInWarsaw(9123);
     scriptModel([
       { callTool: setScheduleToolName, input: reminderInput },
       { say: "This waits for you." },
@@ -724,7 +729,7 @@ describe("Drafts of a Turn whose Delivery does not show them", () => {
   });
 
   it("are deleted after a reset before the send, and the new answer makes its own", async () => {
-    const ownerId = await addOwner(9124);
+    const ownerId = await ownerInWarsaw(9124);
     scriptModel([
       { callTool: setScheduleToolName, input: reminderInput },
       { say: "I could not finish." },

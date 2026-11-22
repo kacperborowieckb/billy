@@ -21,8 +21,8 @@ import {
   scriptModel,
 } from "./fakes.ts";
 import type { ScriptedToolCall } from "./fakes.ts";
+import { ownerInWarsaw } from "./owner-with-data.ts";
 import {
-  addOwner,
   pressUpdate,
   telegramWebhook,
   textUpdate,
@@ -152,7 +152,7 @@ const askForApprovals = async (
   userId: number,
   calls: readonly ScriptedToolCall[]
 ) => {
-  const ownerId = await addOwner(userId);
+  const ownerId = await ownerInWarsaw(userId);
   scriptModel([{ callTools: calls }, { say: "This waits for your Approval." }]);
   await forward(userId);
   await waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));

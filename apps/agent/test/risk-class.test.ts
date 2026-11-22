@@ -36,6 +36,8 @@ const readTools = new Set([
   "list_schedules",
   "stay_silent",
   "react",
+  "quiet_hours",
+  "proactive_message_budget",
 ]);
 
 const expectedRiskClassOf = (toolName: string): RiskClass =>
@@ -102,6 +104,20 @@ describe("Risk Class", () => {
         expect(tool.riskClass, where).toBe(expectedRiskClassOf(toolName));
       }
     }
+  });
+
+  it("is read for quiet_hours and proactive_message_budget with no value to change, and change otherwise", async () => {
+    const { ownerMessage } = await everyToolSet();
+    const quietHours = ownerMessage?.["quiet_hours"];
+    const budget = ownerMessage?.["proactive_message_budget"];
+
+    expect(quietHours?.riskClassOf({})).toBe("read");
+    expect(quietHours?.riskClassOf({ start: "22:00" })).toBe("change");
+    expect(quietHours?.riskClassOf({ start: "22:00", end: "07:00" })).toBe(
+      "change"
+    );
+    expect(budget?.riskClassOf({})).toBe("read");
+    expect(budget?.riskClassOf({ sends: 3 })).toBe("change");
   });
 
   it("can be raised by the input function", () => {

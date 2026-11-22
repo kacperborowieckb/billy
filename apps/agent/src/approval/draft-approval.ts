@@ -1,4 +1,4 @@
-import { DateTime, Duration, Effect, Option } from "effect";
+import { DateTime, Duration, Effect, Option, Result } from "effect";
 
 import { toolNamed } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
@@ -68,11 +68,18 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
   if (holdsOperatorSecret(redactor, call.input)) {
     return refused(operatorSecretRefusal);
   }
-  const summary = yield* tool.approvalSummaryOf(call.input);
-  if (Option.isNone(summary)) {
+  const summary = yield* tool.approvalSummaryOf(call.input).pipe(
+    Effect.map(Option.getOrUndefined),
+    Effect.mapError(({ message }) => message),
+    Effect.result
+  );
+  if (Result.isFailure(summary)) {
+    return refused(summary.failure);
+  }
+  if (summary.success === undefined) {
     return refused(noSummaryRefusal);
   }
-  const shownSummary = redactor.redact(summary.value);
+  const shownSummary = redactor.redact(summary.success);
   if (!fitsOneApprovalRow(shownSummary)) {
     return refused(summaryTooLongRefusal);
   }

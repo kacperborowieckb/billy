@@ -1,8 +1,10 @@
 import { Cause, Effect, Option, Schema } from "effect";
 
+import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
+import { knownNotesOf } from "./known-notes.ts";
 import { NoOpenLoop } from "./no-open-loop.ts";
-import { storedNoteText } from "./note-summary.ts";
+import { noteText } from "./note-summary.ts";
 import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import { OpenLoopClosedReasonSchema } from "./open-loop.ts";
@@ -42,6 +44,33 @@ const closeFailureMessage = (cause: Cause.Cause<unknown>) => {
       });
 };
 
+const resolveClose = (notes: NoteToolServices["notes"], eventId: string) =>
+  Effect.fnUntraced(function* resolveCloseEffect({
+    noteId,
+    reason,
+  }: typeof CloseOpenLoopInput.Type) {
+    const [note] = yield* knownNotesOf(notes, [noteId], {
+      consequence: "Nothing was closed.",
+      readFailed: openLoopNotClosedMessage,
+    });
+    const closedAlready =
+      note?.openLoop?._tag === "Closed" &&
+      (yield* notes
+        .closedInEvent(eventId, noteId)
+        .pipe(
+          Effect.mapError(
+            () => new ToolFailed({ message: openLoopNotClosedMessage })
+          )
+        ));
+    if (
+      note === undefined ||
+      (note.openLoop?._tag !== "Open" && !closedAlready)
+    ) {
+      return yield* new ToolFailed({ message: noOpenLoopMessage(noteId) });
+    }
+    return { note, reason };
+  });
+
 export const closeOpenLoopTool = (
   { notes, ownerTimeZone, progress, redactor }: NoteToolServices,
   eventId: string
@@ -51,20 +80,19 @@ export const closeOpenLoopTool = (
     {
       name: closeOpenLoopToolName,
       riskClass: "change",
-      approvalSummary: ({ noteId, reason }) =>
-        storedNoteText(notes, noteId).pipe(
-          Effect.map((note) => `Close the Open Loop of ${note} as ${reason}`)
-        ),
+      resolve: resolveClose(notes, eventId),
+      approvalSummary: ({ note, reason }) =>
+        `Close the Open Loop of ${noteText(note)} as ${reason}`,
       description:
         "Close the open Open Loop of one Note when the Owner says that it is done, dropped, or replaced. The Note stays. Fails with a message when no Note has the id or the Note has no open Open Loop. Say that it is closed only after it succeeded.",
       inputSchema: CloseOpenLoopInput,
       failureMessage: closeFailureMessage,
       work: Effect.fnUntraced(function* closeOpenLoopEffect({
-        noteId,
+        note: target,
         reason,
       }) {
         const { note, alreadyClosed } = yield* notes.closeOpenLoop({
-          noteId,
+          noteId: target.noteId,
           eventId,
           reason,
         });

@@ -70,6 +70,7 @@ const makeNotes = (ownerId: OwnerId) =>
     const {
       journalOpenLoopChange,
       closeOpenLoop,
+      closedInEvent,
       listOpenLoops,
       openLoopsAmong,
     } = yield* makeOpenLoopStore(ownerId);
@@ -245,6 +246,7 @@ const makeNotes = (ownerId: OwnerId) =>
       update,
       byIds,
       closeOpenLoop,
+      closedInEvent,
       listOpenLoops,
       openLoopsAmong,
       search,

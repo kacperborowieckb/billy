@@ -79,6 +79,7 @@ export const scheduleToolServicesOf = (
   turnOrigin: ScheduleToolServices["turnOrigin"]
 ): ScheduleToolServices => ({
   schedules,
+  notes,
   ownerTimeZone: ownerTimeZone(behavior).pipe(
     Effect.provideService(OwnerPreferences, preferences),
     Effect.orDie

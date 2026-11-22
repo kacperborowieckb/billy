@@ -22,6 +22,7 @@ import {
   resetFakes,
   scriptModel,
 } from "./fakes.ts";
+import { ownerInWarsaw } from "./owner-with-data.ts";
 import {
   addOwner,
   pressUpdate,
@@ -183,7 +184,7 @@ const waitForInboxDone = (ownerId: string) =>
   );
 
 const askForReminder = async (userId: number, sendsBefore = 0) => {
-  const ownerId = await addOwner(userId);
+  const ownerId = await ownerInWarsaw(userId);
   if (sendsBefore > 0) {
     await setTimeZone(userId);
   }
