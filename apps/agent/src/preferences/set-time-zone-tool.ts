@@ -1,6 +1,7 @@
-import { Cause, Effect, Option, Schema } from "effect";
+import { Cause, DateTime, Effect, Option, Schema } from "effect";
 
 import type { Journal } from "../journal/journal.ts";
+import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import type { TurnProgress } from "../personal-agent/turn-progress.ts";
 import { ensureBrief } from "../schedule/brief.ts";
@@ -34,13 +35,25 @@ const SetTimeZoneInput = Schema.Struct({
   ),
 });
 
+const invalidTimeZoneMessage = (name: string) =>
+  `${JSON.stringify(name)} is not an IANA time zone name. The time zone was not changed. Tell the Owner that you could not set it, and ask for their city or an IANA name such as Europe/Warsaw.`;
+
 const failureMessageOf = (cause: Cause.Cause<unknown>) => {
   const error = Cause.findErrorOption(cause);
   if (Option.isSome(error) && error.value instanceof InvalidTimeZone) {
-    return `${JSON.stringify(error.value.name)} is not an IANA time zone name. The time zone was not changed. Tell the Owner that you could not set it, and ask for their city or an IANA name such as Europe/Warsaw.`;
+    return invalidTimeZoneMessage(error.value.name);
   }
   return timeZoneNotChangedMessage;
 };
+
+const requestedTimeZone = (name: string) =>
+  namedTimeZone(name).pipe(
+    Option.match({
+      onNone: () =>
+        Effect.fail(new ToolFailed({ message: invalidTimeZoneMessage(name) })),
+      onSome: Effect.succeed,
+    })
+  );
 
 export const setTimeZoneTool = (
   {
@@ -58,24 +71,24 @@ export const setTimeZoneTool = (
     {
       name: setTimeZoneToolName,
       riskClass: "change",
-      approvalSummary: ({ timeZone }) =>
-        Effect.succeed(`Set the time zone to ${timeZone}`),
+      resolve: ({ timeZone }) => requestedTimeZone(timeZone),
+      approvalSummary: (zone) =>
+        `Set the time zone to ${DateTime.zoneToString(zone)}`,
       description:
         "Set the time zone of the Owner. It decides the local date and time that you see in every Turn, and the repeating Reminders keep their local time in the new time zone. Call it when the Owner says where they live or gives their time zone, also when they change it. Fails with a message when the name is not an IANA time zone name, and then nothing changes.",
       inputSchema: SetTimeZoneInput,
       failureMessage: failureMessageOf,
-      work: Effect.fnUntraced(function* changeTimeZoneEffect({ timeZone }) {
-        const result = yield* preferences.setTimeZone(timeZone, eventId);
-        const zone = namedTimeZone(result.timeZone);
-        if (Option.isSome(zone)) {
-          yield* schedules.moveRepeatingToTimeZone(zone.value, eventId);
-          const { quietHours } =
-            yield* preferences.quietHours(defaultQuietHours);
-          yield* ensureBrief(
-            { schedules, journal },
-            { timeZone: zone.value, localTime: quietHours.end, eventId }
-          );
-        }
+      work: Effect.fnUntraced(function* changeTimeZoneEffect(zone) {
+        const result = yield* preferences.setTimeZone(
+          DateTime.zoneToString(zone),
+          eventId
+        );
+        yield* schedules.moveRepeatingToTimeZone(zone, eventId);
+        const { quietHours } = yield* preferences.quietHours(defaultQuietHours);
+        yield* ensureBrief(
+          { schedules, journal },
+          { timeZone: zone, localTime: quietHours.end, eventId }
+        );
         return result;
       }),
     }

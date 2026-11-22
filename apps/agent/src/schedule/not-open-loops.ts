@@ -6,6 +6,9 @@ export class NotOpenLoops extends Data.TaggedError("NotOpenLoops")<{
   readonly noteIds: readonly string[];
 }> {}
 
+export const notOpenLoopsMessage = (noteIds: readonly string[]) =>
+  `No Schedule was set. These Notes have no open Open Loop: ${noteIds.join(", ")}. Use ids from list_open_loops. Leave out openLoopIds only when the Owner asked for this Schedule.`;
+
 export const refuseNotOpenLoops = <A, E, R>(
   effect: Effect.Effect<A, E | NotOpenLoops, R>
 ): Effect.Effect<A, E | ToolFailed, R> =>
@@ -13,10 +16,6 @@ export const refuseNotOpenLoops = <A, E, R>(
     Effect.catchIf(
       (error): error is NotOpenLoops => error instanceof NotOpenLoops,
       ({ noteIds }) =>
-        Effect.fail(
-          new ToolFailed({
-            message: `No Schedule was set. These Notes have no open Open Loop: ${noteIds.join(", ")}. Use ids from list_open_loops. Leave out openLoopIds only when the Owner asked for this Schedule.`,
-          })
-        )
+        Effect.fail(new ToolFailed({ message: notOpenLoopsMessage(noteIds) }))
     )
   );

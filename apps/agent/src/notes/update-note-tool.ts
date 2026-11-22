@@ -3,9 +3,13 @@ import { Effect, Schema } from "effect";
 import { countOf, quoted } from "../approval/approval-summary.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
+import { knownNotesOf } from "./known-notes.ts";
 import { noteIdListSchema } from "./note-id-list-schema.ts";
-import { openLoopText, storedNoteText } from "./note-summary.ts";
-import { noteToolFailureMessage } from "./note-tool-failure-message.ts";
+import { noteText, openLoopText } from "./note-summary.ts";
+import {
+  noteToolFailureMessage,
+  unknownNotesMessage,
+} from "./note-tool-failure-message.ts";
 import type { NoteToolServices } from "./note-tool-services.ts";
 import { OpenLoopInputSchema, openLoopRequestOf } from "./open-loop-input.ts";
 import { openLoopForModel, textForModel } from "./recalled-note.ts";
@@ -54,6 +58,57 @@ const UpdateNoteInput = Schema.Struct({
   ),
 });
 
+const resolveUpdate = ({
+  notes,
+  ownerTimeZone,
+}: Pick<NoteToolServices, "notes" | "ownerTimeZone">) =>
+  Effect.fnUntraced(function* resolveUpdateEffect({
+    noteId,
+    text,
+    linkedNoteIds = [],
+    unlinkedNoteIds = [],
+    openLoop,
+  }: typeof UpdateNoteInput.Type) {
+    if (
+      text === undefined &&
+      linkedNoteIds.length === 0 &&
+      unlinkedNoteIds.length === 0 &&
+      openLoop === undefined
+    ) {
+      return yield* new ToolFailed({ message: nothingToUpdateMessage });
+    }
+    const linkedAndUnlinked = linkedNoteIds.filter((linkedId) =>
+      unlinkedNoteIds.includes(linkedId)
+    );
+    if (linkedAndUnlinked.length > 0) {
+      return yield* new ToolFailed({
+        message: linkedAndUnlinkedMessage(linkedAndUnlinked),
+      });
+    }
+    const openLoopRequest = yield* openLoopRequestOf(openLoop, ownerTimeZone, {
+      toolName: updateNoteToolName,
+      consequence: "Nothing was changed.",
+    });
+    const [note] = yield* knownNotesOf(
+      notes,
+      [noteId, ...linkedNoteIds, ...unlinkedNoteIds],
+      { consequence: "Nothing was changed.", readFailed: noteNotUpdatedMessage }
+    );
+    if (note === undefined) {
+      return yield* new ToolFailed({
+        message: unknownNotesMessage([noteId], "Nothing was changed."),
+      });
+    }
+    return {
+      note,
+      text,
+      linkedNoteIds,
+      unlinkedNoteIds,
+      openLoop,
+      openLoopRequest,
+    };
+  });
+
 export const updateNoteTool = (
   { notes, ownerTimeZone, progress, redactor }: NoteToolServices,
   eventId: string
@@ -63,32 +118,25 @@ export const updateNoteTool = (
     {
       name: updateNoteToolName,
       riskClass: "change",
+      resolve: resolveUpdate({ notes, ownerTimeZone }),
       approvalSummary: ({
-        noteId,
+        note,
         text,
         linkedNoteIds,
         unlinkedNoteIds,
         openLoop,
       }) =>
-        storedNoteText(notes, noteId).pipe(
-          Effect.map((note) =>
-            [
-              `Change ${note}`,
-              ...(text === undefined ? [] : [`new text ${quoted(text)}`]),
-              ...((linkedNoteIds ?? []).length === 0
-                ? []
-                : [
-                    `link ${countOf(linkedNoteIds?.length ?? 0, "Note", "Notes")}`,
-                  ]),
-              ...((unlinkedNoteIds ?? []).length === 0
-                ? []
-                : [
-                    `unlink ${countOf(unlinkedNoteIds?.length ?? 0, "Note", "Notes")}`,
-                  ]),
-              ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
-            ].join(", ")
-          )
-        ),
+        [
+          `Change ${noteText(note)}`,
+          ...(text === undefined ? [] : [`new text ${quoted(text)}`]),
+          ...(linkedNoteIds.length === 0
+            ? []
+            : [`link ${countOf(linkedNoteIds.length, "Note", "Notes")}`]),
+          ...(unlinkedNoteIds.length === 0
+            ? []
+            : [`unlink ${countOf(unlinkedNoteIds.length, "Note", "Notes")}`]),
+          ...(openLoop === undefined ? [] : [openLoopText(openLoop)]),
+        ].join(", "),
       description:
         "Change one existing Note after a follow-up of the Owner: replace its text, link or unlink other Notes, or open or change its Open Loop. Creates no new Note. Search for the Note first when you do not know its id.",
       inputSchema: UpdateNoteInput,
@@ -98,35 +146,14 @@ export const updateNoteTool = (
           otherwise: noteNotUpdatedMessage,
         }),
       work: Effect.fnUntraced(function* updateNoteEffect({
-        noteId,
+        note: target,
         text,
         linkedNoteIds,
         unlinkedNoteIds,
-        openLoop,
+        openLoopRequest,
       }) {
-        if (
-          text === undefined &&
-          (linkedNoteIds ?? []).length === 0 &&
-          (unlinkedNoteIds ?? []).length === 0 &&
-          openLoop === undefined
-        ) {
-          return yield* new ToolFailed({ message: nothingToUpdateMessage });
-        }
-        const linkedAndUnlinked = (linkedNoteIds ?? []).filter((linkedId) =>
-          (unlinkedNoteIds ?? []).includes(linkedId)
-        );
-        if (linkedAndUnlinked.length > 0) {
-          return yield* new ToolFailed({
-            message: linkedAndUnlinkedMessage(linkedAndUnlinked),
-          });
-        }
-        const openLoopRequest = yield* openLoopRequestOf(
-          openLoop,
-          ownerTimeZone,
-          { toolName: updateNoteToolName, consequence: "Nothing was changed." }
-        );
         const { note, linkedNoteIds: linked } = yield* notes.update({
-          noteId,
+          noteId: target.noteId,
           eventId,
           text,
           linkedNoteIds,

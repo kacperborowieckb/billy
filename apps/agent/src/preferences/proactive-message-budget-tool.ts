@@ -36,6 +36,19 @@ const ProactiveMessageBudgetInput = Schema.Struct({
   ),
 });
 
+type BudgetRequest =
+  | { readonly _tag: "Read" }
+  | { readonly _tag: "Set"; readonly sends: number };
+
+const requestedBudget = ({ sends }: typeof ProactiveMessageBudgetInput.Type) =>
+  sends === undefined
+    ? Effect.succeed<BudgetRequest>({ _tag: "Read" })
+    : Schema.is(ProactiveMessageBudgetSchema)(sends)
+      ? Effect.succeed<BudgetRequest>({ _tag: "Set", sends })
+      : Effect.fail(
+          new ToolFailed({ message: invalidProactiveMessageBudgetMessage })
+        );
+
 export const proactiveMessageBudgetTool = (
   {
     preferences,
@@ -49,30 +62,26 @@ export const proactiveMessageBudgetTool = (
     { eventId, progress, redactor },
     {
       name: proactiveMessageBudgetToolName,
-      riskClass: "change",
-      approvalSummary: ({ sends }) =>
-        Effect.succeed(
-          sends === undefined
-            ? "Show the Budget of Proactive Messages"
-            : `Set the Budget of Proactive Messages to ${countOf(sends, "message", "messages")} a day`
-        ),
+      riskClass: "read",
+      riskClassOfInput: ({ sends }) =>
+        sends === undefined ? "read" : "change",
+      resolve: requestedBudget,
+      approvalSummary: (request) =>
+        request._tag === "Read"
+          ? "Show the Budget of Proactive Messages"
+          : `Set the Budget of Proactive Messages to ${countOf(request.sends, "message", "messages")} a day`,
       description:
         "Read or change the Budget of the Owner: the most Proactive Messages that you send in one local day. Call it with no input to read it. To change it, give sends as a whole number. For example, when the Owner says to message them at most twice a day, give sends 2. A Proactive Message over the Budget is not sent alone: it goes into the next Brief. The Brief still comes. Reminders and Scheduled Tasks that the Owner set do not count. It returns the Budget, its source (owner or default), and whether it changed.",
       inputSchema: ProactiveMessageBudgetInput,
       failureMessage: proactiveMessageBudgetNotChangedMessage,
-      work: Effect.fnUntraced(function* budgetEffect({ sends }) {
-        if (sends === undefined) {
+      work: Effect.fnUntraced(function* budgetEffect(request) {
+        if (request._tag === "Read") {
           const current =
             yield* preferences.proactiveMessageBudget(defaultSends);
           return { ...current, changed: false };
         }
-        if (!Schema.is(ProactiveMessageBudgetSchema)(sends)) {
-          return yield* new ToolFailed({
-            message: invalidProactiveMessageBudgetMessage,
-          });
-        }
         return yield* preferences.setProactiveMessageBudget(
-          sends,
+          request.sends,
           defaultSends,
           eventId
         );

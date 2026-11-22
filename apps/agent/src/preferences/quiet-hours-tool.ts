@@ -48,13 +48,28 @@ const QuietHoursInput = Schema.Struct({
   ),
 });
 
+type QuietHoursRequest =
+  | { readonly _tag: "Read" }
+  | { readonly _tag: "Set"; readonly quietHours: QuietHours };
+
 const requestedQuietHours = ({
   start,
   end,
-}: typeof QuietHoursInput.Type): Option.Option<QuietHours> =>
-  start === undefined || end === undefined
-    ? Option.none()
-    : Schema.decodeUnknownOption(QuietHoursSchema)({ start, end });
+}: typeof QuietHoursInput.Type): Effect.Effect<
+  QuietHoursRequest,
+  ToolFailed
+> => {
+  if (start === undefined && end === undefined) {
+    return Effect.succeed({ _tag: "Read" });
+  }
+  const quietHours =
+    start === undefined || end === undefined
+      ? Option.none<QuietHours>()
+      : Schema.decodeUnknownOption(QuietHoursSchema)({ start, end });
+  return Option.isNone(quietHours)
+    ? Effect.fail(new ToolFailed({ message: invalidQuietHoursMessage }))
+    : Effect.succeed({ _tag: "Set", quietHours: quietHours.value });
+};
 
 export const quietHoursTool = (
   {
@@ -71,19 +86,20 @@ export const quietHoursTool = (
     { eventId, progress, redactor },
     {
       name: quietHoursToolName,
-      riskClass: "change",
-      approvalSummary: ({ start, end }) =>
-        Effect.succeed(
-          start === undefined && end === undefined
-            ? "Show the Quiet Hours"
-            : `Set the Quiet Hours from ${start ?? "the current start"} to ${end ?? "the current end"}`
-        ),
+      riskClass: "read",
+      riskClassOfInput: ({ start, end }) =>
+        start === undefined && end === undefined ? "read" : "change",
+      resolve: requestedQuietHours,
+      approvalSummary: (request) =>
+        request._tag === "Read"
+          ? "Show the Quiet Hours"
+          : `Set the Quiet Hours from ${request.quietHours.start} to ${request.quietHours.end}`,
       description:
         "Read or change the Quiet Hours of the Owner: the local time when you send no Proactive Message. Call it with no input to read them. To change them, give both start and end as HH:mm in the local time of the Owner. For example, when the Owner says not to message them before 9, keep the start and give end 09:00. The start must differ from the end. Reminders and Scheduled Tasks that the Owner set still arrive in Quiet Hours. It returns the Quiet Hours, their source (owner or default), and whether they changed. A Brief that was at the old end moves to the new end.",
       inputSchema: QuietHoursInput,
       failureMessage: quietHoursNotChangedMessage,
-      work: Effect.fnUntraced(function* quietHoursEffect(input) {
-        if (input.start === undefined && input.end === undefined) {
+      work: Effect.fnUntraced(function* quietHoursEffect(request) {
+        if (request._tag === "Read") {
           const current = yield* preferences.quietHours(defaultQuietHours);
           return {
             ...current.quietHours,
@@ -91,12 +107,8 @@ export const quietHoursTool = (
             changed: false,
           };
         }
-        const requested = requestedQuietHours(input);
-        if (Option.isNone(requested)) {
-          return yield* new ToolFailed({ message: invalidQuietHoursMessage });
-        }
         const result = yield* preferences.setQuietHours(
-          requested.value,
+          request.quietHours,
           defaultQuietHours,
           eventId
         );

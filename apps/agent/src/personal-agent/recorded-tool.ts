@@ -17,30 +17,33 @@ export interface RecordedToolServices {
   readonly redactor: Redactor["Service"];
 }
 
-export type RecordedToolApproval<Input> =
+export type RecordedToolApproval<Input, Target> =
   | {
       readonly riskClass: "read";
       readonly riskClassOfInput?: undefined;
+      readonly resolve?: undefined;
       readonly approvalSummary?: undefined;
     }
   | {
       readonly riskClass: RiskClass;
       readonly riskClassOfInput?: (input: Input) => RiskClass;
-      readonly approvalSummary: (input: Input) => Effect.Effect<string>;
+      readonly resolve: (input: Input) => Effect.Effect<Target, ToolFailed>;
+      readonly approvalSummary: (target: Target) => string;
     };
 
 export type RecordedToolDefinition<
   Input extends JSONValue,
   Output extends JSONValue,
   Failure,
-> = RecordedToolApproval<Input> & {
+  Target = Input,
+> = RecordedToolApproval<Input, Target> & {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Schema.Codec<Input, unknown>;
   readonly failureMessage: string | ((cause: Cause.Cause<unknown>) => string);
   readonly recordedInput?: (input: Input) => JSONValue;
   readonly marksItsWorkUntrusted?: (input: Input) => boolean;
-  readonly work: (input: Input) => Effect.Effect<Output, Failure>;
+  readonly work: (target: Target) => Effect.Effect<Output, Failure>;
 };
 
 const toolFailedFrom =
@@ -59,8 +62,8 @@ const toolFailedFrom =
       )
     );
 
-const approvalOf = <Input extends JSONValue>(
-  definition: RecordedToolApproval<Input> & {
+const approvalOf = <Input extends JSONValue, Target>(
+  definition: RecordedToolApproval<Input, Target> & {
     readonly inputSchema: Schema.Codec<Input, unknown>;
   }
 ): ToolApproval<Input> => {
@@ -68,6 +71,7 @@ const approvalOf = <Input extends JSONValue>(
   if (definition.approvalSummary === undefined) {
     return { riskClass: definition.riskClass };
   }
+  const { resolve, approvalSummary } = definition;
   return {
     riskClass: definition.riskClass,
     ...(definition.riskClassOfInput === undefined
@@ -75,17 +79,34 @@ const approvalOf = <Input extends JSONValue>(
       : {
           riskClassOfInput: { isInput, of: definition.riskClassOfInput },
         }),
-    approvalSummary: { isInput, of: definition.approvalSummary },
+    approvalSummary: {
+      isInput,
+      of: (input) => resolve(input).pipe(Effect.map(approvalSummary)),
+    },
   };
 };
+
+const workOf = <
+  Input extends JSONValue,
+  Output extends JSONValue,
+  Failure,
+  Target,
+>(
+  definition: RecordedToolDefinition<Input, Output, Failure, Target>,
+  input: Input
+) =>
+  definition.resolve === undefined
+    ? definition.work(input as unknown as Target)
+    : definition.resolve(input).pipe(Effect.flatMap(definition.work));
 
 export const recordedTool = <
   Input extends JSONValue,
   Output extends JSONValue,
   Failure,
+  Target = Input,
 >(
   { eventId, progress, redactor }: RecordedToolServices,
-  definition: RecordedToolDefinition<Input, Output, Failure>
+  definition: RecordedToolDefinition<Input, Output, Failure, Target>
 ): AgentTool =>
   agentTool({
     description: definition.description,
@@ -110,7 +131,7 @@ export const recordedTool = <
           redactor,
         };
         return yield* progress
-          .recordingToolCall(call, definition.work(input))
+          .recordingToolCall(call, workOf(definition, input))
           .pipe(
             Effect.catchCause((cause) => {
               const failure = toolFailedFrom(definition.failureMessage)(cause);

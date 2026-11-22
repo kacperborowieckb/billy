@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
+import { activeScheduleOf } from "./active-schedule.ts";
 import { noActiveScheduleMessage } from "./schedule-presentation.ts";
 import { storedScheduleText } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
@@ -29,10 +30,9 @@ export const cancelScheduleTool = (
     {
       name: cancelScheduleToolName,
       riskClass: "change",
-      approvalSummary: ({ scheduleId }) =>
-        storedScheduleText(schedules, scheduleId).pipe(
-          Effect.map((schedule) => `Cancel ${schedule}`)
-        ),
+      resolve: ({ scheduleId }) =>
+        activeScheduleOf(schedules, scheduleId, scheduleNotCancelledMessage),
+      approvalSummary: (schedule) => `Cancel ${storedScheduleText(schedule)}`,
       description:
         "Cancel an active Schedule of the Owner. A cancelled Schedule never fires. Fails with a message, and changes nothing, when no active Schedule has the id. Say that the Schedule is cancelled only after this succeeded.",
       inputSchema: CancelScheduleInput,

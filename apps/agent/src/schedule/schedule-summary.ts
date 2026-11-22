@@ -1,10 +1,8 @@
-import { Effect, Option } from "effect";
-
 import { quoted } from "../approval/approval-summary.ts";
 import { localDueTimeText, recurrenceText } from "../time/local-time-text.ts";
 import type { RecurrenceRule } from "../time/recurrence-rule.ts";
 import type { ScheduleAction } from "./schedule-action.ts";
-import type { Schedules } from "./schedules.ts";
+import type { Schedule } from "./schedule.ts";
 
 export const scheduleActionText = (action: ScheduleAction) =>
   action._tag === "SendText"
@@ -22,16 +20,5 @@ export const scheduleDueText = ({ localDueTime, repeat }: ScheduleDueInput) =>
     ...(repeat === undefined ? [] : [recurrenceText(repeat)]),
   ].join(", ");
 
-export const storedScheduleText = (
-  schedules: Schedules["Service"],
-  scheduleId: string
-) =>
-  schedules.byId(scheduleId).pipe(
-    Effect.map(
-      Option.match({
-        onNone: () => `Schedule ${scheduleId}`,
-        onSome: (schedule) => scheduleActionText(schedule.action),
-      })
-    ),
-    Effect.orElseSucceed(() => `Schedule ${scheduleId}`)
-  );
+export const storedScheduleText = ({ action }: Schedule) =>
+  scheduleActionText(action);
