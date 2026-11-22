@@ -323,6 +323,30 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     expect(await countOf(ownerId, "schedules WHERE set_by = 'owner'")).toBe(1);
   });
 
+  it("retries a refused edit of the Approval message after an answer until it succeeds", async () => {
+    const { ownerId, id, messageId } = await askForReminder(9215, 1);
+    fakeTelegram.refuseNextEdits(1);
+
+    await press(9215, `approve:${id}`, { messageId });
+    await waitForEdits(2);
+    await waitForInboxDone(ownerId);
+
+    expect(fakeTelegram.edits[1]?.body).toEqual(fakeTelegram.edits[0]?.body);
+    expect(fakeTelegram.edits[1]?.body.text).toContain(doneStatus);
+    expect(fakeTelegram.edits).toHaveLength(2);
+  });
+
+  it("stops retrying a refused edit after three attempts", async () => {
+    const { ownerId, id, messageId } = await askForReminder(9216, 1);
+    fakeTelegram.refuseNextEdits(10);
+
+    await press(9216, `approve:${id}`, { messageId });
+    await waitForEdits(3);
+    await waitForInboxDone(ownerId);
+
+    expect(fakeTelegram.edits).toHaveLength(3);
+  });
+
   it("answers a second press with a notice and changes nothing", async () => {
     const { ownerId, id, messageId } = await askForReminder(9205, 1);
     await press(9205, `approve:${id}`, { messageId });

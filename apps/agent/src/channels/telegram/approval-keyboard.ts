@@ -1,3 +1,4 @@
+import { maxStatusLength } from "../../approval/approval-status.ts";
 import type { ApprovalAnswer } from "../../event.ts";
 import { approvalAnswers } from "../../personal-agent/storage-values.ts";
 import type { ApprovalRequest, ShownApproval } from "../channel.ts";
@@ -56,6 +57,11 @@ interface ApprovalRow {
   readonly pendingApprovalId: string;
 }
 
+const statusLineRoom = 1 + maxStatusLength;
+
+const textWithRoomForStatuses = (block: ApprovalBlock) =>
+  block.text.length + block.pendingApprovalIds.length * statusLineRoom;
+
 const blockOf = (
   header: readonly string[],
   rows: readonly ApprovalRow[]
@@ -79,7 +85,7 @@ export const approvalBlocksOf = (
   let open: readonly ApprovalRow[] = [];
   for (const row of rows) {
     const grown = blockOf(header, [...open, row]);
-    if (open.length > 0 && grown.text.length > textLimit) {
+    if (open.length > 0 && textWithRoomForStatuses(grown) > textLimit) {
       blocks.push(blockOf(header, open));
       header = [];
       open = [];

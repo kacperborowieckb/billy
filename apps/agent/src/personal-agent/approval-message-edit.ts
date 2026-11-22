@@ -1,4 +1,4 @@
-import { DateTime, Effect, Option } from "effect";
+import { Data, DateTime, Duration, Effect, Option, Schedule } from "effect";
 
 import { shownStatusOf } from "../approval/approval-status.ts";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
@@ -7,6 +7,14 @@ import { Channel } from "../channels/channel.ts";
 import type { ShownApproval } from "../channels/channel.ts";
 
 export const channelAnswerTimeoutMillis = 3000;
+
+export const approvalEditAttempts = 3;
+
+const approvalEditRetryDelay = Duration.millis(500);
+
+class ApprovalEditFailed extends Data.TaggedError("ApprovalEditFailed")<{
+  readonly reason: string;
+}> {}
 
 export interface ApprovalMessageTarget {
   readonly conversationId: string;
@@ -39,24 +47,39 @@ export const editApprovalMessage = Effect.fnUntraced(
     if (Option.isNone(approval) || approval.value.channelMessageId === null) {
       return;
     }
-    const turnApprovals = yield* pendingApprovals.forTurn(
-      approval.value.turnEventId
-    );
-    const edited = yield* channel
-      .editApprovalMessage({
-        conversationId: target.conversationId,
-        channelMessageId: approval.value.channelMessageId,
-        turnApprovals: shownApprovalsOf(turnApprovals, yield* DateTime.now),
-      })
-      .pipe(
-        Effect.timeoutOption(channelAnswerTimeoutMillis),
-        Effect.map(
-          Option.getOrElse(() => ({
-            _tag: "Failed" as const,
-            reason: "Telegram did not answer the edit in time",
-          }))
-        )
+    const { channelMessageId } = approval.value;
+    const attemptEdit = Effect.fnUntraced(function* attemptEdit() {
+      const turnApprovals = yield* pendingApprovals.forTurn(
+        approval.value.turnEventId
       );
+      const edited = yield* channel
+        .editApprovalMessage({
+          conversationId: target.conversationId,
+          channelMessageId,
+          turnApprovals: shownApprovalsOf(turnApprovals, yield* DateTime.now),
+        })
+        .pipe(
+          Effect.timeoutOption(channelAnswerTimeoutMillis),
+          Effect.map(
+            Option.getOrElse(() => ({
+              _tag: "Failed" as const,
+              reason: "Telegram did not answer the edit in time",
+            }))
+          )
+        );
+      return edited._tag === "Failed"
+        ? yield* Effect.fail(new ApprovalEditFailed({ reason: edited.reason }))
+        : edited;
+    });
+    const edited = yield* attemptEdit().pipe(
+      Effect.retry({
+        times: approvalEditAttempts - 1,
+        schedule: Schedule.spaced(approvalEditRetryDelay),
+      }),
+      Effect.catchTag("ApprovalEditFailed", ({ reason }) =>
+        Effect.succeed({ _tag: "Failed" as const, reason })
+      )
+    );
     if (edited._tag === "Failed") {
       yield* Effect.logWarning("The Approval message was not edited", {
         pendingApprovalId: target.pendingApprovalId,

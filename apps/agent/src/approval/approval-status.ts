@@ -12,13 +12,30 @@ export const rejectedStatus = "Rejected";
 
 export const expiredStatus = "Expired";
 
+const failedStatusPrefix = "Approved, but it failed: ";
+
+export const maxFailureReasonLength = 200;
+
+const ellipsis = "...";
+
+const boundedReason = (reason: string) => {
+  if (reason.length <= maxFailureReasonLength) {
+    return reason;
+  }
+  const cut = reason.slice(0, maxFailureReasonLength - ellipsis.length);
+  return `${cut.isWellFormed() ? cut : cut.slice(0, -1)}${ellipsis}`;
+};
+
 export const failedStatus = (reason: string) =>
-  `Approved, but it failed: ${reason}`;
+  `${failedStatusPrefix}${boundedReason(reason)}`;
 
 export const unconfirmedStatus =
   "Approved, but it is not confirmed that it ran";
 
 export const approvedStatus = "Approved";
+
+export const maxStatusLength =
+  failedStatusPrefix.length + maxFailureReasonLength;
 
 const statusOfState: Readonly<
   Record<Exclude<PendingApproval["state"], "failed">, string | undefined>
