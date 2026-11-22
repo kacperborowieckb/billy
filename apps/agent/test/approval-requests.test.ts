@@ -67,7 +67,7 @@ const rowsOf = async <Row extends Record<string, SqlStorageValue>>(
 const pendingApprovalsOf = (ownerId: string) =>
   rowsOf<PendingApprovalRow>(
     ownerId,
-    "SELECT * FROM pending_approvals ORDER BY rowid"
+    "SELECT * FROM pending_approvals ORDER BY position"
   );
 
 const countOf = async (ownerId: string, table: string) => {
@@ -581,7 +581,7 @@ describe("Approval messages", () => {
           .then(() =>
             state.storage.sql
               .exec<{ tool_call_id: string; state: string }>(
-                "SELECT tool_call_id, state FROM pending_approvals ORDER BY rowid"
+                "SELECT tool_call_id, state FROM pending_approvals ORDER BY position"
               )
               .toArray()
           )

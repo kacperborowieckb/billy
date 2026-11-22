@@ -41,7 +41,7 @@ const pendingApprovalsOf = (ownerId: string) =>
     trust_level: string;
   }>(
     ownerId,
-    "SELECT tool_name, state, summary, trust_level FROM pending_approvals ORDER BY rowid"
+    "SELECT tool_name, state, summary, trust_level FROM pending_approvals ORDER BY position"
   );
 
 const pendingToolNamesOf = async (ownerId: string) => {

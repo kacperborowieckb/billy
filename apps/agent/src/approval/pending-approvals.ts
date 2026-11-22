@@ -1,9 +1,8 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import type { ApprovalMessage } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
-import type { TrustLevel } from "../notes/note.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import {
   pendingApprovalStates,
@@ -13,6 +12,8 @@ import type {
   ApprovalAnswering,
   ApprovalRunRecord,
 } from "./approval-answering.ts";
+import { encodeFrozenInput, insertDraft } from "./draft-insert.ts";
+import type { DraftRequest } from "./draft-insert.ts";
 import { newPendingApprovalId } from "./pending-approval-id.ts";
 import { pendingApprovals } from "./pending-approvals-schema.ts";
 
@@ -44,20 +45,6 @@ const decodeOpened = Schema.decodeUnknownSync(
   }))
 );
 
-const encodeFrozenInput = Schema.encodeSync(
-  Schema.fromJsonString(Schema.Unknown)
-);
-
-export interface DraftRequest {
-  readonly turnEventId: string;
-  readonly toolCallId: string;
-  readonly toolName: string;
-  readonly frozenInput: unknown;
-  readonly summary: string;
-  readonly trustLevel: TrustLevel;
-  readonly expiresAt: DateTime.Utc;
-}
-
 export interface SentDrafts {
   readonly turnEventId: string;
   readonly approvalMessages: readonly ApprovalMessage[];
@@ -80,18 +67,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
 
   const draft = Effect.fnUntraced(function* draft(request: DraftRequest) {
     const pendingApprovalId = newPendingApprovalId();
-    yield* database.insert(pendingApprovals).values({
-      pendingApprovalId,
-      turnEventId: request.turnEventId,
-      toolCallId: request.toolCallId,
-      toolName: request.toolName,
-      frozenInput: encodeFrozenInput(request.frozenInput),
-      summary: request.summary,
-      trustLevel: request.trustLevel,
-      state: "draft",
-      createdAt: DateTime.formatIso(yield* DateTime.now),
-      expiresAt: DateTime.formatIso(request.expiresAt),
-    });
+    yield* insertDraft(database, pendingApprovalId, request);
     return {
       pendingApprovalId,
       summary: request.summary,
@@ -103,7 +79,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       .select()
       .from(pendingApprovals)
       .where(eq(pendingApprovals.turnEventId, turnEventId))
-      .orderBy(sql`rowid`)
+      .orderBy(asc(pendingApprovals.position))
       .pipe(
         Effect.map((rows) => rows.map((row) => decodePendingApproval(row)))
       );

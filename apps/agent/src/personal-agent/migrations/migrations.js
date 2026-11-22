@@ -27,6 +27,7 @@ import m0025 from "./20261120110432_send_budget/migration.sql";
 import m0026 from "./20261121192012_pending_approvals/migration.sql";
 import m0027 from "./20261121214207_approval_answers/migration.sql";
 import m0028 from "./20261122212333_pending_approval_trust_level/migration.sql";
+import m0029 from "./20261122215135_pending_approval_position/migration.sql";
 
 export default {
   migrations: {
@@ -59,5 +60,6 @@ export default {
     "20261121192012_pending_approvals": m0026,
     "20261121214207_approval_answers": m0027,
     "20261122212333_pending_approval_trust_level": m0028,
+    "20261122215135_pending_approval_position": m0029,
   },
 };
