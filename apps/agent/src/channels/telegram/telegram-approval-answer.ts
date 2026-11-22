@@ -6,7 +6,7 @@ import type {
   Delivery,
 } from "../channel.ts";
 import { editedApprovalBlockOf } from "./approval-keyboard.ts";
-import { failed } from "./telegram-send.ts";
+import { failed, telegramTextLimit } from "./telegram-send.ts";
 import type { TelegramConfig } from "./telegram-send.ts";
 
 const telegramRequest = (
@@ -47,7 +47,8 @@ export const editApprovalMessage =
   (config: TelegramConfig) => (edit: ApprovalMessageEdit) => {
     const block = editedApprovalBlockOf(
       edit.turnApprovals,
-      edit.channelMessageId
+      edit.channelMessageId,
+      telegramTextLimit
     );
     return Effect.tryPromise((signal) =>
       (config.fetch ?? fetch)(

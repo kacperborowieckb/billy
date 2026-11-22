@@ -61,6 +61,7 @@ const fakeTelegramState = {
   refusedFromSend: Number.POSITIVE_INFINITY,
   edits: [] as SentTelegramMessage[],
   editHold: Promise.resolve() as Promise<undefined>,
+  editsToRefuse: 0,
   pressAnswers: [] as TelegramPressAnswer[],
   pressAnswerHold: Promise.resolve() as Promise<undefined>,
 };
@@ -71,6 +72,13 @@ const answerEdit = async (request: Request) => {
     body: await request.json(),
   });
   await fakeTelegramState.editHold;
+  if (fakeTelegramState.editsToRefuse > 0) {
+    fakeTelegramState.editsToRefuse -= 1;
+    return Response.json(
+      { ok: false, description: "Bad Request: please retry" },
+      { status: 400 }
+    );
+  }
   return Response.json({ ok: true, result: true });
 };
 
@@ -161,6 +169,9 @@ export const fakeTelegram = {
     const { promise, resolve } = Promise.withResolvers<undefined>();
     fakeTelegramState.pressAnswerHold = promise;
     return () => resolve(undefined);
+  },
+  refuseNextEdits: (count: number) => {
+    fakeTelegramState.editsToRefuse = count;
   },
   holdEdits: () => {
     const { promise, resolve } = Promise.withResolvers<undefined>();
@@ -436,6 +447,7 @@ export const resetFakes = () => {
   fakeTelegramState.refusedFromSend = Number.POSITIVE_INFINITY;
   fakeTelegramState.edits = [];
   fakeTelegramState.editHold = Promise.resolve(undefined);
+  fakeTelegramState.editsToRefuse = 0;
   fakeTelegramState.pressAnswers = [];
   fakeTelegramState.pressAnswerHold = Promise.resolve(undefined);
   fakeModel.doGenerateCalls.length = 0;

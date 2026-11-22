@@ -217,6 +217,24 @@ describe("Pending Approvals expire", { timeout: 40_000 }, () => {
     expect(await journalOf(ownerId, "ApprovalExpired")).toHaveLength(1);
   });
 
+  it("retries a refused edit of the expired Approval message until it succeeds", async () => {
+    const { ownerId, id, messageId } = await askForReminder(7311);
+    fakeTelegram.refuseNextEdits(1);
+    await makeDue(ownerId, id);
+
+    await fireTheAlarm(ownerId);
+
+    expect(fakeTelegram.edits).toHaveLength(2);
+    expect(fakeTelegram.edits[1]?.body).toEqual({
+      chat_id: 7311,
+      message_id: messageId,
+      text: `This waits for your Approval:\n${reminderSummary}\n${expiredStatus}`,
+      reply_markup: { inline_keyboard: [] },
+    });
+    const [approval] = await pendingApprovalsOf(ownerId);
+    expect(approval?.state).toBe("expired");
+  });
+
   it("runs nothing on a press after expiry and answers This expired", async () => {
     const { ownerId, id, messageId } = await askForReminder(7302);
     await makeDue(ownerId, id);

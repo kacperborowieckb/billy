@@ -522,20 +522,23 @@ describe("Approval messages", () => {
     ]);
 
     await forward(9109);
-    await waitForSends(3);
+    await waitForSends(4);
     await waitForPendingApprovals(ownerId, 13);
 
-    const [, first, second] = fakeTelegram.sent;
-    const firstRows = first?.body.reply_markup?.inline_keyboard ?? [];
-    const secondRows = second?.body.reply_markup?.inline_keyboard ?? [];
-    expect(firstRows.length + secondRows.length).toBe(13);
-    expect(first?.body.text.length).toBeLessThanOrEqual(4096);
-    expect(second?.body.text.length).toBeLessThanOrEqual(4096);
+    const [, ...approvalMessages] = fakeTelegram.sent;
+    const rowsOfMessages = approvalMessages.map(
+      (message) => message.body.reply_markup?.inline_keyboard ?? []
+    );
+    expect(rowsOfMessages.flat()).toHaveLength(13);
+    for (const message of approvalMessages) {
+      expect(message.body.text.length).toBeLessThanOrEqual(4096);
+    }
     const approvals = await pendingApprovalsOf(ownerId);
-    expect(approvals.map((row) => row.channel_message_id)).toEqual([
-      ...firstRows.map(() => "9002"),
-      ...secondRows.map(() => "9003"),
-    ]);
+    expect(approvals.map((row) => row.channel_message_id)).toEqual(
+      rowsOfMessages.flatMap((rows, index) =>
+        rows.map(() => String(9002 + index))
+      )
+    );
   });
   it("opens only the drafts that the sent message shows", async () => {
     const ownerId = await addOwner(9111);
