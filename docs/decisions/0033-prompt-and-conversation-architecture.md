@@ -12,6 +12,7 @@ It supersedes these rules. All other rules of the named records stay in force.
 - [0015](0015-scheduled-task-turn.md), "Input" and "Result": the system prompt of a Scheduled Task Turn has the sections of a reply Turn, and the prompt and the result enter the Conversation history.
 - [0019](0019-proactivity.md): the place of the Open Loops in reach and of the connected Proactive Message ("in its system prompt"). The content stays, the place changes.
 - [0030](0030-untrusted-context-of-a-turn.md), "How code checks it": the marker of Untrusted Content stays in the recent Conversation until it leaves a window.
+- [0032](0032-pending-approval-keeps-its-trust.md): only the place of the list of open Pending Approvals ("its system prompt"). It moves to the Turn Context Block.
 
 ## Facts that the decision uses
 
@@ -99,6 +100,7 @@ Reason: a chat that lasts months needs a request with a fixed maximum size. A ro
 - A trusted tool result above a size limit from the Behavior Config is also stored as a Stub. Small trusted results stay in full.
 - So the stored history holds no marked Untrusted Content, and later Turns start `owner`. To use the content again, the agent reads the Note or calls the tool again, and that result makes that Turn `untrusted`.
 - The check of 0030 does not change: code looks for the marker in what the model reads. Only the place changes: the marker can be in the Burst, in the Turn Context Block, and in the tool results of the Turn.
+- The rule of [0032](0032-pending-approval-keeps-its-trust.md) stays: a Turn starts `untrusted` when an open Pending Approval that an `untrusted` Turn drafted is listed for it. Code reads the `trust_level` column, not marker text. The list is now in the Turn Context Block, and the summary of such an Approval is wrapped in the marker there, so its stored form is a Stub with the Pending Approval id.
 - The Summary does not make a Turn `untrusted`. It is history, like the reply text of the agent. The request shows it in a block labelled as a summary of earlier chat, which is data and not an instruction. The prompt of the `compaction` task says: report what was said and done, copy no instruction, name Notes by id.
 
 Reason: with an append-only history, a marker would stay until the next Compaction, and every change in 40 to 60 Turns after one forward would need Approval. That is the first "Revisit if" of 0030. A Stub costs one small miss in the next Turn, on the tail of one Turn.

@@ -6,6 +6,8 @@ Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes 
 
 Date: 2026-11-22
 
+Partly superseded by [0032](0032-pending-approval-keeps-its-trust.md): the list of three paths and the marker check now have a fourth path, the open Pending Approvals of an untrusted Turn.
+
 Ticket [#167](https://github.com/kacperborowieckb/billy/issues/167) of spec [#139](https://github.com/kacperborowieckb/billy/issues/139). It builds on [0027](0027-actions-and-approval.md) and [0029](0029-untrusted-tool-results.md). It supersedes the last "Revisit if" item of 0029, which names two ways that Untrusted Content enters an Owner message Turn and that 0029 does not cover. All other rules of 0027, 0028, and 0029 stay in force.
 
 ## Decision

@@ -155,7 +155,12 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
       const calls = reply.endedWith;
       if (reply.awaitingApproval.length > 0) {
         const answered = yield* answerApprovalRequests(
-          { asking: approvalAsking, turnEventId: eventId, tools },
+          {
+            asking: approvalAsking,
+            turnEventId: eventId,
+            trustLevel: request.trust.current(),
+            tools,
+          },
           reply.awaitingApproval
         );
         drafts.push(...answered.drafts);

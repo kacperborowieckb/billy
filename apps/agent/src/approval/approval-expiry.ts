@@ -1,4 +1,4 @@
-import { and, eq, lte, min, sql } from "drizzle-orm";
+import { and, asc, eq, lte, min } from "drizzle-orm";
 import { DateTime, Effect, Option } from "effect";
 
 import { Journal } from "../journal/journal.ts";
@@ -33,7 +33,7 @@ export const approvalsDueToExpire = (database: Database, now: DateTime.Utc) =>
     .select()
     .from(pendingApprovals)
     .where(pendingBy(now))
-    .orderBy(sql`rowid`)
+    .orderBy(asc(pendingApprovals.position))
     .pipe(Effect.map((rows) => rows.map((row) => decodePendingApproval(row))));
 
 export const expireApproval = Effect.fnUntraced(function* expireApproval(
