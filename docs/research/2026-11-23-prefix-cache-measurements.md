@@ -2,7 +2,7 @@
 
 Date: 2026-11-23
 
-Issue: [#179](https://github.com/kacperborowieckb/billy/issues/179). Decision: [0032](../decisions/0032-prompt-and-conversation-architecture.md). Code on `main` at `a1287c5`.
+Issue: [#179](https://github.com/kacperborowieckb/billy/issues/179). Decision: [0033](../decisions/0033-prompt-and-conversation-architecture.md). Code on `main` at `a1287c5`.
 
 The repository owner approved the real model calls (decision [0002](../decisions/0002-agent-authority.md)). All content was synthetic. This record has no tokens, account ids, or URLs.
 
@@ -28,7 +28,7 @@ A recording proxy on `127.0.0.1` sat between the caller and the gateway URL of t
 - **Part A, provider probes.** Direct chat completion calls with the headers that the Model Gateway sends, `max_tokens: 1`, and `reasoning_effort: "none"`. Each probe starts its system message with a new random text, so no probe reads the cache of another probe. Each probe sends a request (prime), waits 1.5 seconds, and sends the next request.
 - **Part B, real Turns.** A driver started the real Worker in the wrangler test harness (the Eval entry `eval/worker.ts`, temporary local storage, the fake Telegram API), with `AI_GATEWAY_URL` set to the proxy. One Owner sent 12 messages: time zone, two Captures, two Recalls, two Scheduled Tasks set for some minutes later, small talk, two moves of the Brief to some minutes later, "less of this", and a closed task. The driver waited until each Schedule fired, so the run has 2 Scheduled Task Turns and 2 Proactive Turns between the Owner message Turns. The loading of the local values file was off for the run (`CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false`), because that file overrides the variables of the harness.
 - **Step 1 and later steps.** A call whose last message has the role `user` is step 1 of a Turn (cross-Turn reuse). Every other call is a later step (in-Turn reuse).
-- **Part C, replay.** A script rebuilt the stored history from the recorded Part B requests and sent step 1 of each Owner message Turn again in the layout of decision 0032: the fixed part of the system text, the same tool definitions, an Owner context block, the append-only history with the time and the situation at the start of each Owner message, and each side Turn as one assistant line. `max_tokens: 1`.
+- **Part C, replay.** A script rebuilt the stored history from the recorded Part B requests and sent step 1 of each Owner message Turn again in the layout of decision 0033: the fixed part of the system text, the same tool definitions, an Owner context block, the append-only history with the time and the situation at the start of each Owner message, and each side Turn as one assistant line. `max_tokens: 1`.
 
 The scripts were temporary and are not in the repository. #182 measures the result with the same parts B and the same hit rate definition.
 
@@ -93,7 +93,7 @@ Step 1 of the 12 Owner message Turns:
 - A Scheduled Task Turn stored 4 to 6 messages in the main Conversation, and a Proactive Turn stored 4 to 5.
 - Call times include different output lengths, so they are an indication only.
 
-## Part C results: the layout of decision 0032
+## Part C results: the layout of decision 0033
 
 Step 1 of the same 12 Owner message Turns, sent again:
 

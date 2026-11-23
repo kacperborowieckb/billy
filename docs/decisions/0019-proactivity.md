@@ -2,7 +2,7 @@
 
 Status: accepted
 
-Partly superseded: [0032](0032-prompt-and-conversation-architecture.md) changes the place of the Open Loops in reach (the run block of a Side Session) and of the connected Proactive Message (the Turn Context Block). Both were "in the system prompt". A Proactive Turn runs as a Side Session. The code follows 0032 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes the place of the Open Loops in reach (the run block of a Side Session) and of the connected Proactive Message (the Turn Context Block). Both were "in the system prompt". A Proactive Turn runs as a Side Session. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
 
 Date: 2026-11-19
 

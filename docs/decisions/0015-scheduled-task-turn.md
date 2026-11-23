@@ -2,7 +2,7 @@
 
 Status: accepted
 
-Partly superseded: [0032](0032-prompt-and-conversation-architecture.md) replaces "Input" and "Result": a Scheduled Task Turn runs as a Side Session with its own system text, and only its Write-back enters the Conversation. The code follows 0032 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) replaces "Input" and "Result": a Scheduled Task Turn runs as a Side Session with its own system text, and only its Write-back enters the Conversation. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
 
 Date: 2026-11-16
 

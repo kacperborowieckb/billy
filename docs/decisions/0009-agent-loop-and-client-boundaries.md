@@ -2,7 +2,7 @@
 
 Status: accepted
 
-Partly superseded: [0032](0032-prompt-and-conversation-architecture.md) changes one rule under "Message storage": a tool result that is Untrusted Content or large is stored as a Stub and does not replay in full in the next Turn. The code follows 0032 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes one rule under "Message storage": a tool result that is Untrusted Content or large is stored as a Stub and does not replay in full in the next Turn. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
 
 Date: 2026-11-15
 
