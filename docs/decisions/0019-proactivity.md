@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0032](0032-prompt-and-conversation-architecture.md) changes the place of the Open Loops in reach (the run block of a Side Session) and of the connected Proactive Message (the Turn Context Block). Both were "in the system prompt". A Proactive Turn runs as a Side Session. The code follows 0032 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+
 Date: 2026-11-19
 
 Spec #97 (Proactivity), tickets #102 (the default Brief), #100 (Outcome), and #105 (Less of this), and #104 (Send Budget). Builds on [0013](0013-schedules-and-time.md), [0014](0014-schedule-actions.md), [0015](0015-scheduled-task-turn.md), [0016](0016-scheduled-task-failure-and-lateness.md), [0017](0017-scheduled-task-limits.md), and [0018](0018-reminder-failure-completes-the-schedule.md). It supersedes only one rule of [0007](0007-typed-queries-and-migrations.md) (see Schema file). Reminders and Scheduled Tasks that the Owner sets do not change.

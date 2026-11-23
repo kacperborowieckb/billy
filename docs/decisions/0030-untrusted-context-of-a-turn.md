@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0032](0032-prompt-and-conversation-architecture.md) changes "How code checks it": the stored Conversation holds Stubs and no marked Untrusted Content, so the tool results and the forwarded messages of earlier Turns no longer make a Turn `untrusted`. The check of the marker in what the model reads stays. The code follows 0032 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+
 Date: 2026-11-22
 
 Ticket [#167](https://github.com/kacperborowieckb/billy/issues/167) of spec [#139](https://github.com/kacperborowieckb/billy/issues/139). It builds on [0027](0027-actions-and-approval.md) and [0029](0029-untrusted-tool-results.md). It supersedes the last "Revisit if" item of 0029, which names two ways that Untrusted Content enters an Owner message Turn and that 0029 does not cover. All other rules of 0027, 0028, and 0029 stay in force.
