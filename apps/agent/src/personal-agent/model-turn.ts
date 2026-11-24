@@ -14,15 +14,10 @@ import type { TurnTrace } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { staySilent } from "./delivery.ts";
 import type { InboxEvent } from "./inbox.ts";
+import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
 import { generateWithOutcomeTools } from "./outcome-tools.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import {
-  reacted,
-  replied,
-  silent,
-  unanswered,
-  withRecordedToolParts,
-} from "./stored-turn.ts";
+import { reacted, replied, silent, unanswered } from "./stored-turn.ts";
 import type { TurnEnding } from "./stored-turn.ts";
 import { approvalAskingOf, deliverTurnOutcome } from "./turn-delivery.ts";
 import { recordTurnMetric } from "./turn-metric.ts";
@@ -181,52 +176,57 @@ export const runModelTurn = <Failure, Requirements>({
     }
     yield* recordTrace(true);
 
-    const stepsOfTurn = Effect.fnUntraced(function* stepsOfTurn(
-      turnMessages: readonly ModelMessage[]
+    const keptSteps = (turnMessages: readonly ModelMessage[]) =>
+      keepFinishedSteps({ eventId, earlier, turnMessages });
+    const endFailed = Effect.fnUntraced(function* endFailed(
+      reason: string,
+      steps: Option.Option<readonly ModelMessage[]>
     ) {
-      const recorded = yield* progress.completedFor(eventId);
-      const steps = [
-        ...earlier,
-        ...withRecordedToolParts(
-          turnMessages.map((message) => redactor.redactMessage(message)),
-          recorded
-        ),
-      ];
-      return yield* progress.replaceSteps(eventId, steps).pipe(
-        Effect.tapCause((cause) =>
-          Effect.logWarning(
-            "Turn progress did not keep the steps of the finished run",
-            cause
-          )
-        ),
-        Effect.orElseSucceed(() => steps)
+      yield* dropDraftsOf(eventId);
+      yield* finished(
+        Option.isSome(steps)
+          ? steps.value
+          : yield* progress.completedFor(eventId),
+        unanswered
       );
+      yield* recordMetric("model_failed");
+      return { _tag: "Failed", reason } satisfies ModelTurnResult;
     });
     if (outcome._tag === "ModelFailed") {
-      yield* dropDraftsOf(eventId);
-      yield* finished(yield* stepsOfTurn(toolMessagesOf(outcome)), unanswered);
-      yield* recordMetric("model_failed");
-      return {
-        _tag: "Failed",
-        reason: modelFailureReason(outcome.error, redactor),
-      } satisfies ModelTurnResult;
+      return yield* endFailed(
+        modelFailureReason(outcome.error, redactor),
+        yield* keptSteps(toolMessagesOf(outcome))
+      );
     }
     if (decided.kind === "silent") {
-      yield* database.transaction(() =>
-        stepsOfTurn(responseMessagesOf(outcome)).pipe(
-          Effect.flatMap((steps) => finished(steps, silent)),
-          Effect.andThen(staySilent(event))
+      const stayedSilent = yield* database.transaction(() =>
+        keptSteps(responseMessagesOf(outcome)).pipe(
+          Effect.flatMap((steps) =>
+            Option.isNone(steps)
+              ? Effect.succeed(false)
+              : finished(steps.value, silent).pipe(
+                  Effect.andThen(staySilent(event)),
+                  Effect.as(true)
+                )
+          )
         )
       );
+      if (!stayedSilent) {
+        return yield* endFailed(stepsNotKeptReason, Option.none());
+      }
       yield* recordMetric("silent", "silent");
       return silentResult;
     }
     const outcomeKind = decided.reaction === undefined ? "reply" : "reaction";
-    const steps = yield* stepsOfTurn(
+    const kept = yield* keptSteps(
       outcomeKind === "reply"
         ? toolMessagesOf(outcome)
         : responseMessagesOf(outcome)
     );
+    if (Option.isNone(kept)) {
+      return yield* endFailed(stepsNotKeptReason, Option.none());
+    }
+    const steps = kept.value;
     const text = preparation.lateText(redactor.redact(outcome.reply.text));
     const delivery = yield* deliverTurnOutcome({
       event,

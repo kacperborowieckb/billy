@@ -1,6 +1,6 @@
 import type { JSONValue, ModelMessage } from "ai";
 import { asc, count, eq } from "drizzle-orm";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
   ModelMessageJsonSchema,
@@ -73,38 +73,32 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
       .where(eq(turnModelSteps.eventId, eventId))
       .pipe(Effect.map(([row]) => row?.steps ?? 0));
 
-  const record = (call: ToolCallProgress, messages: readonly ModelMessage[]) =>
-    Effect.gen(function* recordEffect() {
-      const recordedAt = new Date().toISOString();
+  const insertMessages = (eventId: string, messages: readonly ModelMessage[]) =>
+    Effect.gen(function* insertMessagesEffect() {
+      const recordedAt = DateTime.formatIso(yield* DateTime.now);
       for (const message of messages) {
-        const checked = yield* checkMessage(
-          call.redactor.redactMessage(message)
-        ).pipe(Effect.orDie);
+        const checked = yield* checkMessage(message).pipe(Effect.orDie);
         yield* database.insert(turnProgress).values({
-          eventId: call.eventId,
+          eventId,
           message: encodeMessage(checked),
           recordedAt,
         });
       }
     });
 
+  const record = (call: ToolCallProgress, messages: readonly ModelMessage[]) =>
+    insertMessages(
+      call.eventId,
+      messages.map((message) => call.redactor.redactMessage(message))
+    );
+
   const replaceSteps = (eventId: string, messages: readonly ModelMessage[]) =>
     database
       .transaction(() =>
-        Effect.gen(function* replaceStepsEffect() {
-          const recordedAt = new Date().toISOString();
-          yield* database
-            .delete(turnProgress)
-            .where(eq(turnProgress.eventId, eventId));
-          for (const message of messages) {
-            const checked = yield* checkMessage(message).pipe(Effect.orDie);
-            yield* database.insert(turnProgress).values({
-              eventId,
-              message: encodeMessage(checked),
-              recordedAt,
-            });
-          }
-        })
+        database
+          .delete(turnProgress)
+          .where(eq(turnProgress.eventId, eventId))
+          .pipe(Effect.andThen(insertMessages(eventId, messages)))
       )
       .pipe(Effect.andThen(completedFor(eventId)));
 
