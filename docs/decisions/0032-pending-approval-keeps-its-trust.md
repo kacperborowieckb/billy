@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes only the place of the list of open Pending Approvals: the Turn Context Block, not the system prompt. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+
 Date: 2026-11-22
 
 Ticket [#176](https://github.com/kacperborowieckb/billy/issues/176) of spec [#139](https://github.com/kacperborowieckb/billy/issues/139). It builds on [0027](0027-actions-and-approval.md) and [0030](0030-untrusted-context-of-a-turn.md). It supersedes the rule of 0030 that names three paths for Untrusted Content, and its rule that code checks only the recent Conversation and the situation part of the system prompt for the marker. All other rules of 0027 and 0030 stay in force.

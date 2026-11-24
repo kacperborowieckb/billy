@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes one rule under "Message storage": a tool result that is Untrusted Content or large is stored as a Stub and does not replay in full in the next Turn. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+
 Date: 2026-11-15
 
 Extends [0003](0003-runtime-and-model-stack.md). It records how we use the Agents SDK and the AI SDK when tools, MCP, and the mobile app arrive.
