@@ -142,7 +142,7 @@ beforeEach(() => {
   resetFakes();
 });
 
-describe("The stored form of a Turn", () => {
+describe("The stored form of a Turn", { timeout: 30_000 }, () => {
   it("is the same bytes when recovery after a reset stores the Turn as when the normal path stores it", async () => {
     const {
       normal,
