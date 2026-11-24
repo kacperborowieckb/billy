@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0034](0034-architecture-review-changes.md) makes the daily Token Budget a cost Budget when Usage records the real cost ([#27](https://github.com/kacperborowieckb/billy/issues/27)).
+
 Date: 2026-11-17
 
 Spec #66 (Schedule Actions), ticket #71. Builds on [0014](0014-schedule-actions.md), [0015](0015-scheduled-task-turn.md), and [0016](0016-scheduled-task-failure-and-lateness.md). All parts of those records stay.

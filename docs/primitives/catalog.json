@@ -67,7 +67,8 @@
         "docs/decisions/0024-reaction-plan-on-reply-planned.md",
         "docs/decisions/0025-restart-mid-turn.md",
         "docs/decisions/0027-actions-and-approval.md",
-        "docs/decisions/0033-prompt-and-conversation-architecture.md"
+        "docs/decisions/0033-prompt-and-conversation-architecture.md",
+        "docs/decisions/0034-architecture-review-changes.md"
       ]
     },
     {
@@ -97,7 +98,8 @@
         "docs/decisions/0007-typed-queries-and-migrations.md",
         "docs/decisions/0009-agent-loop-and-client-boundaries.md",
         "docs/decisions/0010-full-text-search-of-notes.md",
-        "docs/decisions/0028-approval-requests-in-telegram.md"
+        "docs/decisions/0028-approval-requests-in-telegram.md",
+        "docs/decisions/0034-architecture-review-changes.md"
       ]
     },
     {
@@ -154,7 +156,8 @@
         "docs/decisions/0019-proactivity.md",
         "docs/decisions/0027-actions-and-approval.md",
         "docs/decisions/0029-untrusted-tool-results.md",
-        "docs/decisions/0033-prompt-and-conversation-architecture.md"
+        "docs/decisions/0033-prompt-and-conversation-architecture.md",
+        "docs/decisions/0034-architecture-review-changes.md"
       ]
     },
     {
@@ -167,7 +170,8 @@
         "docs/decisions/0029-untrusted-tool-results.md",
         "docs/decisions/0030-untrusted-context-of-a-turn.md",
         "docs/decisions/0032-pending-approval-keeps-its-trust.md",
-        "docs/decisions/0033-prompt-and-conversation-architecture.md"
+        "docs/decisions/0033-prompt-and-conversation-architecture.md",
+        "docs/decisions/0034-architecture-review-changes.md"
       ]
     },
     {
@@ -194,7 +198,8 @@
         "docs/decisions/0023-reaction-outcome.md",
         "docs/decisions/0024-reaction-plan-on-reply-planned.md",
         "docs/decisions/0025-restart-mid-turn.md",
-        "docs/decisions/0033-prompt-and-conversation-architecture.md"
+        "docs/decisions/0033-prompt-and-conversation-architecture.md",
+        "docs/decisions/0034-architecture-review-changes.md"
       ]
     },
     {
@@ -221,7 +226,8 @@
         "docs/decisions/0024-reaction-plan-on-reply-planned.md",
         "docs/decisions/0025-restart-mid-turn.md",
         "docs/decisions/0027-actions-and-approval.md",
-        "docs/decisions/0033-prompt-and-conversation-architecture.md"
+        "docs/decisions/0033-prompt-and-conversation-architecture.md",
+        "docs/decisions/0034-architecture-review-changes.md"
       ]
     },
     {

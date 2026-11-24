@@ -55,8 +55,8 @@ For the future hosted business:
 
 These directions are valid but need more definition before we build them. The order can change.
 
-- **Actions with Approval and Auto-review:** the agent drafts and does work (messages, bookings, forms). The Owner approves irreversible actions.
-- **Integrations:** remote MCP servers, Google Mail and Calendar, with pointer Notes and no copies.
+- **More actions, and Auto-review:** the agent drafts and does work (messages, bookings, forms). The Owner approves irreversible actions. Approval itself is in [the MVP](mvp.md).
+- **More integrations:** Google Mail and Calendar, with pointer Notes and no copies. MCP Connections from the MCP Catalog are in the MVP.
 - **Inbox triage:** an email Channel, and the agent sorts mail and shows what matters.
 - **More capture:** voice memos, photos, and files.
 - **Helpers:** long work in durable workflows, so the chat stays free.
