@@ -60,7 +60,7 @@ The MVP limits scope, not quality (vision principle 9). Each part in scope is bu
 
 - Web chat and any web app for Owners.
 - The mobile app, the marketing site, and `apps/platform` (accounts, billing, open Registration).
-- Auto-review. It comes with the first `approve`-class tool ([#140](https://github.com/kacperborowieckb/billy/issues/140)).
+- Auto-review. It follows the MVP. In the MVP, the Owner sees and answers every call that needs Approval. The spec of Auto-review ([#140](https://github.com/kacperborowieckb/billy/issues/140)) can start when the first `approve`-class call exists.
 - Google Mail and Calendar, and the email Channel.
 - MCP servers that the Owner adds by URL, and servers with a bearer token or an API key. Only the MCP Catalog entries are supported.
 - Voice memos, photos, files, R2, and Vectorize.

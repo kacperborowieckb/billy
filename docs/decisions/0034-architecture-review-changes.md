@@ -11,6 +11,7 @@ It supersedes these rules. All other rules of the named records stay in force.
 - [0033](0033-prompt-and-conversation-architecture.md), "Tool sets": "Safety when the Owner is absent is by construction: the change tools are missing." That is false for a Proactive Turn, which has `set_schedule` and `close_open_loop`.
 - [0033](0033-prompt-and-conversation-architecture.md), "MCP": the Stub of an MCP result names only the Connection, the tool, and the status.
 - [0033](0033-prompt-and-conversation-architecture.md), "History and Compaction" and "Forget": Compaction deletes the rows that the Summary replaces, and the rejected option "Compacted rows kept as an archive".
+- [0019](0019-proactivity.md), "Tools of a proactive Turn", and [0020](0020-follow-ups-set-by-the-agent.md), "Tools": a Proactive Turn has `close_open_loop` and `set_schedule` with a prompt that the model writes, in every run.
 - [0029](0029-untrusted-tool-results.md) and [0030](0030-untrusted-context-of-a-turn.md), "Which Turns": Proactive Turns and Scheduled Task Turns stay `owner`.
 - [0010](0010-full-text-search-of-notes.md): the search matches a Note when any word of the query matches.
 - [0017](0017-scheduled-task-limits.md) and [0019](0019-proactivity.md): the daily Budgets for background work count input and output tokens with the same weight.
