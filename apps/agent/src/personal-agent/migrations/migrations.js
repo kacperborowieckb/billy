@@ -29,6 +29,7 @@ import m0027 from "./20261121214207_approval_answers/migration.sql";
 import m0028 from "./20261122212333_pending_approval_trust_level/migration.sql";
 import m0029 from "./20261122215135_pending_approval_position/migration.sql";
 import m0030 from "./20261124202916_conversation_layout/migration.sql";
+import m0031 from "./20261124225450_conversation_stubs/migration.sql";
 
 export default {
   migrations: {
@@ -63,5 +64,6 @@ export default {
     "20261122212333_pending_approval_trust_level": m0028,
     "20261122215135_pending_approval_position": m0029,
     "20261124202916_conversation_layout": m0030,
+    "20261124225450_conversation_stubs": m0031,
   },
 };
