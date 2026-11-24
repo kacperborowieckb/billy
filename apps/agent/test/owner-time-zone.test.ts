@@ -9,7 +9,13 @@ import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { OwnerPreferences } from "../src/preferences/owner-preferences.ts";
 import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { ownerCurrentTimeText } from "../src/time/owner-current-time.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const preferencesWith = (timeZone: string | undefined) =>
@@ -105,11 +111,8 @@ const journalOf = async (ownerId: string) =>
     )
   );
 
-const systemPromptOfCall = (callIndex: number) => {
-  const prompt = fakeModel.doGenerateCalls[callIndex]?.prompt ?? [];
-  const system = prompt.find((message) => message.role === "system");
-  return system?.role === "system" ? system.content : "";
-};
+const systemPromptOfCall = (callIndex: number) =>
+  instructionsAndContextOf(fakeModel.doGenerateCalls[callIndex]?.prompt ?? []);
 
 const toolNames = (callIndex: number) =>
   (fakeModel.doGenerateCalls[callIndex]?.tools ?? []).map((tool) => tool.name);
@@ -166,16 +169,6 @@ describe("Owner time zone", () => {
       /Current local time of the Owner: \w+ \d{4}-\d{2}-\d{2}, \d{2}:\d{2} \(time zone Europe\/Warsaw\)\./u
     );
     expect(lastSystemPrompt()).not.toContain("is not known");
-  });
-
-  it("puts the time last so the static sections keep the prompt cache", async () => {
-    await addOwner(8303);
-    await ownerSays(8303, "hello", 1);
-
-    const lines = systemPromptOfCall(0).split("\n");
-
-    expect(lines.at(-1)).toContain("time zone of the Owner is not known");
-    expect(lines.at(-2)).toContain("Profile of the Owner is empty");
   });
 
   it("normalizes the case of the name and writes a Journal Entry for each change", async () => {

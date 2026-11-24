@@ -1,5 +1,9 @@
 import { MockLanguageModelV4 } from "ai/test";
 
+import {
+  ownerContextLabel,
+  turnContextLabel,
+} from "../src/personal-agent/context-labels.ts";
 import { burstMessageLabel } from "../src/personal-agent/event-message.ts";
 
 export const fakeTelegramApiUrl = "https://telegram.fake";
@@ -292,6 +296,38 @@ export type ScriptedModelStep =
     };
 
 type ModelPrompt = MockLanguageModelV4["doGenerateCalls"][number]["prompt"];
+
+const userTextOf = (message: ModelPrompt[number]) =>
+  message.role === "user"
+    ? message.content
+        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .join("\n")
+    : "";
+
+export const systemTextOf = (prompt: ModelPrompt) => {
+  const system = prompt.find((message) => message.role === "system");
+  return system?.role === "system" ? system.content : "";
+};
+
+export const contextBlockOf = (prompt: ModelPrompt, label: string) =>
+  prompt.map(userTextOf).findLast((text) => text.startsWith(label)) ?? "";
+
+const isContextBlock = (text: string) =>
+  text.startsWith(ownerContextLabel) || text.startsWith(turnContextLabel);
+
+export const ownerTextsOf = (prompt: ModelPrompt) =>
+  prompt.map(userTextOf).filter((text) => text !== "" && !isContextBlock(text));
+
+export const instructionsAndContextOf = (prompt: ModelPrompt) =>
+  [
+    systemTextOf(prompt),
+    contextBlockOf(prompt, ownerContextLabel),
+    contextBlockOf(prompt, turnContextLabel),
+  ].join("\n");
+
+export const instructionsAndContextMessageOf = (prompt: ModelPrompt) => ({
+  content: instructionsAndContextOf(prompt),
+});
 
 const lastToolOutput = (prompt: ModelPrompt): Record<string, unknown> => {
   const message = prompt.findLast((candidate) => candidate.role === "tool");

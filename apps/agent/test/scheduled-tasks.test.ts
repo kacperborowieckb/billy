@@ -33,6 +33,7 @@ import {
   holdModel,
   resetFakes,
   scriptModel,
+  instructionsAndContextMessageOf,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
@@ -218,9 +219,7 @@ describe("the system prompt of a Scheduled Task Turn", () => {
     await fireTheAlarm(ownerId);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
-    const system = lastModelCall().prompt.find(
-      (message) => message.role === "system"
-    );
+    const system = instructionsAndContextMessageOf(lastModelCall().prompt);
     const setAt = localTimeOf(
       schedule.createdAt,
       DateTime.zoneMakeNamedUnsafe("Europe/Warsaw")

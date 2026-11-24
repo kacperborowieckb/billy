@@ -11,7 +11,13 @@ import { OwnerPreferences } from "../src/preferences/owner-preferences.ts";
 import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { briefPrompt } from "../src/schedule/brief-prompt.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const agentOf = (ownerId: string) =>
@@ -181,7 +187,7 @@ const forwardedFromAna = {
 
 const systemPromptOfLastCall = () => {
   const prompt = fakeModel.doGenerateCalls.at(-1)?.prompt ?? [];
-  return prompt.find((message) => message.role === "system")?.content ?? "";
+  return instructionsAndContextOf(prompt);
 };
 
 beforeEach(() => {

@@ -24,6 +24,8 @@ import {
   resetFakes,
   scriptModel,
   burstInputTexts,
+  instructionsAndContextOf,
+  ownerTextsOf,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
@@ -31,20 +33,7 @@ type ModelPrompt = (typeof fakeModel.doGenerateCalls)[number]["prompt"];
 
 const quietMillis = 1500;
 
-const ownerTextsOf = (prompt: ModelPrompt) =>
-  prompt
-    .filter((message) => message.role === "user")
-    .flatMap((message) =>
-      message.content.flatMap((part) =>
-        part.type === "text" ? [part.text] : []
-      )
-    );
-
-const systemTextOf = (prompt: ModelPrompt) =>
-  prompt
-    .filter((message) => message.role === "system")
-    .map((message) => message.content)
-    .join("\n");
+const systemTextOf = (prompt: ModelPrompt) => instructionsAndContextOf(prompt);
 
 const toolMessageCountOf = (prompt: ModelPrompt) =>
   prompt.filter((message) => message.role === "tool").length;

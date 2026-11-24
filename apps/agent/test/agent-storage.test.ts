@@ -31,12 +31,15 @@ const columnsOf = (table: string) =>
 
 const appendOwnerMessage = Effect.gen(function* appendEffect() {
   const conversation = yield* Conversation;
-  yield* conversation.append("seed", [{ role: "user", content: "kept" }]);
+  yield* conversation.append({
+    eventId: "seed",
+    rows: [{ kind: "input", message: { role: "user", content: "kept" } }],
+  });
 });
 
 const readMessages = Effect.gen(function* readEffect() {
   const conversation = yield* Conversation;
-  return yield* conversation.recent;
+  return yield* conversation.history;
 });
 
 const runWithMigrations = <A, E>(

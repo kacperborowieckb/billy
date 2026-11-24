@@ -26,8 +26,8 @@ import { connectedProactivePreparation } from "./connected-proactive-section.ts"
 import { fail, failWithNotice } from "./delivery.ts";
 import { handleFiredSchedule } from "./fired-schedule.ts";
 import { Inbox } from "./inbox.ts";
+import type { ModelTurnResult } from "./model-turn-result.ts";
 import { runModelTurn } from "./model-turn.ts";
-import type { ModelTurnResult } from "./model-turn.ts";
 import { openApprovalsSection } from "./open-approvals-section.ts";
 import {
   recordOutcomeMetric,
@@ -35,8 +35,8 @@ import {
   recordOutcomesOfFinishedTurns,
 } from "./outcome-records.ts";
 import { ownerMessageTools } from "./owner-message-tools.ts";
-import { reactSection, reactToolName } from "./react-tool.ts";
-import { staySilentSection, staySilentToolName } from "./stay-silent-tool.ts";
+import { reactSection } from "./react-tool.ts";
+import { staySilentSection } from "./stay-silent-tool.ts";
 import { traceOf } from "./turn-record.ts";
 import { ownerMessageRecovery, settleFromJournal } from "./turn-recovery.ts";
 import { restartOf, restartSection } from "./turn-restart.ts";
@@ -129,18 +129,14 @@ const answer = (
         event,
         replyTo,
         inputs: burstInputs(burst),
+        instructions: [staySilentSection, reactSection],
         tools: { ...tools, ...ownerTools },
         trustLevel: trustLevelOfBurst(burst),
         asksOwnerForApproval: true,
         prepare: Effect.succeed({
           ...preparation,
           holdsUntrustedContent: openApprovals.holdsUntrustedContent,
-          situation: [
-            ...(staySilentToolName in ownerTools ? [staySilentSection] : []),
-            ...(reactToolName in ownerTools ? [reactSection] : []),
-            ...openApprovals.situation,
-            ...preparation.situation,
-          ],
+          situation: [...openApprovals.situation, ...preparation.situation],
         }),
         traceOf: (model) => traceOf({ event, ...model }),
         restartSection,

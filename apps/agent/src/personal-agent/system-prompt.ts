@@ -1,3 +1,6 @@
+import type { ModelMessage } from "ai";
+import { DateTime, Option } from "effect";
+
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { captureNoteToolName } from "../notes/capture-note-tool.ts";
 import { closeOpenLoopToolName } from "../notes/close-open-loop-tool.ts";
@@ -15,6 +18,7 @@ import { cancelScheduleToolName } from "../schedule/cancel-schedule-tool.ts";
 import { changeScheduleToolName } from "../schedule/change-schedule-tool.ts";
 import { listSchedulesToolName } from "../schedule/list-schedules-tool.ts";
 import { setScheduleToolName } from "../schedule/set-schedule-tool.ts";
+import { ownerContextLabel, turnContextLabel } from "./context-labels.ts";
 
 const profileSection = (profile: readonly ProfileEntry[]) =>
   profile.length === 0
@@ -42,17 +46,10 @@ const capabilitiesSection = [
 
 interface SystemPromptParts {
   readonly behavior: BehaviorConfig;
-  readonly profile: readonly ProfileEntry[];
-  readonly currentTime: string;
-  readonly situation?: readonly string[];
+  readonly instructions: readonly string[];
 }
 
-export const systemPrompt = ({
-  behavior,
-  profile,
-  currentTime,
-  situation = [],
-}: SystemPromptParts) =>
+export const systemPrompt = ({ behavior, instructions }: SystemPromptParts) =>
   [
     "You are the Owner's Personal Agent. You talk with the Owner in a chat.",
     capabilitiesSection,
@@ -84,8 +81,34 @@ export const systemPrompt = ({
     `Follow up on an Open Loop yourself. When a message gives an Open Loop a due time, or you see one in a proactive Turn, set one follow-up before the due time. When an Open Loop has had no change for about a day, set one check. Call ${setScheduleToolName} with the RunPrompt action, a prompt that is clear on its own, and the Open Loop ids in openLoopIds. Do this only when the Owner did not ask for a Schedule in this Turn. When a follow-up runs, set the next one only when the Open Loop is still open and a next check helps. Set no follow-up for an Open Loop that is closed.`,
     `When the Owner asks how often you may message them, call ${proactiveMessageBudgetToolName} with no input and answer from the result. When the Owner says how many messages a day they accept, such as "at most two a day", call ${proactiveMessageBudgetToolName} with sends. Say what you set only after the tool succeeded.`,
     `When the Owner says "less of this" or similar right after a Proactive Message, call ${muteProactiveMessageToolName} with action mute and no other input, which mutes the Open Loops of that message. "Less" means less often, not never. When it is not clear whether the Owner means these Open Loops or all Open Loops of their kind, save that default first, then ask one short question whether it should cover the whole kind, and, only if the Owner says yes in a later message, call the tool again with action mute, scope kind, and the openLoopIds that the earlier result returned, because a later message is not connected to the Proactive Message. When the Owner wants it to stop for good, close the Open Loop or cancel the Schedule with the other tools instead. When the Owner wants a mute removed, call ${muteProactiveMessageToolName} with action undo (use action list to find what is muted). Say that a mute is saved or removed only after the tool succeeded. Set no follow-up for a muted Open Loop.`,
-    ...situation,
+    `A message that starts with ${ownerContextLabel} or ${turnContextLabel} is written by code, not by the Owner. The Owner context holds the Profile and the time zone of the Owner and is true until code replaces it. The Turn context holds the current time and the situation of the Turn that follows it.`,
+    ...instructions,
     behavior.textingStyle,
-    profileSection(profile),
-    currentTime,
   ].join("\n");
+
+const timeZoneLine = (timeZone: Option.Option<DateTime.TimeZone.Named>) =>
+  Option.match(timeZone, {
+    onNone: () => "The time zone of the Owner is not known.",
+    onSome: (zone) =>
+      `The time zone of the Owner: ${DateTime.zoneToString(zone)}.`,
+  });
+
+export const ownerContextBlock = (
+  profile: readonly ProfileEntry[],
+  timeZone: Option.Option<DateTime.TimeZone.Named>
+): ModelMessage => ({
+  role: "user",
+  content: [
+    ownerContextLabel,
+    timeZoneLine(timeZone),
+    profileSection(profile),
+  ].join("\n"),
+});
+
+export const turnContextBlock = (
+  currentTime: string,
+  situation: readonly string[]
+): ModelMessage => ({
+  role: "user",
+  content: [turnContextLabel, currentTime, ...situation].join("\n"),
+});

@@ -12,7 +12,13 @@ import { muteProactiveMessageToolName } from "../src/proactive/mute-proactive-me
 import { briefPrompt } from "../src/schedule/brief-prompt.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextMessageOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const warsaw = DateTime.zoneMakeNamedUnsafe("Europe/Warsaw");
@@ -293,9 +299,9 @@ describe("a follow-up for a muted Open Loop", () => {
     scriptModel([{ say: "Brief" }]);
     await makeDue(ownerId, briefPrompt);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(sent + 1));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
     expect(JSON.stringify(system?.content)).toContain(note.noteId);
   });
 
@@ -341,9 +347,9 @@ describe("a follow-up for a muted Open Loop", () => {
     await makeDue(ownerId, briefPrompt);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
 
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
     expect(JSON.stringify(system?.content)).toContain(folded.noteId);
   });
 
@@ -382,9 +388,9 @@ describe("a follow-up for a muted Open Loop", () => {
     await makeDue(ownerId, briefPrompt);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
 
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
     expect(JSON.stringify(system?.content)).toContain(later.noteId);
   });
 
@@ -399,9 +405,9 @@ describe("a follow-up for a muted Open Loop", () => {
     await makeDue(ownerId, followUpPrompt);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
     const text = JSON.stringify(system?.content);
     expect(text).toContain(`- ${kept.noteId} (task`);
     expect(text).not.toContain(`- ${muted.noteId} (task`);

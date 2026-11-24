@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
-import { desc } from "drizzle-orm";
-import { Context, Effect, Layer, Schema } from "effect";
+import { asc } from "drizzle-orm";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
   ModelMessageJsonSchema,
@@ -11,62 +11,66 @@ import {
   conversationMessages,
   conversationRecordedEvents,
 } from "./storage-schema.ts";
-
-const recentMessageLimit = 20;
+import type { ConversationRowKind } from "./storage-values.ts";
 
 const encodeMessage = Schema.encodeSync(ModelMessageJsonSchema);
 const decodeMessage = Schema.decodeUnknownEffect(ModelMessageJsonSchema);
 const checkMessage = Schema.decodeUnknownEffect(ModelMessageSchema);
 
-const startingAtOwnerMessage = (messages: readonly ModelMessage[]) => {
-  const firstOwnerMessage = messages.findIndex(
-    (message) => message.role === "user"
-  );
-  return firstOwnerMessage === -1 ? [] : messages.slice(firstOwnerMessage);
-};
+export interface ConversationRow {
+  readonly kind: ConversationRowKind;
+  readonly message: ModelMessage;
+}
+
+export interface ConversationEntry {
+  readonly eventId: string;
+  readonly rows: readonly ConversationRow[];
+  readonly recordedAs?: string | undefined;
+}
 
 const makeConversation = Effect.gen(function* makeConversationEffect() {
   const { database } = yield* AgentStorage;
 
-  const recent = database
+  const history = database
     .select({ message: conversationMessages.message })
     .from(conversationMessages)
-    .orderBy(desc(conversationMessages.sequence))
-    .limit(recentMessageLimit)
+    .orderBy(asc(conversationMessages.sequence))
     .pipe(
       Effect.flatMap((rows) =>
-        Effect.forEach(rows.toReversed(), (row) => decodeMessage(row.message))
+        Effect.all(rows.map((row) => decodeMessage(row.message)))
       ),
-      Effect.orDie,
-      Effect.map(startingAtOwnerMessage)
+      Effect.orDie
     );
 
-  const writeMessages = (messages: readonly ModelMessage[]) =>
-    Effect.gen(function* writeMessagesEffect() {
-      const recordedAt = new Date().toISOString();
-      for (const message of messages) {
+  const writeRows = (eventId: string, rows: readonly ConversationRow[]) =>
+    Effect.gen(function* writeRowsEffect() {
+      const recordedAt = DateTime.formatIso(yield* DateTime.now);
+      for (const { kind, message } of rows) {
         const checked = yield* checkMessage(message).pipe(Effect.orDie);
-        yield* database
-          .insert(conversationMessages)
-          .values({ message: encodeMessage(checked), recordedAt });
+        yield* database.insert(conversationMessages).values({
+          eventId,
+          kind,
+          message: encodeMessage(checked),
+          recordedAt,
+        });
       }
     });
 
-  const append = (eventId: string, messages: readonly ModelMessage[]) =>
+  const append = ({ eventId, rows, recordedAs }: ConversationEntry) =>
     database.transaction(() =>
       Effect.gen(function* appendEffect() {
         const [recorded] = yield* database
           .insert(conversationRecordedEvents)
-          .values({ eventId })
+          .values({ eventId: recordedAs ?? eventId })
           .onConflictDoNothing()
           .returning();
         if (recorded !== undefined) {
-          yield* writeMessages(messages);
+          yield* writeRows(eventId, rows);
         }
       })
     );
 
-  return { recent, append };
+  return { history, append };
 });
 
 export class Conversation extends Context.Service<

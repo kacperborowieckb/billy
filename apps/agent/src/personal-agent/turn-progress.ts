@@ -1,5 +1,5 @@
 import type { JSONValue, ModelMessage } from "ai";
-import { asc, count, eq } from "drizzle-orm";
+import { asc, count, eq, inArray } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
@@ -8,7 +8,11 @@ import {
 } from "../model-gateway/model-message-schema.ts";
 import type { Redactor } from "../tracing/redactor.ts";
 import { AgentStorage } from "./agent-storage.ts";
-import { turnModelSteps, turnProgress } from "./storage-schema.ts";
+import {
+  turnContextBlocks,
+  turnModelSteps,
+  turnProgress,
+} from "./turn-progress-schema.ts";
 
 const encodeMessage = Schema.encodeSync(ModelMessageJsonSchema);
 const decodeMessage = Schema.decodeUnknownEffect(ModelMessageJsonSchema);
@@ -140,8 +144,48 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
       )
     );
 
+  const recordTurnContext = (eventId: string, message: ModelMessage) =>
+    Effect.gen(function* recordTurnContextEffect() {
+      const checked = yield* checkMessage(message).pipe(Effect.orDie);
+      const row = {
+        message: encodeMessage(checked),
+        recordedAt: DateTime.formatIso(yield* DateTime.now),
+      };
+      yield* database
+        .insert(turnContextBlocks)
+        .values({ eventId, ...row })
+        .onConflictDoUpdate({ target: turnContextBlocks.eventId, set: row });
+    });
+
+  const turnContextFor = (eventId: string) =>
+    database
+      .select({ message: turnContextBlocks.message })
+      .from(turnContextBlocks)
+      .where(eq(turnContextBlocks.eventId, eventId))
+      .pipe(
+        Effect.flatMap(([row]) =>
+          row === undefined ? Effect.undefined : decodeMessage(row.message)
+        ),
+        Effect.orDie
+      );
+
+  const forgetSettled = (eventIds: readonly string[]) =>
+    database
+      .delete(turnProgress)
+      .where(inArray(turnProgress.eventId, [...eventIds]))
+      .pipe(
+        Effect.andThen(
+          database
+            .delete(turnContextBlocks)
+            .where(inArray(turnContextBlocks.eventId, [...eventIds]))
+        )
+      );
+
   return {
     completedFor,
+    recordTurnContext,
+    turnContextFor,
+    forgetSettled,
     markModelStep,
     usedStepCount,
     recordingToolCall,

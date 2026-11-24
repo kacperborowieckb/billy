@@ -14,6 +14,7 @@ import { OwnerChannelConversation } from "../src/personal-agent/owner-channel-co
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { receiveEvent } from "../src/personal-agent/receive-event.ts";
 import { staySilentToolName } from "../src/personal-agent/stay-silent-tool.ts";
+import { TurnProgress } from "../src/personal-agent/turn-progress.ts";
 import type { OwnerPreferences } from "../src/preferences/owner-preferences.ts";
 import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { ProactiveMessages } from "../src/proactive/proactive-messages.ts";
@@ -25,6 +26,8 @@ import {
   fakeTelegram,
   resetFakes,
   scriptModel,
+  instructionsAndContextMessageOf,
+  instructionsAndContextOf,
 } from "./fakes.ts";
 import { quietHoursLaterToday } from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
@@ -147,8 +150,7 @@ const ownerWrites = async (telegramUserId: number, text: string) => {
 
 const systemPromptOfLastModelCall = () => {
   const call = fakeModel.doGenerateCalls.at(-1);
-  const system = call?.prompt.find((message) => message.role === "system");
-  return typeof system?.content === "string" ? system.content : "";
+  return instructionsAndContextOf(call?.prompt ?? []);
 };
 
 beforeEach(() => {
@@ -174,7 +176,7 @@ describe("the Outcome of a Proactive Message in a connected Turn", () => {
       expect(await outcomeOf(ownerId)).toBe("acted")
     );
     const system = fakeModel.doGenerateCalls
-      .map((call) => call.prompt.find((message) => message.role === "system"))
+      .map((call) => instructionsAndContextMessageOf(call.prompt))
       .find(
         (message) =>
           typeof message?.content === "string" &&
@@ -458,7 +460,7 @@ const withStore = async <A, E>(
     const services = Layer.mergeAll(
       ProactiveMessages.layer.pipe(Layer.provide(journal)),
       Schedules.layer(ownerId, alarmClock).pipe(Layer.provide(journal)),
-      Inbox.layer.pipe(Layer.provide(journal)),
+      Inbox.layer.pipe(Layer.provide(Layer.merge(journal, TurnProgress.layer))),
       OwnerChannelConversation.layer,
       journal
     ).pipe(

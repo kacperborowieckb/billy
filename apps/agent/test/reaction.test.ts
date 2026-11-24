@@ -208,7 +208,7 @@ describe("One outcome for each Event: a reaction", () => {
     ]);
     const history = await inAgent(
       ownerId,
-      Conversation.pipe(Effect.flatMap((conversation) => conversation.recent))
+      Conversation.pipe(Effect.flatMap((conversation) => conversation.history))
     );
     expect(JSON.stringify(history)).toContain("buy milk");
     expect(JSON.stringify(history)).toContain('"emoji":"✍"');

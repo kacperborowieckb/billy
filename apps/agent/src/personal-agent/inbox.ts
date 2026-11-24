@@ -17,6 +17,7 @@ import { AgentStorage } from "./agent-storage.ts";
 import { makeBurstWaitQueries } from "./burst-wait.ts";
 import { inboxEvents } from "./storage-schema.ts";
 import { inboxStates } from "./storage-values.ts";
+import { TurnProgress } from "./turn-progress.ts";
 
 const inboxFields = {
   eventId: Schema.String,
@@ -82,6 +83,7 @@ const newPendingRow = Effect.fnUntraced(function* newPendingRow() {
 const makeInbox = Effect.gen(function* makeInboxEffect() {
   const { database } = yield* AgentStorage;
   const journal = yield* Journal;
+  const progress = yield* TurnProgress;
 
   const insertOwnerMessage = Effect.fnUntraced(function* insertOwnerMessage({
     _tag,
@@ -191,14 +193,20 @@ const makeInbox = Effect.gen(function* makeInboxEffect() {
 
   const settle =
     (state: "done" | "failed") => (events: readonly InboxEvent[]) =>
-      Effect.forEach(
-        events,
-        (event) =>
-          database
-            .update(inboxEvents)
-            .set({ state })
-            .where(eq(inboxEvents.eventId, event.eventId)),
-        { discard: true }
+      database.transaction(() =>
+        Effect.forEach(
+          events,
+          (event) =>
+            database
+              .update(inboxEvents)
+              .set({ state })
+              .where(eq(inboxEvents.eventId, event.eventId)),
+          { discard: true }
+        ).pipe(
+          Effect.andThen(
+            progress.forgetSettled(events.map((event) => event.eventId))
+          )
+        )
       );
 
   const { burstIsDue, burstGrewSince } = makeBurstWaitQueries(database);

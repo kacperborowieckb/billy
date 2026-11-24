@@ -28,6 +28,7 @@ import {
   fakeTelegram,
   resetFakes,
   scriptModel,
+  instructionsAndContextMessageOf,
 } from "./fakes.ts";
 import { quietHoursLaterToday } from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
@@ -286,7 +287,7 @@ describe("a Brief that fires", () => {
     );
     expect(fakeTelegram.sent[1]?.body.reply_parameters).toBeUndefined();
     const call = lastModelCall();
-    const system = call.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(call.prompt);
     expect(system?.content).toContain("The Owner is not present.");
     expect(system?.content).toContain(`- ${note.noteId} (task`);
     expect(system?.content).toContain("Buy a gift for Ana");

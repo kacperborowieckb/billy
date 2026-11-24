@@ -128,12 +128,18 @@ const answerAndRun = Effect.fnUntraced(function* answerAndRun(
     Option.flatMap((row) => Option.fromNullishOr(statusOfApproval(row)))
   );
   if (Option.isSome(status)) {
-    yield* conversation.append(event.eventId, [
-      {
-        role: "assistant",
-        content: conversationEntryOf(approval.summary, status.value),
-      },
-    ]);
+    yield* conversation.append({
+      eventId: event.eventId,
+      rows: [
+        {
+          kind: "approval_status",
+          message: {
+            role: "assistant",
+            content: conversationEntryOf(approval.summary, status.value),
+          },
+        },
+      ],
+    });
   }
 });
 

@@ -30,21 +30,13 @@ import {
   holdModel,
   resetFakes,
   scriptModel,
+  ownerTextsOf,
 } from "./fakes.ts";
 import { addOwner } from "./telegram-requests.ts";
 
 const burstTexts = ["first", "second", "third"] as const;
 
 type ModelPrompt = (typeof fakeModel.doGenerateCalls)[number]["prompt"];
-
-const ownerTextsOf = (prompt: ModelPrompt) =>
-  prompt
-    .filter((message) => message.role === "user")
-    .flatMap((message) =>
-      message.content.flatMap((part) =>
-        part.type === "text" ? [part.text] : []
-      )
-    );
 
 const agentOf = (ownerId: string) =>
   personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId));
@@ -208,12 +200,13 @@ describe("A Turn answers a burst of Owner messages", () => {
           Effect.flatMap((store) => store.readForEvent(turnEventId ?? ""))
         ),
         conversation: Conversation.pipe(
-          Effect.flatMap((store) => store.recent)
+          Effect.flatMap((store) => store.history)
         ),
       })
     );
     expect(traces).toHaveLength(1);
     expect(conversation.map((message) => message.content)).toEqual([
+      expect.stringMatching(/^\[Turn context\]/u),
       ...burstInputTexts(...burstTexts),
       expect.anything(),
     ]);

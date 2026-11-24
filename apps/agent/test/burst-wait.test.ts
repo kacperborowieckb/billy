@@ -20,25 +20,14 @@ import {
   holdModel,
   resetFakes,
   scriptModel,
+  instructionsAndContextOf,
+  ownerTextsOf,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 type ModelPrompt = (typeof fakeModel.doGenerateCalls)[number]["prompt"];
 
-const ownerTextsOf = (prompt: ModelPrompt) =>
-  prompt
-    .filter((message) => message.role === "user")
-    .flatMap((message) =>
-      message.content.flatMap((part) =>
-        part.type === "text" ? [part.text] : []
-      )
-    );
-
-const systemTextOf = (prompt: ModelPrompt) =>
-  prompt
-    .filter((message) => message.role === "system")
-    .map((message) => message.content)
-    .join("\n");
+const systemTextOf = (prompt: ModelPrompt) => instructionsAndContextOf(prompt);
 
 const agentOf = (ownerId: string) =>
   personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId));

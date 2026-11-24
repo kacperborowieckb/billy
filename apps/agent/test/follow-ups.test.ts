@@ -13,7 +13,13 @@ import { listSchedulesToolName } from "../src/schedule/list-schedules-tool.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import type { TurnTraces } from "../src/tracing/turn-trace.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextMessageOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 interface ScheduleRow extends Record<string, SqlStorageValue> {
@@ -458,9 +464,9 @@ describe("a follow-up that fires", () => {
     );
     expect(rows).toHaveLength(2);
     expect(rows[1]?.open_loop_ids).toBe(JSON.stringify([note.noteId]));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
     expect(system?.content).toContain("The Owner is not present.");
     expect(system?.content).toContain("Buy a gift for Ana");
     expect(system?.content).not.toContain("Renew the passport");
@@ -523,9 +529,9 @@ describe("a follow-up that fires", () => {
     await makeAgentSchedulesDue(ownerId, followUpPrompt);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
+    const system = instructionsAndContextMessageOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
     expect(system?.content).toContain(
       "recent Outcomes of earlier Proactive Messages about it, newest first: ignored"
     );

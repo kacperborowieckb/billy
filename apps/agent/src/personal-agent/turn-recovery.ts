@@ -54,6 +54,7 @@ const recordConversation = Effect.fnUntraced(function* recordConversation(
   const progress = yield* TurnProgress;
   yield* session.commit({
     eventId: event.eventId,
+    turnContext: yield* progress.turnContextFor(event.eventId),
     inputs: inputs ?? [yield* inputMessageOf(event)],
     steps: yield* progress.completedFor(event.eventId),
     ending: endingOf(state),

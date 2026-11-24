@@ -712,7 +712,9 @@ describe("Open Loops on Notes", () => {
       await agentOf(ownerId),
       (_, state) =>
         state.storage.sql
-          .exec<{ message: string }>("SELECT message FROM turn_progress")
+          .exec<{ message: string }>(
+            "SELECT message FROM conversation_messages WHERE kind = 'step'"
+          )
           .toArray()
           .map((row) => row.message)
           .join("\n")

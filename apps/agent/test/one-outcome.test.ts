@@ -392,7 +392,7 @@ describe("One outcome for each Event: silence", () => {
     expect(await stateOfOnlyEvent(ownerId)).toBe("done");
     const history = await inPersonalAgent(
       ownerId,
-      Conversation.pipe(Effect.flatMap((conversation) => conversation.recent))
+      Conversation.pipe(Effect.flatMap((conversation) => conversation.history))
     );
     expect(JSON.stringify(history)).toContain("interrupted");
   });
@@ -534,7 +534,7 @@ describe("One outcome for each Event: silence", () => {
     expect(toolResultTexts()).toContain(silenceAfterFailureMessage);
   });
 
-  it("records a failed tool call in Turn progress, so a restarted Turn sees it", async () => {
+  it("keeps a failed tool call in the stored steps of the Turn, so the next Turn sees it", async () => {
     scriptModel([
       { callTool: setTimeZoneToolName, input: { timeZone: "Not/AZone" } },
       { say: "Sorry, I could not set that time zone." },
@@ -542,16 +542,15 @@ describe("One outcome for each Event: silence", () => {
 
     const ownerId = await ownerSays(6110, "I live in Not/AZone");
 
-    const progress = await inPersonalAgent(
-      ownerId,
-      Effect.gen(function* progressEffect() {
-        const inbox = yield* Inbox;
-        const turnProgress = yield* TurnProgress;
-        const journal = yield* Journal;
-        const [entry] = yield* journal.read;
-        yield* inbox.pending;
-        return yield* turnProgress.completedFor(entry?.record.eventId ?? "");
-      })
+    const progress = await runInDurableObject(
+      await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
+      (_, state) =>
+        state.storage.sql
+          .exec<{ message: string }>(
+            "SELECT message FROM conversation_messages WHERE kind = 'step' ORDER BY sequence"
+          )
+          .toArray()
+          .map((row) => JSON.parse(row.message) as unknown)
     );
     expect(progress).toMatchObject([
       { role: "assistant", content: [{ toolName: setTimeZoneToolName }] },
@@ -578,7 +577,7 @@ describe("One outcome for each Event: silence", () => {
     ]);
     const history = await inPersonalAgent(
       ownerId,
-      Conversation.pipe(Effect.flatMap((conversation) => conversation.recent))
+      Conversation.pipe(Effect.flatMap((conversation) => conversation.history))
     );
     const results = history.flatMap((message) =>
       message.role === "tool" ? message.content : []

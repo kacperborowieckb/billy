@@ -9,7 +9,13 @@ import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { Profile } from "../src/profile/profile.ts";
 import { updateProfileToolName } from "../src/profile/update-profile-tool.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const agentOf = (ownerId: string) =>
@@ -46,11 +52,8 @@ const toolCallsOfTraces = async (ownerId: string) =>
     )
   );
 
-const systemPromptOfCall = (callIndex: number) => {
-  const prompt = fakeModel.doGenerateCalls[callIndex]?.prompt ?? [];
-  const system = prompt.find((message) => message.role === "system");
-  return system?.role === "system" ? system.content : "";
-};
+const systemPromptOfCall = (callIndex: number) =>
+  instructionsAndContextOf(fakeModel.doGenerateCalls[callIndex]?.prompt ?? []);
 
 const lastSystemPrompt = () =>
   systemPromptOfCall(fakeModel.doGenerateCalls.length - 1);
