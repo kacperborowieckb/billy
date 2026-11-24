@@ -57,8 +57,21 @@ export const statusOfApproval = (approval: PendingApproval) =>
 const lowerFirst = (text: string) =>
   `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 
-export const conversationEntryOf = (summary: string, status: string) =>
-  `Approval for ${summary}: ${lowerFirst(status)}`;
+export const conversationEntryOf = (
+  {
+    pendingApprovalId,
+    toolName,
+    summary,
+    trustLevel,
+  }: Pick<
+    PendingApproval,
+    "pendingApprovalId" | "toolName" | "summary" | "trustLevel"
+  >,
+  status: string
+) =>
+  trustLevel === "untrusted"
+    ? `Approval ${pendingApprovalId} (${toolName}): ${lowerFirst(status)}`
+    : `Approval for ${summary}: ${lowerFirst(status)}`;
 
 const hasExpired = (approval: PendingApproval, now: DateTime.Utc) =>
   approval.state === "expired" ||

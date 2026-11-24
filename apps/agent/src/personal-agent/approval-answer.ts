@@ -135,7 +135,7 @@ const answerAndRun = Effect.fnUntraced(function* answerAndRun(
           kind: "approval_status",
           message: {
             role: "assistant",
-            content: conversationEntryOf(approval.summary, status.value),
+            content: conversationEntryOf(approval, status.value),
           },
         },
       ],

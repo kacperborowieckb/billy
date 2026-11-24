@@ -26,6 +26,8 @@ import { showTypingOnce } from "./acknowledge.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { burstWaitOf } from "./burst-wait.ts";
 import type { BurstWait } from "./burst-wait.ts";
+import { StoredFormLimits } from "./conversation-stubs.ts";
+import type { StoredFormLimitValues } from "./conversation-stubs.ts";
 import { Conversation } from "./conversation.ts";
 import { fireDueSchedulesThen } from "./due-schedule-events.ts";
 import { expireDueApprovals } from "./expire-due-approvals.ts";
@@ -37,15 +39,16 @@ import { TurnProgress } from "./turn-progress.ts";
 import { liveTurnServices } from "./turn-services.ts";
 import { takeTurn } from "./turn.ts";
 
-interface AgentAlarm {
+interface AgentSettings {
   readonly clock: AlarmClock;
   readonly burstWait: () => BurstWait;
+  readonly storedFormLimits: () => StoredFormLimitValues;
 }
 
 const personalAgentLayer = (
   storage: DurableObjectStorage,
   ownerId: OwnerId,
-  { clock, burstWait }: AgentAlarm
+  { clock, burstWait, storedFormLimits }: AgentSettings
 ) => {
   const journal = Journal.layer(ownerId);
   const schedules = Schedules.layer(ownerId, clock, burstWait).pipe(
@@ -61,6 +64,7 @@ const personalAgentLayer = (
     ProactiveMessages.layer.pipe(Layer.provide(journal)),
     PendingApprovals.layer.pipe(Layer.provide(journal)),
     Conversation.layer,
+    StoredFormLimits.layer(storedFormLimits),
     OwnerChannelConversation.layer,
     TurnProgress.layer,
     UsageLedger.layer(ownerId),
@@ -96,6 +100,7 @@ export class PersonalAgent extends Agent<Env> {
     personalAgentLayer(this.ctx.storage, this.ownerId, {
       clock: this.alarmClock,
       burstWait: () => burstWaitOf(this.behavior),
+      storedFormLimits: () => this.behavior,
     })
   );
 

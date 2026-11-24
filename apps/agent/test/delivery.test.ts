@@ -11,6 +11,7 @@ import type { Delivery } from "../src/channels/channel.ts";
 import { Journal, JournalRecordSchema } from "../src/journal/journal.ts";
 import type { JournalEntry, JournalRecord } from "../src/journal/journal.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import type { StoredFormLimits } from "../src/personal-agent/conversation-stubs.ts";
 import type { Conversation } from "../src/personal-agent/conversation.ts";
 import { noOwnerConversationReason } from "../src/personal-agent/delivery-send.ts";
 import {
@@ -263,6 +264,7 @@ const inAgent = async <A, E>(
     | OwnerChannelConversation
     | Redactor
     | Schedules
+    | StoredFormLimits
     | TurnTraces
   >
 ) =>

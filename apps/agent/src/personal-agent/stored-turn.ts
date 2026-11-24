@@ -1,7 +1,16 @@
 import type { AssistantContent, ModelMessage, ToolContent } from "ai";
 import { Effect } from "effect";
 
+import { holdsUntrustedContent } from "../notes/note.ts";
 import { Redactor } from "../tracing/redactor.ts";
+import {
+  inputStubbed,
+  trustedStepsLimited,
+  untrustedReplyStub,
+  StoredFormLimits,
+  untrustedStepsStubbed,
+} from "./conversation-stubs.ts";
+import type { StoredFormLimitValues } from "./conversation-stubs.ts";
 import { Conversation } from "./conversation.ts";
 import type { ConversationRow } from "./conversation.ts";
 import { withTurnContext } from "./turn-context.ts";
@@ -90,9 +99,20 @@ export interface FinishedTurn {
   readonly ending: TurnEnding;
 }
 
-const endingRowsOf = (ending: TurnEnding): readonly ConversationRow[] =>
+const endingRowsOf = (
+  ending: TurnEnding,
+  heldUntrustedContent: boolean
+): readonly ConversationRow[] =>
   ending._tag === "Replied"
-    ? [{ kind: "reply", message: { role: "assistant", content: ending.text } }]
+    ? [
+        {
+          kind: "reply",
+          message: {
+            role: "assistant",
+            content: heldUntrustedContent ? untrustedReplyStub : ending.text,
+          },
+        },
+      ]
     : [];
 
 const rowsOfKind = (
@@ -102,27 +122,35 @@ const rowsOfKind = (
 
 export const storedFormOf = (
   { turnContext, inputs, steps, ending }: FinishedTurn,
-  redactor: Redactor["Service"]
-): readonly ConversationRow[] =>
-  ending._tag === "Unanswered" && steps.length === 0
-    ? []
+  redactor: Redactor["Service"],
+  limits: StoredFormLimitValues
+): readonly ConversationRow[] => {
+  if (ending._tag === "Unanswered" && steps.length === 0) {
+    return [];
+  }
+  const sentInputs = withTurnContext(turnContext, inputs).map((input) =>
+    redactor.redactMessage(input)
+  );
+  const heldUntrustedContent = holdsUntrustedContent([sentInputs, steps]);
+  return heldUntrustedContent
+    ? [
+        ...rowsOfKind("input", sentInputs.map(inputStubbed)),
+        ...rowsOfKind("step", untrustedStepsStubbed(steps)),
+        ...endingRowsOf(ending, true),
+      ]
     : [
-        ...rowsOfKind(
-          "input",
-          withTurnContext(turnContext, inputs).map((input) =>
-            redactor.redactMessage(input)
-          )
-        ),
-        ...rowsOfKind("step", steps),
-        ...endingRowsOf(ending),
+        ...rowsOfKind("input", sentInputs),
+        ...rowsOfKind("step", trustedStepsLimited(steps, limits)),
+        ...endingRowsOf(ending, false),
       ];
+};
 
 export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
   turn: FinishedTurn
 ) {
   const conversation = yield* Conversation;
   const redactor = yield* Redactor;
-  const rows = storedFormOf(turn, redactor);
+  const rows = storedFormOf(turn, redactor, yield* StoredFormLimits);
   if (rows.length > 0) {
     yield* conversation.append({
       eventId: turn.eventId,

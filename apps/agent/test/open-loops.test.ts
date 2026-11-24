@@ -719,10 +719,8 @@ describe("Open Loops on Notes", () => {
           .map((row) => row.message)
           .join("\n")
     );
-    expect(savedSteps).toContain(
-      JSON.stringify(markUntrustedContent("waiting"))
-    );
-    expect(savedSteps).not.toContain('"kind":"waiting"');
+    expect(savedSteps).toContain(`[${captureNoteToolName}: done. Note ids: `);
+    expect(savedSteps).not.toContain("waiting");
     expect(offered).toContain(updateNoteToolName);
   });
 });

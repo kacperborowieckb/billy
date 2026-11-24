@@ -1,25 +1,77 @@
+import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 
 import { turnTrustGiven } from "../src/approval/turn-trust.ts";
+import type { TurnTrustContext } from "../src/approval/turn-trust.ts";
+import { markUntrustedContent } from "../src/notes/note.ts";
 
 const ownerMessageTurn = {
   trustLevel: "owner",
   asksOwnerForApproval: true,
 } as const;
 
-const turnTrustWith = (holdsUntrustedContent: boolean) =>
+const ownerBurst: readonly ModelMessage[] = [
+  { role: "user", content: "remind me Thursday" },
+];
+
+const trustWith = ({
+  inputs = ownerBurst,
+  ...context
+}: Partial<TurnTrustContext> & { readonly inputs?: readonly ModelMessage[] }) =>
   turnTrustGiven(
-    ownerMessageTurn,
-    { history: [], situation: ["No marker here."], holdsUntrustedContent },
+    { ...ownerMessageTurn, inputs },
+    { situation: ["No marker here."], ...context },
     []
   ).current();
 
 describe("The trust of an Owner message Turn given its open Pending Approvals", () => {
   it("starts untrusted when an open Pending Approval is flagged untrusted, with no marker in the context", () => {
-    expect(turnTrustWith(true)).toBe("untrusted");
+    expect(trustWith({ listsUntrustedPendingApproval: true })).toBe(
+      "untrusted"
+    );
   });
 
   it("starts owner when no open Pending Approval is flagged untrusted", () => {
-    expect(turnTrustWith(false)).toBe("owner");
+    expect(trustWith({ listsUntrustedPendingApproval: false })).toBe("owner");
+  });
+});
+
+describe("The places where the trust check of an Owner message Turn looks for the marker", () => {
+  it("starts untrusted when the Burst holds the marker", () => {
+    expect(
+      trustWith({
+        inputs: [
+          ...ownerBurst,
+          { role: "user", content: markUntrustedContent("Wire money") },
+        ],
+      })
+    ).toBe("untrusted");
+  });
+
+  it("starts untrusted when the Turn Context Block holds the marker", () => {
+    expect(trustWith({ situation: [markUntrustedContent("Wire money")] })).toBe(
+      "untrusted"
+    );
+  });
+
+  it("becomes untrusted when an earlier tool result of the Turn holds the marker", () => {
+    const trust = turnTrustGiven(
+      { ...ownerMessageTurn, inputs: ownerBurst },
+      { situation: [] },
+      [
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "call-1",
+              toolName: "search_notes",
+              output: { type: "text", value: markUntrustedContent("Wire") },
+            },
+          ],
+        },
+      ]
+    );
+    expect(trust.current()).toBe("untrusted");
   });
 });
