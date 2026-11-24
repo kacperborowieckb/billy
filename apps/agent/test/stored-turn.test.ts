@@ -4,12 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
-import { turnContextLabel } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import {
-  contextBlockOf,
   fakeModel,
   fakeTelegram,
+  lastUserTextOf,
   resetFakes,
   scriptModel,
 } from "./fakes.ts";
@@ -52,13 +51,10 @@ const pendingEventCountOf = async (ownerId: string) =>
         .one().pending
   );
 
-const sentTurnContextRow = () =>
+const sentOwnerMessageRow = () =>
   JSON.stringify({
     role: "user",
-    content: contextBlockOf(
-      fakeModel.doGenerateCalls[0]?.prompt ?? [],
-      turnContextLabel
-    ),
+    content: lastUserTextOf(fakeModel.doGenerateCalls[0]?.prompt ?? []),
   });
 
 const captureThenReply = () =>
@@ -81,7 +77,7 @@ describe("The stored form of a Turn", () => {
       expect(await pendingEventCountOf(normalOwner)).toBe(0)
     );
     const normal = await storedConversationOf(normalOwner);
-    const normalSentTurnContext = sentTurnContextRow();
+    const normalSentOwnerMessage = sentOwnerMessageRow();
 
     resetFakes();
     const recoveredOwner = await ownerInWarsaw(7302);
@@ -98,7 +94,7 @@ describe("The stored form of a Turn", () => {
     await telegramWebhook(textUpdate({ fromUserId: 7302, text: "buy tea" }));
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
     expect(await storedConversationOf(recoveredOwner)).toEqual([]);
-    const recoveredSentTurnContext = sentTurnContextRow();
+    const recoveredSentOwnerMessage = sentOwnerMessageRow();
     expect(await pendingEventCountOf(recoveredOwner)).toBe(1);
 
     await runInDurableObject(
@@ -113,15 +109,14 @@ describe("The stored form of a Turn", () => {
     expect(await pendingEventCountOf(recoveredOwner)).toBe(0);
     expect(normal.map((message) => JSON.parse(message).role)).toEqual([
       "user",
-      "user",
       "assistant",
       "tool",
       "assistant",
     ]);
     const recovered = await storedConversationOf(recoveredOwner);
-    expect(normalSentTurnContext).toContain("Current local time of the Owner");
-    expect(normal[0]).toBe(normalSentTurnContext);
-    expect(recovered[0]).toBe(recoveredSentTurnContext);
+    expect(normalSentOwnerMessage).toContain("Current local time of the Owner");
+    expect(normal[0]).toBe(normalSentOwnerMessage);
+    expect(recovered[0]).toBe(recoveredSentOwnerMessage);
     expect(recovered.slice(1)).toEqual(normal.slice(1));
   });
 });

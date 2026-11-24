@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "a2d11998-cfdb-496c-bad3-8c1e01e86af5",
+  "id": "7a244657-b678-4de9-8c1c-efb02472c62b",
   "prevIds": ["478c22b4-e827-4c3a-9924-d00ab6c4ea4b"],
   "ddl": [
     {
@@ -45,6 +45,10 @@
       "entityType": "tables"
     },
     {
+      "name": "turn_traces",
+      "entityType": "tables"
+    },
+    {
       "name": "turn_context_blocks",
       "entityType": "tables"
     },
@@ -54,10 +58,6 @@
     },
     {
       "name": "turn_progress",
-      "entityType": "tables"
-    },
-    {
-      "name": "turn_traces",
       "entityType": "tables"
     },
     {
@@ -897,6 +897,66 @@
       "entityType": "columns"
     },
     {
+      "table": "turn_traces",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "result",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "record",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "turn_context_blocks",
       "name": "event_id",
       "type": "text",
@@ -908,7 +968,7 @@
     },
     {
       "table": "turn_context_blocks",
-      "name": "message",
+      "name": "text",
       "type": "text",
       "notNull": true,
       "autoincrement": false,
@@ -979,66 +1039,6 @@
     {
       "table": "turn_progress",
       "name": "recorded_at",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "turn_traces",
-      "name": "sequence",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": true,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "turn_traces",
-      "name": "owner_id",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "turn_traces",
-      "name": "recorded_at",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "turn_traces",
-      "name": "event_id",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "turn_traces",
-      "name": "result",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "turn_traces",
-      "name": "record",
       "type": "text",
       "notNull": true,
       "autoincrement": false,
@@ -1445,8 +1445,8 @@
       "entityType": "indexes"
     },
     {
-      "table": "turn_progress",
-      "name": "turn_progress_event",
+      "table": "turn_traces",
+      "name": "turn_traces_event",
       "columns": [
         {
           "value": "event_id",
@@ -1459,8 +1459,8 @@
       "entityType": "indexes"
     },
     {
-      "table": "turn_traces",
-      "name": "turn_traces_event",
+      "table": "turn_progress",
+      "name": "turn_progress_event",
       "columns": [
         {
           "value": "event_id",
@@ -1690,6 +1690,13 @@
       "entityType": "pks"
     },
     {
+      "table": "turn_traces",
+      "name": "turn_traces_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
       "table": "turn_context_blocks",
       "name": "turn_context_blocks_pk",
       "columns": ["event_id"],
@@ -1699,13 +1706,6 @@
     {
       "table": "turn_progress",
       "name": "turn_progress_pk",
-      "columns": ["sequence"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "table": "turn_traces",
-      "name": "turn_traces_pk",
       "columns": ["sequence"],
       "nameExplicit": false,
       "entityType": "pks"
@@ -1790,7 +1790,7 @@
     {
       "table": "conversation_messages",
       "name": "conversation_messages_kind_check",
-      "value": "\"kind\" IN ('turn_context', 'input', 'step', 'reply', 'approval_status')",
+      "value": "\"kind\" IN ('input', 'step', 'reply', 'approval_status')",
       "entityType": "checks"
     },
     {

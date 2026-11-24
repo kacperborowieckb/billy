@@ -52,11 +52,11 @@ const toolCallsOfTraces = async (ownerId: string) =>
     )
   );
 
-const systemPromptOfCall = (callIndex: number) =>
+const instructionsAndContextOfCall = (callIndex: number) =>
   instructionsAndContextOf(fakeModel.doGenerateCalls[callIndex]?.prompt ?? []);
 
-const lastSystemPrompt = () =>
-  systemPromptOfCall(fakeModel.doGenerateCalls.length - 1);
+const lastInstructionsAndContext = () =>
+  instructionsAndContextOfCall(fakeModel.doGenerateCalls.length - 1);
 
 const lastToolResultText = () => {
   const prompt = fakeModel.doGenerateCalls.at(-1)?.prompt ?? [];
@@ -91,15 +91,17 @@ describe("Profile in every Turn", () => {
 
     await ownerSays(8101, "what should I cook?", 2);
 
-    expect(lastSystemPrompt()).toContain("I am vegetarian");
+    expect(lastInstructionsAndContext()).toContain("I am vegetarian");
   });
 
   it("puts the Profile in the prompt of the first model call of a Turn", async () => {
     await addOwner(8102);
     await ownerSays(8102, "hello", 1);
 
-    expect(systemPromptOfCall(0)).toContain("Profile of the Owner is empty");
-    expect(systemPromptOfCall(0)).toContain(
+    expect(instructionsAndContextOfCall(0)).toContain(
+      "Profile of the Owner is empty"
+    );
+    expect(instructionsAndContextOfCall(0)).toContain(
       "answer from the Profile when it holds the answer"
     );
   });
@@ -127,7 +129,7 @@ describe("Profile in every Turn", () => {
     await ownerSays(8103, "hello again", 3);
 
     expect(await profileOf(ownerId)).toEqual([]);
-    expect(lastSystemPrompt()).not.toContain("Answer in French");
+    expect(lastInstructionsAndContext()).not.toContain("Answer in French");
   });
 
   it("writes nothing when an add passes the size limit and tells the model", async () => {

@@ -15,7 +15,6 @@ export const approvalRunResults = [
 export const inboxStates = ["pending", "done", "failed"] as const;
 
 export const conversationRowKinds = [
-  "turn_context",
   "input",
   "step",
   "reply",

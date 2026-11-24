@@ -25,10 +25,6 @@ import {
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
-type ModelPrompt = (typeof fakeModel.doGenerateCalls)[number]["prompt"];
-
-const systemTextOf = (prompt: ModelPrompt) => instructionsAndContextOf(prompt);
-
 const agentOf = (ownerId: string) =>
   personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId));
 
@@ -276,7 +272,7 @@ describe(
           "actually Thursday, not Friday"
         )
       );
-      expect(systemTextOf(call?.prompt ?? [])).toContain(
+      expect(instructionsAndContextOf(call?.prompt ?? [])).toContain(
         "the later value replaces the earlier one"
       );
       expect(await noteTexts(ownerId)).toEqual(["dentist on Thursday"]);

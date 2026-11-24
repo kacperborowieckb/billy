@@ -2,6 +2,7 @@ import { Schema } from "effect";
 
 import {
   ownerContextLabel,
+  textAfterTurnContext,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 
@@ -18,7 +19,7 @@ export const lastOwnerText = (
   const content = messages.findLast(
     (message) => message.role === "user"
   )?.content;
-  return typeof content === "string" ? content : "";
+  return typeof content === "string" ? textAfterTurnContext(content) : "";
 };
 
 const textContentOf = (content: unknown) =>

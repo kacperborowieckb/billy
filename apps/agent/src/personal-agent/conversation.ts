@@ -42,19 +42,21 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       Effect.orDie
     );
 
-  const writeRows = (eventId: string, rows: readonly ConversationRow[]) =>
-    Effect.gen(function* writeRowsEffect() {
-      const recordedAt = DateTime.formatIso(yield* DateTime.now);
-      for (const { kind, message } of rows) {
-        const checked = yield* checkMessage(message).pipe(Effect.orDie);
-        yield* database.insert(conversationMessages).values({
-          eventId,
-          kind,
-          message: encodeMessage(checked),
-          recordedAt,
-        });
-      }
-    });
+  const writeRows = Effect.fnUntraced(function* writeRows(
+    eventId: string,
+    rows: readonly ConversationRow[]
+  ) {
+    const recordedAt = DateTime.formatIso(yield* DateTime.now);
+    for (const { kind, message } of rows) {
+      const checked = yield* checkMessage(message).pipe(Effect.orDie);
+      yield* database.insert(conversationMessages).values({
+        eventId,
+        kind,
+        message: encodeMessage(checked),
+        recordedAt,
+      });
+    }
+  });
 
   const append = ({ eventId, rows, recordedAs }: ConversationEntry) =>
     database.transaction(() =>

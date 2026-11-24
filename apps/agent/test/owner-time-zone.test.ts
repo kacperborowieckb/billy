@@ -111,14 +111,14 @@ const journalOf = async (ownerId: string) =>
     )
   );
 
-const systemPromptOfCall = (callIndex: number) =>
+const instructionsAndContextOfCall = (callIndex: number) =>
   instructionsAndContextOf(fakeModel.doGenerateCalls[callIndex]?.prompt ?? []);
 
 const toolNames = (callIndex: number) =>
   (fakeModel.doGenerateCalls[callIndex]?.tools ?? []).map((tool) => tool.name);
 
-const lastSystemPrompt = () =>
-  systemPromptOfCall(fakeModel.doGenerateCalls.length - 1);
+const lastInstructionsAndContext = () =>
+  instructionsAndContextOfCall(fakeModel.doGenerateCalls.length - 1);
 
 const lastToolResultText = () =>
   JSON.stringify(
@@ -144,7 +144,7 @@ describe("Owner time zone", () => {
 
     await ownerSays(8301, "hello", 1);
 
-    expect(systemPromptOfCall(0)).toContain(
+    expect(instructionsAndContextOfCall(0)).toContain(
       "time zone of the Owner is not known"
     );
   });
@@ -165,10 +165,10 @@ describe("Owner time zone", () => {
     expect(Option.getOrUndefined(await timeZoneOf(ownerId))).toBe(
       "Europe/Warsaw"
     );
-    expect(lastSystemPrompt()).toMatch(
+    expect(lastInstructionsAndContext()).toMatch(
       /Current local time of the Owner: \w+ \d{4}-\d{2}-\d{2}, \d{2}:\d{2} \(time zone Europe\/Warsaw\)\./u
     );
-    expect(lastSystemPrompt()).not.toContain("is not known");
+    expect(lastInstructionsAndContext()).not.toContain("is not known");
   });
 
   it("normalizes the case of the name and writes a Journal Entry for each change", async () => {

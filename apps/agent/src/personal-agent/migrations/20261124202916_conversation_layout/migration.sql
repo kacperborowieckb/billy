@@ -1,6 +1,6 @@
 CREATE TABLE `turn_context_blocks` (
 	`event_id` text PRIMARY KEY,
-	`message` text NOT NULL,
+	`text` text NOT NULL,
 	`recorded_at` text NOT NULL
 );
 --> statement-breakpoint
@@ -11,7 +11,7 @@ CREATE TABLE `conversation_messages` (
 	`kind` text NOT NULL,
 	`message` text NOT NULL,
 	`recorded_at` text NOT NULL,
-	CONSTRAINT "conversation_messages_kind_check" CHECK("kind" IN ('turn_context', 'input', 'step', 'reply', 'approval_status'))
+	CONSTRAINT "conversation_messages_kind_check" CHECK("kind" IN ('input', 'step', 'reply', 'approval_status'))
 );
 --> statement-breakpoint
 CREATE INDEX `conversation_messages_event` ON `conversation_messages` (`event_id`);--> statement-breakpoint

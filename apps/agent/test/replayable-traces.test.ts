@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Journal } from "../src/journal/journal.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { textAfterTurnContext } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { redactedMark } from "../src/tracing/redactor.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
@@ -87,8 +88,12 @@ describe("Replayable Traces", () => {
       },
       messages: [
         { role: "user", content: expect.stringMatching(/^\[Owner context\]/u) },
-        { role: "user", content: expect.stringMatching(/^\[Turn context\]/u) },
-        { role: "user", content: "Hello" },
+        {
+          role: "user",
+          content: expect.stringMatching(
+            /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
+          ),
+        },
       ],
       steps: [
         {
@@ -141,11 +146,9 @@ describe("Replayable Traces", () => {
       second?.trace.messages.map((message) => textOf(message.content))
     ).toEqual([
       expect.stringMatching(/^\[Owner context\]/u),
-      expect.stringMatching(/^\[Turn context\]/u),
-      "First",
+      expect.stringMatching(/^\[Turn context\][^]*\nFirst$/u),
       `${fakeReplyPrefix}First`,
-      expect.stringMatching(/^\[Turn context\]/u),
-      "Second",
+      expect.stringMatching(/^\[Turn context\][^]*\nSecond$/u),
     ]);
   });
 
@@ -163,8 +166,12 @@ describe("Replayable Traces", () => {
       modelSettings: { reasoningEffort: "none" },
       messages: [
         { role: "user", content: expect.stringMatching(/^\[Owner context\]/u) },
-        { role: "user", content: expect.stringMatching(/^\[Turn context\]/u) },
-        { role: "user", content: "Hello" },
+        {
+          role: "user",
+          content: expect.stringMatching(
+            /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
+          ),
+        },
       ],
     });
     expect(stored?.trace.error).toContain(redactedMark);
@@ -189,7 +196,9 @@ describe("Replayable Traces", () => {
     }
     const marks = allSecrets.map(() => redactedMark).join(" ");
     const [stored] = await tracesOf(ownerId);
-    expect(stored?.trace.messages.at(-1)?.content).toBe(`Keys ${marks}`);
+    expect(
+      textAfterTurnContext(String(stored?.trace.messages.at(-1)?.content))
+    ).toBe(`Keys ${marks}`);
     expect(stored?.trace.reply).toBe(`${fakeReplyPrefix}Keys ${marks}`);
   });
 

@@ -62,7 +62,7 @@ const conversationRolesOf = async (ownerId: string) =>
   runInDurableObject(await agentOf(ownerId), (_, state) =>
     state.storage.sql
       .exec<{ message: string }>(
-        "SELECT message FROM conversation_messages WHERE kind <> 'turn_context' ORDER BY sequence"
+        "SELECT message FROM conversation_messages ORDER BY sequence"
       )
       .toArray()
       .map((row) => (JSON.parse(row.message) as { role: string }).role)

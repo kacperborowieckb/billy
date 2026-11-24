@@ -375,7 +375,7 @@ const migrationsBefore = (name: string): AgentMigrations => ({
   ),
 });
 
-const conversationLayoutMigration = "20261124193240";
+const conversationLayoutMigration = "20261124202916";
 
 describe("Conversation history", () => {
   it("sends every stored row with no window, and each row has its Turn Event id and row kind", async () => {
@@ -393,7 +393,7 @@ describe("Conversation history", () => {
             const turn = toolTurn(index);
             yield* storeFinishedTurn({
               eventId: `seed-${index}`,
-              turnContext: { role: "user", content: `[Turn context] ${index}` },
+              turnContext: `[Turn context] ${index}`,
               inputs: turn.slice(0, 1),
               steps: turn.slice(1, 3),
               ending: replied(`done ${index}`),
@@ -409,14 +409,16 @@ describe("Conversation history", () => {
       )
     );
 
-    expect(history).toHaveLength(turns * 5);
-    expect(history[0]).toEqual({ role: "user", content: "[Turn context] 0" });
+    expect(history).toHaveLength(turns * 4);
+    expect(history[0]).toEqual({
+      role: "user",
+      content: "[Turn context] 0\nask 0",
+    });
     expect(history.at(-1)).toEqual({
       role: "assistant",
       content: `done ${turns - 1}`,
     });
-    expect(rows.slice(0, 5)).toEqual([
-      { event_id: "seed-0", kind: "turn_context" },
+    expect(rows.slice(0, 4)).toEqual([
       { event_id: "seed-0", kind: "input" },
       { event_id: "seed-0", kind: "step" },
       { event_id: "seed-0", kind: "step" },

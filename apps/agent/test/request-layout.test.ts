@@ -8,6 +8,7 @@ import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
 import {
   ownerContextLabel,
+  textAfterTurnContext,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
@@ -16,6 +17,7 @@ import {
   contextBlockOf,
   fakeModel,
   fakeTelegram,
+  lastUserTextOf,
   resetFakes,
   scriptModel,
   systemTextOf,
@@ -91,33 +93,29 @@ describe("The request of an Owner message Turn", () => {
       role: "assistant",
       content: [{ type: "text", text: "Kept." }],
     });
-    expect(
-      laterMessages.slice(earlierMessages.length + 1).map((message) => {
-        const [part] = message.content;
-        return part?.type === "text" ? part.text.split("\n")[0] : message.role;
-      })
-    ).toEqual([turnContextLabel, "thanks"]);
+    const newOwnerMessage = lastUserTextOf(laterTurn.prompt);
+    expect(laterMessages).toHaveLength(earlierMessages.length + 2);
+    expect(newOwnerMessage.startsWith(turnContextLabel)).toBe(true);
+    expect(textAfterTurnContext(newOwnerMessage)).toBe("thanks");
   });
 
-  it("stores the Turn Context Block as it was sent, before the Owner message", async () => {
+  it("stores the Owner message with its Turn Context Block at the start, as it was sent", async () => {
     const ownerId = await ownerInWarsaw(9802);
     await ownerSays(9802, "hello", 1);
-    const sentTurnContext = contextBlockOf(lastCall().prompt, turnContextLabel);
+    const sentOwnerMessage = lastUserTextOf(lastCall().prompt);
 
     const rows = await storedRowsOf(ownerId, "conversation_messages");
 
-    expect(sentTurnContext).toContain("Current local time of the Owner");
+    expect(sentOwnerMessage).toMatch(
+      /^\[Turn context\]\nCurrent local time of the Owner: .*\n\[End of Turn context\]\nhello$/su
+    );
     expect(
       rows.map(({ kind, message }) => ({
         kind,
         message: JSON.parse(String(message)) as unknown,
       }))
     ).toEqual([
-      {
-        kind: "turn_context",
-        message: { role: "user", content: sentTurnContext },
-      },
-      { kind: "input", message: { role: "user", content: "hello" } },
+      { kind: "input", message: { role: "user", content: sentOwnerMessage } },
       {
         kind: "reply",
         message: { role: "assistant", content: expect.any(String) },

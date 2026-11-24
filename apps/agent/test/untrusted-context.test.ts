@@ -185,7 +185,7 @@ const forwardedFromAna = {
   date: 1_794_000_000,
 };
 
-const systemPromptOfLastCall = () => {
+const instructionsAndContextOfLastCall = () => {
   const prompt = fakeModel.doGenerateCalls.at(-1)?.prompt ?? [];
   return instructionsAndContextOf(prompt);
 };
@@ -288,7 +288,7 @@ describe(
       await ownerWrites(9404, "yes");
       await waitForSends(6);
 
-      expect(systemPromptOfLastCall()).toContain(
+      expect(instructionsAndContextOfLastCall()).toContain(
         firstApprovals[0]?.summary ?? "missing"
       );
       expect(await reminderTexts(ownerId)).toEqual([]);

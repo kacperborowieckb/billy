@@ -9,11 +9,8 @@ import {
 } from "../time/owner-current-time.ts";
 import { Conversation } from "./conversation.ts";
 import { storeFinishedTurn } from "./stored-turn.ts";
-import {
-  ownerContextBlock,
-  systemPrompt,
-  turnContextBlock,
-} from "./system-prompt.ts";
+import { ownerContextBlock, systemPrompt } from "./system-prompt.ts";
+import { turnContextBlock, withTurnContext } from "./turn-context.ts";
 import { TurnProgress } from "./turn-progress.ts";
 
 interface SessionRequestInput {
@@ -49,7 +46,12 @@ const conversationRequest = Effect.fnUntraced(function* conversationRequest({
     system: systemPrompt({ behavior, instructions }),
     history,
     turnContext,
-    messages: [ownerContext, ...history, turnContext, ...inputs, ...earlier],
+    messages: [
+      ownerContext,
+      ...history,
+      ...withTurnContext(turnContext, inputs),
+      ...earlier,
+    ],
   };
 });
 

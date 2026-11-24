@@ -19,7 +19,7 @@ export const turnProgress = sqliteTable(
 
 export const turnContextBlocks = sqliteTable("turn_context_blocks", {
   eventId: text("event_id").primaryKey(),
-  message: text("message").notNull(),
+  text: text("text").notNull(),
   recordedAt: text("recorded_at").notNull(),
 });
 

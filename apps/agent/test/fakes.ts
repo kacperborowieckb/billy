@@ -2,6 +2,7 @@ import { MockLanguageModelV4 } from "ai/test";
 
 import {
   ownerContextLabel,
+  textAfterTurnContext,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { burstMessageLabel } from "../src/personal-agent/event-message.ts";
@@ -273,7 +274,7 @@ const lastOwnerText = (
 ) => {
   const message = prompt.findLast((candidate) => candidate.role === "user");
   const part = message?.content.find((candidate) => candidate.type === "text");
-  return part?.type === "text" ? part.text : "";
+  return part?.type === "text" ? textAfterTurnContext(part.text) : "";
 };
 
 export interface ScriptedToolCall {
@@ -304,19 +305,29 @@ const userTextOf = (message: ModelPrompt[number]) =>
         .join("\n")
     : "";
 
+export const lastUserTextOf = (prompt: ModelPrompt) =>
+  prompt.map(userTextOf).findLast((text) => text !== "") ?? "";
+
 export const systemTextOf = (prompt: ModelPrompt) => {
   const system = prompt.find((message) => message.role === "system");
   return system?.role === "system" ? system.content : "";
 };
 
-export const contextBlockOf = (prompt: ModelPrompt, label: string) =>
-  prompt.map(userTextOf).findLast((text) => text.startsWith(label)) ?? "";
+const blockOf = (text: string) =>
+  text.startsWith(turnContextLabel)
+    ? text.slice(0, text.length - textAfterTurnContext(text).length)
+    : text;
 
-const isContextBlock = (text: string) =>
-  text.startsWith(ownerContextLabel) || text.startsWith(turnContextLabel);
+export const contextBlockOf = (prompt: ModelPrompt, label: string) =>
+  blockOf(
+    prompt.map(userTextOf).findLast((text) => text.startsWith(label)) ?? ""
+  );
 
 export const ownerTextsOf = (prompt: ModelPrompt) =>
-  prompt.map(userTextOf).filter((text) => text !== "" && !isContextBlock(text));
+  prompt
+    .map(userTextOf)
+    .filter((text) => text !== "" && !text.startsWith(ownerContextLabel))
+    .map(textAfterTurnContext);
 
 export const instructionsAndContextOf = (prompt: ModelPrompt) =>
   [

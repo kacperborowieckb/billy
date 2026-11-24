@@ -16,6 +16,7 @@ import {
 } from "../src/notes/capture-note-tool.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { textAfterTurnContext } from "../src/personal-agent/context-labels.ts";
 import { Conversation } from "../src/personal-agent/conversation.ts";
 import { Inbox } from "../src/personal-agent/inbox.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
@@ -205,8 +206,11 @@ describe("A Turn answers a burst of Owner messages", () => {
       })
     );
     expect(traces).toHaveLength(1);
-    expect(conversation.map((message) => message.content)).toEqual([
-      expect.stringMatching(/^\[Turn context\]/u),
+    const contents = conversation.map((message) =>
+      typeof message.content === "string" ? message.content : ""
+    );
+    expect(contents[0]).toMatch(/^\[Turn context\]/u);
+    expect(contents.map(textAfterTurnContext)).toEqual([
       ...burstInputTexts(...burstTexts),
       expect.anything(),
     ]);

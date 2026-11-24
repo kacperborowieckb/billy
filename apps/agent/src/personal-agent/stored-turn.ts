@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { Redactor } from "../tracing/redactor.ts";
 import { Conversation } from "./conversation.ts";
 import type { ConversationRow } from "./conversation.ts";
+import { withTurnContext } from "./turn-context.ts";
 
 export type TurnEnding =
   | { readonly _tag: "Replied"; readonly text: string }
@@ -83,7 +84,7 @@ export const withRecordedToolParts = (
 export interface FinishedTurn {
   readonly eventId: string;
   readonly recordedAs?: string | undefined;
-  readonly turnContext?: ModelMessage | undefined;
+  readonly turnContext?: string | undefined;
   readonly inputs: readonly ModelMessage[];
   readonly steps: readonly ModelMessage[];
   readonly ending: TurnEnding;
@@ -107,12 +108,10 @@ export const storedFormOf = (
     ? []
     : [
         ...rowsOfKind(
-          "turn_context",
-          turnContext === undefined ? [] : [redactor.redactMessage(turnContext)]
-        ),
-        ...rowsOfKind(
           "input",
-          inputs.map((input) => redactor.redactMessage(input))
+          withTurnContext(turnContext, inputs).map((input) =>
+            redactor.redactMessage(input)
+          )
         ),
         ...rowsOfKind("step", steps),
         ...endingRowsOf(ending),

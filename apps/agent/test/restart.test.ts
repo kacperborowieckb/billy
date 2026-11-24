@@ -33,8 +33,6 @@ type ModelPrompt = (typeof fakeModel.doGenerateCalls)[number]["prompt"];
 
 const quietMillis = 1500;
 
-const systemTextOf = (prompt: ModelPrompt) => instructionsAndContextOf(prompt);
-
 const toolMessageCountOf = (prompt: ModelPrompt) =>
   prompt.filter((message) => message.role === "tool").length;
 
@@ -203,10 +201,10 @@ describe(
         burstInputTexts("first", "second")
       );
       expect(
-        systemTextOf(fakeModel.doGenerateCalls[1]?.prompt ?? [])
+        instructionsAndContextOf(fakeModel.doGenerateCalls[1]?.prompt ?? [])
       ).toContain(restartSection);
       expect(
-        systemTextOf(fakeModel.doGenerateCalls[0]?.prompt ?? [])
+        instructionsAndContextOf(fakeModel.doGenerateCalls[0]?.prompt ?? [])
       ).not.toContain(restartSection);
       const tags = await journalTags(ownerId);
       expect(tags.slice(tags.indexOf("Restart"))).toEqual([

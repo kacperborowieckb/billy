@@ -144,28 +144,24 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
       )
     );
 
-  const recordTurnContext = (eventId: string, message: ModelMessage) =>
-    Effect.gen(function* recordTurnContextEffect() {
-      const checked = yield* checkMessage(message).pipe(Effect.orDie);
-      const row = {
-        message: encodeMessage(checked),
-        recordedAt: DateTime.formatIso(yield* DateTime.now),
-      };
-      yield* database
-        .insert(turnContextBlocks)
-        .values({ eventId, ...row })
-        .onConflictDoUpdate({ target: turnContextBlocks.eventId, set: row });
-    });
+  const recordTurnContext = Effect.fnUntraced(function* recordTurnContext(
+    eventId: string,
+    text: string
+  ) {
+    const row = { text, recordedAt: DateTime.formatIso(yield* DateTime.now) };
+    yield* database
+      .insert(turnContextBlocks)
+      .values({ eventId, ...row })
+      .onConflictDoUpdate({ target: turnContextBlocks.eventId, set: row });
+  });
 
   const turnContextFor = (eventId: string) =>
     database
-      .select({ message: turnContextBlocks.message })
+      .select({ text: turnContextBlocks.text })
       .from(turnContextBlocks)
       .where(eq(turnContextBlocks.eventId, eventId))
       .pipe(
-        Effect.flatMap(([row]) =>
-          row === undefined ? Effect.undefined : decodeMessage(row.message)
-        ),
+        Effect.map(([row]) => row?.text),
         Effect.orDie
       );
 

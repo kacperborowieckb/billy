@@ -148,7 +148,7 @@ const ownerWrites = async (telegramUserId: number, text: string) => {
   await telegramWebhook(textUpdate({ fromUserId: telegramUserId, text }));
 };
 
-const systemPromptOfLastModelCall = () => {
+const instructionsAndContextOfLastModelCall = () => {
   const call = fakeModel.doGenerateCalls.at(-1);
   return instructionsAndContextOf(call?.prompt ?? []);
 };
@@ -244,7 +244,7 @@ describe("the Outcome of a Proactive Message in a connected Turn", () => {
     await ownerWrites(9803, "and another thing");
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(4));
 
-    expect(systemPromptOfLastModelCall()).not.toContain(
+    expect(instructionsAndContextOfLastModelCall()).not.toContain(
       "follows a Proactive Message"
     );
     expect(await outcomeEntriesOf(ownerId)).toHaveLength(1);
@@ -425,7 +425,7 @@ describe("the ignored Outcome", () => {
 
     await sendBrief(ownerId, 2);
 
-    const system = systemPromptOfLastModelCall();
+    const system = instructionsAndContextOfLastModelCall();
     expect(system).toContain("Renew the passport");
     expect(system).toContain(
       "recent Outcomes of earlier Proactive Messages about it, newest first: ignored"
