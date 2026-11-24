@@ -6,6 +6,10 @@ import type { ApprovalRequestedCall } from "../model-gateway/model-step.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import { fitsOneApprovalRow } from "./approval-summary.ts";
+import {
+  isPendingApprovalId,
+  pendingApprovalIdLength,
+} from "./pending-approval-id.ts";
 import { PendingApprovals } from "./pending-approvals.ts";
 import type { DraftApproval } from "./pending-approvals.ts";
 
@@ -15,17 +19,13 @@ const waitingForApprovalOpening =
 export const waitingForApprovalOutput = (pendingApprovalId: string) =>
   `${waitingForApprovalOpening}${pendingApprovalId}. The Owner gets Approve and Reject buttons with your reply. Tell the Owner what waits for their Approval, and never say that it is done.`;
 
-const pendingApprovalIdShape = /^[\w-]{12}$/u;
-
 export const pendingApprovalIdOfOutput = (output: string) => {
   if (!output.startsWith(waitingForApprovalOpening)) {
     return;
   }
-  const id = output.slice(
-    waitingForApprovalOpening.length,
-    waitingForApprovalOpening.length + 12
-  );
-  return pendingApprovalIdShape.test(id) ? id : undefined;
+  const idStart = waitingForApprovalOpening.length;
+  const id = output.slice(idStart, idStart + pendingApprovalIdLength);
+  return isPendingApprovalId(id) ? id : undefined;
 };
 
 export const operatorSecretRefusal =

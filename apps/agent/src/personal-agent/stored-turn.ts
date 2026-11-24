@@ -132,17 +132,19 @@ export const storedFormOf = (
     redactor.redactMessage(input)
   );
   const heldUntrustedContent = holdsUntrustedContent([sentInputs, steps]);
-  return heldUntrustedContent
-    ? [
-        ...rowsOfKind("input", sentInputs.map(inputStubbed)),
-        ...rowsOfKind("step", untrustedStepsStubbed(steps)),
-        ...endingRowsOf(ending, true),
-      ]
-    : [
-        ...rowsOfKind("input", sentInputs),
-        ...rowsOfKind("step", trustedStepsLimited(steps, limits)),
-        ...endingRowsOf(ending, false),
-      ];
+  return [
+    ...rowsOfKind(
+      "input",
+      heldUntrustedContent ? sentInputs.map(inputStubbed) : sentInputs
+    ),
+    ...rowsOfKind(
+      "step",
+      heldUntrustedContent
+        ? untrustedStepsStubbed(steps)
+        : trustedStepsLimited(steps, limits)
+    ),
+    ...endingRowsOf(ending, heldUntrustedContent),
+  ];
 };
 
 export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(

@@ -5,7 +5,7 @@ import type {
   ToolResultPart,
   UserContent,
 } from "ai";
-import { Context, Layer } from "effect";
+import { Context, Layer, Schema } from "effect";
 
 import { pendingApprovalIdOfOutput } from "../approval/draft-approval.ts";
 import {
@@ -33,8 +33,7 @@ export const untrustedReplyStub =
 
 const untrustedModelTextStub = "[Model text removed from the history]";
 
-const noteIdShape =
-  /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/u;
+const isNoteId = Schema.is(Schema.String.pipe(Schema.check(Schema.isUUID())));
 
 const collectNoteIds = (value: unknown, found: Set<string>): void => {
   if (Array.isArray(value)) {
@@ -47,11 +46,7 @@ const collectNoteIds = (value: unknown, found: Set<string>): void => {
     return;
   }
   for (const [key, field] of Object.entries(value)) {
-    if (
-      key === "noteId" &&
-      typeof field === "string" &&
-      noteIdShape.test(field)
-    ) {
+    if (key === "noteId" && isNoteId(field)) {
       found.add(field);
     } else {
       collectNoteIds(field, found);
@@ -99,10 +94,14 @@ const sizeOf = (output: ToolOutput) => JSON.stringify(output).length;
 export const largeToolResultStub = (toolName: string, output: ToolOutput) =>
   `[${toolName} result of ${sizeOf(output)} characters removed from the history.${noteIdsText(output)} Call the tool again to read it]`;
 
-const toolNameShape = /^[a-z]+(?:_[a-z]+){0,3}$/u;
+const isToolName = Schema.is(
+  Schema.String.pipe(
+    Schema.check(Schema.isPattern(/^[a-z]+(?:_[a-z]+){0,3}$/u))
+  )
+);
 
 const storedToolNameOf = (toolName: string) =>
-  toolNameShape.test(toolName) ? toolName : "unknown_tool";
+  isToolName(toolName) ? toolName : "unknown_tool";
 
 export const untrustedToolCallStub = (
   toolName: string,

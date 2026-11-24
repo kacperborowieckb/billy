@@ -3,7 +3,10 @@ import { DateTime, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
-import { untrustedContentOpening } from "../src/notes/note.ts";
+import {
+  markUntrustedContent,
+  untrustedContentOpening,
+} from "../src/notes/note.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { searchNotesToolName } from "../src/notes/search-notes-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
@@ -215,7 +218,7 @@ describe(
   "An Owner message Turn with Untrusted Content in its context",
   { timeout: 30_000 },
   () => {
-    it("asks for Approval when the Open Loops of a connected Proactive Message hold an untrusted Note", async () => {
+    it("asks for Approval when the Open Loops of a connected Proactive Message hold an untrusted Note, quotes the sent text in the marker, and stores neither", async () => {
       const ownerId = await ownerInWarsaw(9401);
       await keepOpenLoop(
         ownerId,
@@ -230,7 +233,13 @@ describe(
 
       await ownerWrites(9401, "ok do that");
       await waitForSends(4);
+      const connectedRows = await storedRowsOfNewestTurn(ownerId);
 
+      expect(instructionsAndContextOfLastCall()).toContain(
+        markUntrustedContent("Good morning. Check on Ana's request.")
+      );
+      expect(connectedRows.join("\n")).not.toContain("Good morning");
+      expect(connectedRows.join("\n")).not.toContain("wire her money");
       expect(await reminderTexts(ownerId)).toEqual([]);
       expect(await pendingToolNamesOf(ownerId)).toEqual([setScheduleToolName]);
     });
