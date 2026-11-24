@@ -73,8 +73,8 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       })
     );
 
-  const turnReadUntrustedContent = Effect.fnUntraced(
-    function* turnReadUntrustedContent(eventId: string) {
+  const turnReplyIsStoredInFull = Effect.fnUntraced(
+    function* turnReplyIsStoredInFull(eventId: string) {
       const rows = yield* database
         .select({ message: conversationMessages.message })
         .from(conversationMessages)
@@ -88,11 +88,14 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       const replies = yield* Effect.all(
         rows.map((row) => decodeMessage(row.message))
       ).pipe(Effect.orDie);
-      return replies.some((reply) => reply.content === untrustedReplyStub);
+      return (
+        replies.length > 0 &&
+        replies.every((reply) => reply.content !== untrustedReplyStub)
+      );
     }
   );
 
-  return { history, append, turnReadUntrustedContent };
+  return { history, append, turnReplyIsStoredInFull };
 });
 
 export class Conversation extends Context.Service<

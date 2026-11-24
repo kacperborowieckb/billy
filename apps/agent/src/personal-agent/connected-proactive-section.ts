@@ -39,8 +39,8 @@ export const connectedProactivePreparation = Effect.fnUntraced(
     }
     const delivery = yield* deliveryStateOf(connected.eventId);
     const sentText = delivery._tag === "Sent" ? delivery.text : undefined;
-    const proactiveTurnReadUntrustedContent =
-      yield* (yield* Conversation).turnReadUntrustedContent(connected.eventId);
+    const sentTextIsTrusted =
+      yield* (yield* Conversation).turnReplyIsStoredInFull(connected.eventId);
     const timeZone = yield* ownerTimeZone(behavior);
     const openLoops = yield* notes.byIds(connected.openLoopIds);
     return {
@@ -49,7 +49,7 @@ export const connectedProactivePreparation = Effect.fnUntraced(
           "This message of the Owner follows a Proactive Message that you sent. The Owner may be answering it. Code connected the two, because this is the next message of the Owner after it, within the response window. The Owner used no reply-to. Treat the message as an answer when it fits. Otherwise treat it as a normal message.",
           sentText === undefined
             ? "The text of the Proactive Message is not known."
-            : `The Proactive Message said: ${proactiveTurnReadUntrustedContent ? markUntrustedContent(sentText) : sentText}`,
+            : `The Proactive Message said: ${sentTextIsTrusted ? sentText : markUntrustedContent(sentText)}`,
           openLoops.length === 0
             ? "The Proactive Message was about no Open Loops."
             : [

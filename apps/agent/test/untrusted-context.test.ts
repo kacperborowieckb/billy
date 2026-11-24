@@ -257,6 +257,27 @@ describe(
       expect(await pendingApprovalsOf(ownerId)).toEqual([]);
     });
 
+    it("quotes the sent text in the marker and asks for Approval when the Proactive Message has no stored reply, for example after the migration deleted it", async () => {
+      const ownerId = await ownerInWarsaw(9408);
+      await keepOpenLoop(ownerId, "Buy a gift for Ana", "owner");
+      await sendBrief(ownerId);
+      await runInDurableObject(await agentOf(ownerId), (_, state) => {
+        state.storage.sql.exec(
+          "DELETE FROM conversation_messages WHERE event_id IN (SELECT event_id FROM proactive_messages)"
+        );
+      });
+      scriptModel([setReminder("Gift for Ana"), { say: "This waits." }]);
+
+      await ownerWrites(9408, "remind me Thursday");
+      await waitForSends(4);
+
+      expect(instructionsAndContextOfLastCall()).toContain(
+        markUntrustedContent("Good morning. Check on Ana's request.")
+      );
+      expect(await reminderTexts(ownerId)).toEqual([]);
+      expect(await pendingToolNamesOf(ownerId)).toEqual([setScheduleToolName]);
+    });
+
     it("starts owner after an earlier Turn read an untrusted Note, because decision 0033 stores that Turn with a Stub that names the Note id", async () => {
       const ownerId = await ownerInWarsaw(9403);
       await keepOpenLoop(
