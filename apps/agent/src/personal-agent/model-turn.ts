@@ -28,7 +28,7 @@ import {
   modelFailureReason,
   responseMessagesOf,
   stepLimitReason,
-  toolMessagesOf,
+  stepMessagesOfReply,
 } from "./turn-record.ts";
 import type { ModelTraceInput } from "./turn-record.ts";
 import { recordSuperseded, restartCountForTurn } from "./turn-restart.ts";
@@ -195,7 +195,7 @@ export const runModelTurn = <Failure, Requirements>({
     if (outcome._tag === "ModelFailed") {
       return yield* endFailed(
         modelFailureReason(outcome.error, redactor),
-        yield* keptSteps(toolMessagesOf(outcome))
+        yield* keptSteps(responseMessagesOf(outcome))
       );
     }
     if (decided.kind === "silent") {
@@ -220,7 +220,7 @@ export const runModelTurn = <Failure, Requirements>({
     const outcomeKind = decided.reaction === undefined ? "reply" : "reaction";
     const kept = yield* keptSteps(
       outcomeKind === "reply"
-        ? toolMessagesOf(outcome)
+        ? stepMessagesOfReply(outcome)
         : responseMessagesOf(outcome)
     );
     if (Option.isNone(kept)) {
