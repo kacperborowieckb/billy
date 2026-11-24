@@ -10,6 +10,7 @@ import {
   attemptTimeoutMillis,
   modelAttempts,
 } from "../../src/model-gateway/model-call-policy.ts";
+import type { ModelRouteTable } from "../../src/model-gateway/model-routes.ts";
 import type { FakeTelegramMessage } from "../local-fakes.ts";
 import { startLocalWorker, temporarySecrets } from "../local-worker.ts";
 import { addOwner } from "../operator.ts";
@@ -31,7 +32,7 @@ export const turnTimeoutMillis =
 export interface ModelAccess {
   readonly aiGatewayUrl: string;
   readonly aiGatewayToken: string;
-  readonly vars?: Readonly<Record<string, string>>;
+  readonly modelRoutes?: ModelRouteTable;
 }
 
 export interface FakeTelegramApi {
@@ -77,7 +78,9 @@ export const startLocalEvalAgent = Effect.fnUntraced(
     const workerUrl = yield* startLocalWorker({
       main: evalWorkerMain,
       vars: {
-        ...model.vars,
+        ...(model.modelRoutes === undefined
+          ? {}
+          : { MODEL_ROUTES: model.modelRoutes }),
         TELEGRAM_API_URL: telegram.telegramApiUrl,
         AI_GATEWAY_URL: model.aiGatewayUrl,
       },

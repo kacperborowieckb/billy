@@ -6,7 +6,7 @@ import {
   BillingModeSchema,
 } from "../model-gateway/ai-gateway.ts";
 import { ModelGateway } from "../model-gateway/model-gateway.ts";
-import { ReasoningEffortSchema } from "../model-gateway/model-provider.ts";
+import { ModelRouteTableSchema } from "../model-gateway/model-routes.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { OperatorMetrics } from "../tracing/operator-metrics.ts";
 import { Redactor } from "../tracing/redactor.ts";
@@ -30,10 +30,7 @@ const TurnEnvSchema = Schema.Struct({
   AI_GATEWAY_URL: HttpUrl,
   AI_GATEWAY_ID: NonEmpty,
   AI_GATEWAY_TOKEN: NonEmpty,
-  REPLY_MODEL: NonEmpty,
-  REPLY_REASONING_EFFORT: ReasoningEffortSchema,
-  EVAL_JUDGE_MODEL: NonEmpty,
-  EVAL_JUDGE_REASONING_EFFORT: ReasoningEffortSchema,
+  MODEL_ROUTES: ModelRouteTableSchema,
   MODEL_BILLING: BillingModeSchema,
 });
 
@@ -62,24 +59,7 @@ export const liveModelGateway = (config: TurnEnv, ownerId: OwnerId) =>
         {
           url: config.AI_GATEWAY_URL,
           gatewayId: config.AI_GATEWAY_ID,
-          routes: {
-            reply: {
-              model: config.REPLY_MODEL,
-              reasoningEffort: config.REPLY_REASONING_EFFORT,
-            },
-            scheduled_task: {
-              model: config.REPLY_MODEL,
-              reasoningEffort: config.REPLY_REASONING_EFFORT,
-            },
-            proactive: {
-              model: config.REPLY_MODEL,
-              reasoningEffort: config.REPLY_REASONING_EFFORT,
-            },
-            eval_judge: {
-              model: config.EVAL_JUDGE_MODEL,
-              reasoningEffort: config.EVAL_JUDGE_REASONING_EFFORT,
-            },
-          },
+          routes: config.MODEL_ROUTES,
         },
         {
           token: config.AI_GATEWAY_TOKEN,
