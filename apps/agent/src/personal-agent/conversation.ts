@@ -73,25 +73,24 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       })
     );
 
-  const turnReadUntrustedContent = (eventId: string) =>
-    database
-      .select({ message: conversationMessages.message })
-      .from(conversationMessages)
-      .where(
-        and(
-          eq(conversationMessages.eventId, eventId),
-          eq(conversationMessages.kind, "reply")
+  const turnReadUntrustedContent = Effect.fnUntraced(
+    function* turnReadUntrustedContent(eventId: string) {
+      const rows = yield* database
+        .select({ message: conversationMessages.message })
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.eventId, eventId),
+            eq(conversationMessages.kind, "reply")
+          )
         )
-      )
-      .pipe(
-        Effect.flatMap((rows) =>
-          Effect.all(rows.map((row) => decodeMessage(row.message)))
-        ),
-        Effect.map((replies) =>
-          replies.some((reply) => reply.content === untrustedReplyStub)
-        ),
-        Effect.orDie
-      );
+        .pipe(Effect.orDie);
+      const replies = yield* Effect.all(
+        rows.map((row) => decodeMessage(row.message))
+      ).pipe(Effect.orDie);
+      return replies.some((reply) => reply.content === untrustedReplyStub);
+    }
+  );
 
   return { history, append, turnReadUntrustedContent };
 });
