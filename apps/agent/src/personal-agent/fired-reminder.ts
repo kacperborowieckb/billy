@@ -7,7 +7,6 @@ import { lateReminderText } from "../schedule/lateness.ts";
 import type { SendText } from "../schedule/schedule-action.ts";
 import { Schedules } from "../schedule/schedules.ts";
 import { Redactor } from "../tracing/redactor.ts";
-import { Conversation } from "./conversation.ts";
 import {
   fail,
   recordOutcome,
@@ -19,6 +18,7 @@ import { eventMessage } from "./event-message.ts";
 import { lateNoticeFor } from "./fired-schedule-lateness.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
+import { replied, storeFinishedTurn } from "./stored-turn.ts";
 
 interface ReminderRecord {
   readonly ownerId: OwnerId;
@@ -139,7 +139,6 @@ export const deliverReminder = Effect.fnUntraced(function* deliverReminder({
 }: ReminderDelivery) {
   const inbox = yield* Inbox;
   const schedules = yield* Schedules;
-  const conversation = yield* Conversation;
   const redactor = yield* Redactor;
   const startedAt = yield* Clock.currentTimeMillis;
 
@@ -167,9 +166,11 @@ export const deliverReminder = Effect.fnUntraced(function* deliverReminder({
     _tag: "Delivered",
     channelMessageId: delivery.channelMessageId,
   });
-  yield* conversation.append(event.eventId, [
-    eventMessage(event),
-    { role: "assistant", content: text },
-  ]);
+  yield* storeFinishedTurn({
+    eventId: event.eventId,
+    inputs: [eventMessage(event)],
+    steps: [],
+    ending: replied(text),
+  });
   yield* inbox.markDone([event]);
 });

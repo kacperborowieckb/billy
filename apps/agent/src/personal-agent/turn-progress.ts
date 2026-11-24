@@ -88,6 +88,26 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
       }
     });
 
+  const replaceSteps = (eventId: string, messages: readonly ModelMessage[]) =>
+    database
+      .transaction(() =>
+        Effect.gen(function* replaceStepsEffect() {
+          const recordedAt = new Date().toISOString();
+          yield* database
+            .delete(turnProgress)
+            .where(eq(turnProgress.eventId, eventId));
+          for (const message of messages) {
+            const checked = yield* checkMessage(message).pipe(Effect.orDie);
+            yield* database.insert(turnProgress).values({
+              eventId,
+              message: encodeMessage(checked),
+              recordedAt,
+            });
+          }
+        })
+      )
+      .pipe(Effect.andThen(completedFor(eventId)));
+
   const recordFailedToolCall = (call: ToolCallProgress, message: string) =>
     database.transaction(() =>
       record(call, [
@@ -132,6 +152,7 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
     usedStepCount,
     recordingToolCall,
     recordFailedToolCall,
+    replaceSteps,
   };
 });
 

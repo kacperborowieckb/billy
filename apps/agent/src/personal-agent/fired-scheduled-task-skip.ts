@@ -7,13 +7,13 @@ import type { OwnerId } from "../owner-id.ts";
 import type { RunPrompt } from "../schedule/schedule-action.ts";
 import { Schedules } from "../schedule/schedules.ts";
 import { Redactor } from "../tracing/redactor.ts";
-import { Conversation } from "./conversation.ts";
 import { fail, recordOutcome, send } from "./delivery.ts";
 import { scheduledTaskInputMessage } from "./event-message.ts";
 import { nameOfPrompt } from "./fired-scheduled-task-name.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
 import { scheduledTaskTokensSpentToday } from "./scheduled-task-budget.ts";
+import { replied, storeFinishedTurn } from "./stored-turn.ts";
 
 const scheduledTaskSkipText = (redactedPrompt: string) =>
   `Your Scheduled Task "${nameOfPrompt(redactedPrompt)}" was skipped because of the daily limit for Scheduled Tasks.`;
@@ -38,7 +38,6 @@ const finishSkippedScheduledTask = Effect.fnUntraced(
   ) {
     const inbox = yield* Inbox;
     const schedules = yield* Schedules;
-    const conversation = yield* Conversation;
 
     yield* schedules.complete(event.scheduleId, event.dueAt, event.eventId);
     const delivery = yield* send(event, text);
@@ -46,10 +45,12 @@ const finishSkippedScheduledTask = Effect.fnUntraced(
       yield* fail(event, delivery.reason);
       return;
     }
-    yield* conversation.append(event.eventId, [
-      input,
-      { role: "assistant", content: text },
-    ]);
+    yield* storeFinishedTurn({
+      eventId: event.eventId,
+      inputs: [input],
+      steps: [],
+      ending: replied(text),
+    });
     yield* inbox.markDone([event]);
   }
 );

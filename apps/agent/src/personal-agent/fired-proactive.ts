@@ -1,7 +1,6 @@
 import { Clock, Effect, Option } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
-import type { Journal } from "../journal/journal.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { ProactiveMessages } from "../proactive/proactive-messages.ts";
 import { lateProactiveMessageText } from "../schedule/lateness.ts";
@@ -16,7 +15,8 @@ import { scheduledTaskInputMessage } from "./event-message.ts";
 import { completeMergedSchedules, mergedSchedulesFor } from "./fired-merge.ts";
 import type { MergedSchedule } from "./fired-merge.ts";
 import { lateNoticeFor } from "./fired-schedule-lateness.ts";
-import type { Inbox, ScheduleFiredEvent } from "./inbox.ts";
+import { Inbox } from "./inbox.ts";
+import type { ScheduleFiredEvent } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
 import { proactiveReach } from "./proactive-reach.ts";
 import { proactiveSection } from "./proactive-section.ts";
@@ -24,6 +24,7 @@ import { proactiveTools } from "./proactive-tools.ts";
 import { tokensSpentToday } from "./scheduled-task-budget.ts";
 import type { TurnPreparation } from "./turn-preparation.ts";
 import { proactiveTraceOf } from "./turn-record.ts";
+import { sideSession } from "./turn-session.ts";
 
 const uniqueNotes = <Item extends { readonly noteId: string }>(
   items: readonly Item[]
@@ -157,15 +158,13 @@ const finishSentProactiveMessage = Effect.fnUntraced(
 const endUnsentProactiveMessage = Effect.fnUntraced(
   function* endUnsentProactiveMessage(
     event: ScheduleFiredEvent,
-    reason: string | undefined
+    reason: string
   ) {
     const schedules = yield* Schedules;
 
     yield* completeMergedSchedules(event.eventId);
     yield* schedules.complete(event.scheduleId, event.dueAt, event.eventId);
-    if (reason !== undefined) {
-      yield* fail(event, reason);
-    }
+    yield* fail(event, reason);
   }
 );
 
@@ -186,16 +185,15 @@ export const runProactiveMessage = Effect.fnUntraced(
     schedule,
   }: ProactiveRun) {
     const toolServices = yield* agentToolServices;
-    const hookServices = yield* Effect.context<
-      Inbox | Journal | OperatorMetrics | ProactiveMessages | Schedules
-    >();
+    const inbox = yield* Inbox;
     const startedAt = yield* Clock.currentTimeMillis;
     const merged = yield* mergedSchedulesFor(behavior, event, schedule);
     const tokensSpentBefore = yield* tokensSpentToday("proactive", behavior);
 
-    yield* runModelTurn({
+    const result = yield* runModelTurn({
       ownerId,
       behavior,
+      session: sideSession,
       kind: {
         task: "proactive",
         event,
@@ -213,20 +211,34 @@ export const runProactiveMessage = Effect.fnUntraced(
             tokensSpentBefore,
             ...model,
           }),
-        whenSent: finishSentProactiveMessage({
+      },
+    });
+    switch (result._tag) {
+      case "Sent": {
+        yield* finishSentProactiveMessage({
           ownerId,
           behavior,
           event,
           startedAt,
-        }).pipe(Effect.provideContext(hookServices)),
-        whenFailed: (reason) =>
-          endUnsentProactiveMessage(event, reason).pipe(
-            Effect.provideContext(hookServices)
-          ),
-        whenSendFailed: endUnsentProactiveMessage(event, undefined).pipe(
-          Effect.provideContext(hookServices)
-        ),
-      },
-    });
+        });
+        yield* inbox.markDone([event]);
+        break;
+      }
+      case "Silent": {
+        yield* inbox.markDone([event]);
+        break;
+      }
+      case "Failed":
+      case "SendFailed": {
+        yield* endUnsentProactiveMessage(event, result.reason);
+        break;
+      }
+      case "Superseded": {
+        break;
+      }
+      default: {
+        return result satisfies never;
+      }
+    }
   }
 );

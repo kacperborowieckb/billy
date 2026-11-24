@@ -4,10 +4,8 @@ import { Effect } from "effect";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { Journal } from "../journal/journal.ts";
 import type { JournalEntry } from "../journal/journal.ts";
-import { Redactor } from "../tracing/redactor.ts";
 import { burstInputs, newestEventOf } from "./burst.ts";
 import type { Burst } from "./burst.ts";
-import { Conversation } from "./conversation.ts";
 import { sendReaction } from "./delivery-reaction.ts";
 import {
   deliveryStateOfEntries,
@@ -22,35 +20,44 @@ import type { DeliveryState } from "./delivery.ts";
 import { inputMessageOf } from "./event-message.ts";
 import { Inbox } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
+import { reacted, replied, silent, unanswered } from "./stored-turn.ts";
+import type { TurnEnding } from "./stored-turn.ts";
 import { TurnProgress } from "./turn-progress.ts";
+import { mainConversation } from "./turn-session.ts";
+import type { TurnSession } from "./turn-session.ts";
+
+const endingOf = (state: DeliveryState): TurnEnding => {
+  switch (state._tag) {
+    case "Sent": {
+      if (state.reaction !== undefined) {
+        return reacted;
+      }
+      return state.text === undefined ? unanswered : replied(state.text);
+    }
+    case "ReactionUnconfirmed": {
+      return reacted;
+    }
+    case "Silent": {
+      return silent;
+    }
+    default: {
+      return unanswered;
+    }
+  }
+};
 
 const recordConversation = Effect.fnUntraced(function* recordConversation(
   event: InboxEvent,
   state: DeliveryState,
-  inputs: readonly ModelMessage[] | undefined
+  { session, inputs }: RecoveredTurn
 ) {
-  const conversation = yield* Conversation;
   const progress = yield* TurnProgress;
-  const redactor = yield* Redactor;
-  const earlier = yield* progress.completedFor(event.eventId);
-  const reply =
-    state._tag === "Sent" && state.text !== undefined
-      ? [{ role: "assistant", content: state.text } as const]
-      : [];
-
-  const endedWithoutText =
-    state._tag === "Silent" ||
-    state._tag === "ReactionUnconfirmed" ||
-    (state._tag === "Sent" && state.reaction !== undefined);
-  if (endedWithoutText || earlier.length + reply.length > 0) {
-    yield* conversation.append(event.eventId, [
-      ...(inputs ?? [yield* inputMessageOf(event)]).map((input) =>
-        redactor.redactMessage(input)
-      ),
-      ...earlier,
-      ...reply,
-    ]);
-  }
+  yield* session.commit({
+    eventId: event.eventId,
+    inputs: inputs ?? [yield* inputMessageOf(event)],
+    steps: yield* progress.completedFor(event.eventId),
+    ending: endingOf(state),
+  });
 });
 
 interface SkippedScheduledTask {
@@ -58,7 +65,15 @@ interface SkippedScheduledTask {
   readonly tokensSpent: number;
 }
 
-export interface Recovery<UnsentRequirements, NoticeRequirements> {
+interface RecoveredTurn {
+  readonly session: TurnSession;
+  readonly inputs?: readonly ModelMessage[];
+}
+
+export interface Recovery<
+  UnsentRequirements,
+  NoticeRequirements,
+> extends RecoveredTurn {
   readonly resumeUnsent: (
     skipped: SkippedScheduledTask | undefined
   ) => Effect.Effect<"settled" | "unanswered", unknown, UnsentRequirements>;
@@ -67,13 +82,13 @@ export interface Recovery<UnsentRequirements, NoticeRequirements> {
     unknown,
     NoticeRequirements
   >;
-  readonly inputs?: readonly ModelMessage[];
   readonly replyTo?: InboxEvent;
 }
 
 export const ownerMessageRecovery = (burst: Burst) => ({
   resumeUnsent: () => Effect.succeed("unanswered" as const),
   failureNoticeText: Effect.succeed(honestFailureText),
+  session: mainConversation,
   inputs: burstInputs(burst),
   replyTo: newestEventOf(burst),
 });
@@ -181,7 +196,7 @@ export const settleFromJournal = Effect.fnUntraced(function* settleFromJournal<
 
   yield* settleDrafts(event, state);
   if (state._tag !== "Unsent") {
-    yield* recordConversation(event, state, recovery.inputs);
+    yield* recordConversation(event, state, recovery);
   }
   return yield* settleState({ event, entries, state, recovery });
 });
