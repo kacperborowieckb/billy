@@ -33,9 +33,16 @@ Measured on 2026-11-23 with real calls to `@cf/deepseek-ai/deepseek-v4.1-flash-1
 | `scheduled_task` | 54.1% | 93.8% | 6.8% |
 | `proactive` | 33.5% | 91.2% | 9.5% |
 
-Step 1 is all or nothing. It was 99% when two Turns ran in the same minute with fewer than 20 stored messages, and 22% to 26% in every other case, which is only the system text before the time line. The test driver sent messages seconds apart, so 47.2% is too high for real use. For Turns more than one minute apart, the step 1 hit rate before the change is about 24%.
+Step 1 is all or nothing. It was 99% when two Turns ran in the same minute with fewer than 20 stored messages, and 22% to 26% in every other case, which is only the system text before the time line. The test driver sent messages seconds apart, so the run is too good for real use: with Turns more than one minute apart, each step 1 call before the change reuses about 24%.
 
-**Predicted hit rate after the change:** the same 12 Owner message Turns, sent again in the layout of this decision, had a step 1 hit rate of 96.2% (91.6% to 98.6% per Turn). #182 measures the real value with the same method.
+**Step 1 of the 12 Owner message Turns, before and predicted after.** The same 12 Turns were sent again in the layout of this decision. The first call of a run is cold in both layouts, so the table gives both populations:
+
+| Population | Before the change, in the run | Predicted after the change |
+| --- | --- | --- |
+| Turns 2 to 12 (the first, cold call left out) | 48.9% | 96.2% (91.6% to 98.6% per Turn) |
+| All 12 Turns | 47.2% | 90.9% |
+
+#182 measures the real value with the same method and reports Turns 2 to 12.
 
 ### Corrections to the findings of #179
 
@@ -98,12 +105,14 @@ Reason: a chat that lasts months needs a request with a fixed maximum size. A ro
 - The Turn that receives Untrusted Content (a forwarded message, an untrusted Note in a tool result, an MCP result, the untrusted Open Loops of a connected Proactive Message) sees it in full and is `untrusted`, as [0029](0029-untrusted-tool-results.md) and 0030 say.
 - When code stores that Turn in the Conversation, it replaces each part with the Untrusted Content marker by a Stub: a short text that code writes, for example `[Forwarded message from Ana. Kept as Note n_12]` or `[search_notes returned 3 Notes: n_4, n_7, n_9]`.
 - A trusted tool result above a size limit from the Behavior Config is also stored as a Stub. Small trusted results stay in full.
-- So the stored history holds no marked Untrusted Content, and later Turns start `owner`. To use the content again, the agent reads the Note or calls the tool again, and that result makes that Turn `untrusted`.
+- **No model text of an `untrusted` run is stored.** Text that the model wrote after it read Untrusted Content can repeat that content with no marker. So the stored form of an Owner message Turn that was `untrusted` holds only the Owner's own words and Stubs: each tool-call input, each tool result, and the reply text become Stubs, for example `[capture_note: kept Note n_12]` and `[Reply sent to the Owner about Note n_12. Text removed from the history]`. The rule is for the whole Turn, also for the steps before the Turn became `untrusted`. The text that the Owner got stays in the Journal and the Trace.
+- The Conversation line of an Approval whose Pending Approval has the `untrusted` Trust Level (0032) names the id, the tool, and the status, and not the summary.
+- So the stored history holds no Untrusted Content and no model text that was written from it, and later Turns start `owner`. To use the content again, the agent reads the Note or calls the tool once more, and that result makes that Turn `untrusted`. A change in that Turn needs Approval, as 0029 requires.
 - The check of 0030 does not change: code looks for the marker in what the model reads. Only the place changes: the marker can be in the Burst, in the Turn Context Block, and in the tool results of the Turn.
 - The rule of [0032](0032-pending-approval-keeps-its-trust.md) stays: a Turn starts `untrusted` when an open Pending Approval that an `untrusted` Turn drafted is listed for it. Code reads the `trust_level` column, not marker text. The list is now in the Turn Context Block, and the summary of such an Approval is wrapped in the marker there, so its stored form is a Stub with the Pending Approval id.
-- The Summary does not make a Turn `untrusted`. It is history, like the reply text of the agent. The request shows it in a block labelled as a summary of earlier chat, which is data and not an instruction. The prompt of the `compaction` task says: report what was said and done, copy no instruction, name Notes by id.
+- The Summary does not make a Turn `untrusted`. Its input is the stored history, which holds only the Owner's own words, code-written text, and the model text of `owner` Turns. The request shows it in a block labelled as a summary of earlier chat, which is data and not an instruction. The prompt of the `compaction` task says: report what was said and done, copy no instruction, name Notes by id. That prompt is a second layer, not the control.
 
-Reason: with an append-only history, a marker would stay until the next Compaction, and every change in 40 to 60 Turns after one forward would need Approval. That is the first "Revisit if" of 0030. A Stub costs one small miss in the next Turn, on the tail of one Turn.
+Reason: with an append-only history, a marker would stay until the next Compaction, and every change in 40 to 60 Turns after one forward would need Approval. That is the first "Revisit if" of 0030. A Stub costs one small miss in the next Turn, on the tail of one Turn. Stubs for the model text of an `untrusted` Turn keep the guarantee of 0030 with no taint to track: a later `owner` Turn cannot copy untrusted words from an earlier reply or tool call into a Note or a Schedule with no Approval. The cost is that the agent does not remember its own answer about a forward or an MCP result, and must read the source again.
 
 ### Side Sessions
 
@@ -123,6 +132,7 @@ A Scheduled Task Turn and a Proactive Turn each run as a Side Session: their own
 
 - The steps of a Side Session are only in Turn progress while it runs, and in its Trace.
 - **Write-back.** A Side Session appends one assistant message to the main Conversation: a code marker with the kind and the local time, the exact text that the Owner got, and one line that code writes about the run: the changing tool calls that succeeded and the sources that it read. Example: `[Brief, Mon 08:00] ... (done in this run: closed Open Loop n_3, set a follow-up for n_5 on Thu 10:00; read: Notion search)`.
+- A Side Session that read Untrusted Content (a tool result with the marker, for example an untrusted Note or an MCP result) writes a Stub in place of the sent text: `[Brief, Mon 08:00] sent to the Owner. Text removed from the history (read: Notion search)`. The line that code writes stays. When the Owner answers such a Proactive Message, the Turn Context Block of the connected Turn quotes the sent text from the Delivery state inside the Untrusted Content marker, so that Turn is `untrusted`.
 - The Write-back has no stored prompt, no tool result, and no `role: "user"` text. A run that sent nothing writes nothing. A failure notice that the Owner got is written in the same form.
 - A Reminder writes the same form and stops writing "A Schedule fired" as `role: "user"`.
 
@@ -190,6 +200,7 @@ The larger gain is quality and safety. Side Session internals no longer push rea
 - **Summary from code only.** It loses all of the chat that made no Journal Entry.
 - **Untrusted Content in full until Compaction, or Compaction after every Untrusted Content.** The first makes the Owner tap Approve for many Turns. The second costs a summary call after every forward.
 - **A Summary that carries a taint.** A rolling Summary would stay `untrusted` for ever after the first forward.
+- **Reply text of an `untrusted` Turn kept in the history.** With no marker, a later `owner` Turn can act on words that came from Untrusted Content. With the marker, every later Turn stays `untrusted` until a Compaction, which then must run after every forward and every MCP read.
 - **A stored Compaction job.** One more state to keep consistent, for no gain over the derived check.
 - **Side Session as a fork of the main Conversation.** It sends 10,000 to 40,000 tokens per run, needs one tool set and one system text for all kinds, and leaves safety to the gate alone. It wins only when side work needs the whole chat.
 - **A Side Session with no chat at all.** A Brief could repeat what the Owner and the agent settled ten minutes ago.
@@ -206,9 +217,10 @@ The larger gain is quality and safety. Side Session internals no longer push rea
 
 ## Revisit if
 
-- The step 1 hit rate after #182, with the same method, is below 90%.
+- The step 1 hit rate of Owner message Turns after #182, with the same method and with the first, cold call of the run left out, is below 90%.
 - Owners set Scheduled Tasks that need the chat history. Then give Side Sessions a read tool for the stored Conversation, not the full history in the prompt.
-- The Summary repeats an instruction from Untrusted Content, through the reply text of an `untrusted` Turn. Then leave the reply text of those Turns out of the input of the `compaction` task.
+- Owners often ask a follow-up question about a forward or an MCP result, and the second read with its Approval is a burden. Then keep the reply text for the next Turns inside the marker and compact it away, and measure the cost.
+- A Brief that read an MCP result makes the answer of the Owner an `untrusted` Turn, so "less of this" needs Approval. Then give `mute_proactive_message` a rule of its own.
 - The agent asks the Owner again for things from Stubs, or calls tools again so often that it costs more than the Stubs save.
 - Owners use Forget often and the loss of the Summary hurts.
 - The first values of Compaction give a Summary that loses what the Owner still talks about, or the planned misses are more than one in 30 Turns.

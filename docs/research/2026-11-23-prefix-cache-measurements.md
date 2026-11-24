@@ -112,9 +112,9 @@ Step 1 of the same 12 Owner message Turns, sent again:
 | 11       | 50       | 13,434 | 13,184 | 98.1%    |
 | 12       | 55       | 14,114 | 13,376 | 94.8%    |
 
-Turns 2 to 12: 129,152 input tokens, 124,224 cached, **96.2%**. The uncached part of each call is the tail of the Turn before and the new message.
+Turns 2 to 12: 129,152 input tokens, 124,224 cached, **96.2%**. All 12 Turns, with the cold first call: 138,747 input tokens, 126,080 cached, 90.9%. The layout before the change, for the same two populations: Turns 2 to 12 had 118,476 input tokens and 57,984 cached, 48.9%, and all 12 Turns had 47.2%. Compare like with like: 48.9% against 96.2%, or 47.2% against 90.9%. The uncached part of each call is the tail of the Turn before and the new message.
 
-Limits of the replay: it has no Compaction, no Stub, and no Profile change, so it has none of the planned misses. The calls were seconds apart.
+Limits of the replay: it has no Compaction, no Stub, and no Profile change, so it has none of the planned misses. Decision 0033 stores an `untrusted` Turn as Stubs, which adds one planned miss on the tail of that Turn. The calls were seconds apart.
 
 ## Cost of the measurement
 
