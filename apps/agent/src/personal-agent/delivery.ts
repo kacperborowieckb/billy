@@ -8,11 +8,11 @@ import { OperatorMetrics } from "../tracing/operator-metrics.ts";
 import type { OperatorMetric } from "../tracing/operator-metrics.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
 import type { TurnTrace } from "../tracing/turn-trace.ts";
-import { Conversation } from "./conversation.ts";
 import { lastOf, latestPlanOf, textPlanOf } from "./delivery-plans.ts";
 import { sendPlanned } from "./delivery-send.ts";
 import { Inbox } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
+import { replied, storeFinishedTurn } from "./stored-turn.ts";
 
 export const honestFailureText =
   "Sorry, I could not answer that. Please try again in a moment.";
@@ -166,15 +166,14 @@ export const fail = Effect.fnUntraced(function* fail(
 });
 
 export const rememberFailureNotice = (event: InboxEvent, text: string) =>
-  Conversation.pipe(
-    Effect.flatMap((conversation) =>
-      event._tag === "ScheduleFired"
-        ? conversation.append(`${event.eventId}:failure-notice`, [
-            { role: "assistant", content: text },
-          ])
-        : Effect.void
-    )
-  );
+  event._tag === "ScheduleFired"
+    ? storeFinishedTurn({
+        eventId: `${event.eventId}:failure-notice`,
+        inputs: [],
+        steps: [],
+        ending: replied(text),
+      })
+    : Effect.void;
 
 export const sendFailureNotice = Effect.fnUntraced(function* sendFailureNotice(
   event: InboxEvent,

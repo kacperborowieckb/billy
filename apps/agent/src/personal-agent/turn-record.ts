@@ -226,8 +226,27 @@ export const proactiveTraceOf = ({
 export const responseMessagesOf = (outcome: ModelOutcome) =>
   stepsOf(outcome).flatMap((step) => step.responseMessages);
 
-export const toolMessagesOf = (outcome: ModelOutcome) =>
-  (outcome._tag === "Replied"
-    ? outcome.reply.steps.slice(0, -1)
-    : outcome.error.steps
-  ).flatMap((step) => step.responseMessages);
+const isToolPart = (part: { readonly type: string }) =>
+  part.type === "tool-call" || part.type === "tool-result";
+
+const toolPartsOf = (message: ModelMessage): readonly ModelMessage[] => {
+  if (message.role === "tool") {
+    return [message];
+  }
+  if (message.role !== "assistant" || typeof message.content === "string") {
+    return [];
+  }
+  const content = message.content.filter(isToolPart);
+  return content.length === 0 ? [] : [{ ...message, content }];
+};
+
+export const stepMessagesOfReply = (outcome: ModelOutcome) => {
+  const steps = stepsOf(outcome);
+  const last = steps.at(-1);
+  return last === undefined
+    ? []
+    : [
+        ...steps.slice(0, -1).flatMap((step) => step.responseMessages),
+        ...last.responseMessages.flatMap(toolPartsOf),
+      ];
+};

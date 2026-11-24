@@ -8,6 +8,7 @@ import { ProactiveMessages } from "../proactive/proactive-messages.ts";
 import type { RecordedOutcome } from "../proactive/proactive-outcomes.ts";
 import { Schedules } from "../schedule/schedules.ts";
 import { whileAcknowledging } from "./acknowledge.ts";
+import { AgentStorage } from "./agent-storage.ts";
 import { agentToolServices } from "./agent-tool-services.ts";
 import { handleApprovalAnswered } from "./approval-answer.ts";
 import { burstWaitOf } from "./burst-wait.ts";
@@ -22,10 +23,11 @@ import {
 } from "./burst.ts";
 import type { Burst } from "./burst.ts";
 import { connectedProactivePreparation } from "./connected-proactive-section.ts";
-import { failWithNotice } from "./delivery.ts";
+import { fail, failWithNotice } from "./delivery.ts";
 import { handleFiredSchedule } from "./fired-schedule.ts";
 import { Inbox } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
+import type { ModelTurnResult } from "./model-turn.ts";
 import { openApprovalsSection } from "./open-approvals-section.ts";
 import {
   recordOutcomeMetric,
@@ -38,26 +40,71 @@ import { staySilentSection, staySilentToolName } from "./stay-silent-tool.ts";
 import { traceOf } from "./turn-record.ts";
 import { ownerMessageRecovery, settleFromJournal } from "./turn-recovery.ts";
 import { restartOf, restartSection } from "./turn-restart.ts";
+import { mainConversation } from "./turn-session.ts";
 
 interface TurnSettings {
   readonly behavior: BehaviorConfig;
   readonly tools: AgentTools;
 }
 
-const settleSilentBurst = (burst: Burst, recorded: RecordedOutcome[]) =>
-  Effect.gen(function* settleSilentBurstEffect() {
-    const inbox = yield* Inbox;
-    const proactiveMessages = yield* ProactiveMessages;
-    yield* inbox.markDone(burst.slice(1));
-    for (const event of burst) {
-      const outcome = yield* proactiveMessages.recordOutcomeOfConnectedTurn(
-        event.eventId
-      );
-      if (Option.isSome(outcome)) {
-        recorded.push(outcome.value);
+const settleSilentBurst = Effect.fnUntraced(function* settleSilentBurst(
+  burst: Burst
+) {
+  const { database } = yield* AgentStorage;
+  const inbox = yield* Inbox;
+  const proactiveMessages = yield* ProactiveMessages;
+  return yield* database.transaction(() =>
+    Effect.gen(function* settleSilentBurstEffect() {
+      const recorded: RecordedOutcome[] = [];
+      yield* inbox.markDone(burst);
+      for (const event of burst) {
+        const outcome = yield* proactiveMessages.recordOutcomeOfConnectedTurn(
+          event.eventId
+        );
+        if (Option.isSome(outcome)) {
+          recorded.push(outcome.value);
+        }
       }
+      return recorded;
+    })
+  );
+});
+
+const settleAnswer = Effect.fnUntraced(function* settleAnswer(
+  ownerId: OwnerId,
+  burst: Burst,
+  result: ModelTurnResult
+) {
+  const inbox = yield* Inbox;
+  const event = turnEventOf(burst);
+  switch (result._tag) {
+    case "Sent": {
+      yield* inbox.markDone([event]);
+      break;
     }
-  });
+    case "Silent": {
+      const recorded = yield* settleSilentBurst(burst);
+      for (const outcome of recorded) {
+        yield* recordOutcomeMetric(ownerId, outcome);
+      }
+      break;
+    }
+    case "Failed": {
+      yield* failWithNotice(event, result.reason, newestEventOf(burst));
+      break;
+    }
+    case "SendFailed": {
+      yield* fail(event, result.reason);
+      break;
+    }
+    case "Superseded": {
+      break;
+    }
+    default: {
+      return result satisfies never;
+    }
+  }
+});
 
 const answer = (
   ownerId: OwnerId,
@@ -68,16 +115,15 @@ const answer = (
   const replyTo = newestEventOf(burst);
   return Effect.gen(function* answerEffect() {
     const toolServices = yield* agentToolServices;
-    const silenceServices = yield* Effect.context<Inbox | ProactiveMessages>();
-    const settledBySilence: RecordedOutcome[] = [];
     const preparation = yield* connectedProactivePreparation(behavior, burst);
     const openApprovals = yield* openApprovalsSection;
     const ownerTools = ownerMessageTools(burst, { ...toolServices, behavior });
 
     yield* linkBurst(burst);
-    const turn = yield* runModelTurn({
+    const result = yield* runModelTurn({
       ownerId,
       behavior,
+      session: mainConversation,
       kind: {
         task: "reply",
         event,
@@ -100,16 +146,10 @@ const answer = (
         restartSection,
         restartBeforeDelivery: (restartsDone) =>
           restartOf(burst, behavior, restartsDone),
-        whenSilent: settleSilentBurst(burst, settledBySilence).pipe(
-          Effect.provideContext(silenceServices)
-        ),
-        whenFailed: (reason) => failWithNotice(event, reason, replyTo),
       },
     });
-    for (const recorded of settledBySilence) {
-      yield* recordOutcomeMetric(ownerId, recorded);
-    }
-    return turn;
+    yield* settleAnswer(ownerId, burst, result);
+    return result;
   }).pipe(
     whileAcknowledging(replyTo.conversationId, behavior.typingRepeatMillis)
   );
@@ -126,7 +166,7 @@ const answerBurst = Effect.fnUntraced(function* answerBurst(
   );
   if (
     outcome === "unanswered" &&
-    (yield* answer(ownerId, settings, burst)) === "Superseded"
+    (yield* answer(ownerId, settings, burst))._tag === "Superseded"
   ) {
     return;
   }

@@ -24,6 +24,7 @@ import {
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
 import { settleFromJournal } from "./turn-recovery.ts";
+import { sideSession } from "./turn-session.ts";
 
 const hasEndedSending = (state: DeliveryState) =>
   state._tag === "Sent" ||
@@ -138,6 +139,7 @@ export const handleFiredSchedule = Effect.fnUntraced(
     const outcome = yield* settleFromJournal(event, {
       resumeUnsent: resumeUnsentFor(ownerId, event, schedule),
       failureNoticeText: failureNoticeTextOf(schedule),
+      session: sideSession,
     });
     if (outcome === "settled") {
       return;

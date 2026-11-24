@@ -7,21 +7,18 @@ import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import type { OwnerId } from "../owner-id.ts";
-import { Profile } from "../profile/profile.ts";
-import { ownerCurrentTimeText } from "../time/owner-current-time.ts";
 import type { TurnMetricResult } from "../tracing/operator-metrics.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
 import type { TurnTrace } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
-import { Conversation } from "./conversation.ts";
-import { fail, staySilent } from "./delivery.ts";
-import { Inbox } from "./inbox.ts";
+import { staySilent } from "./delivery.ts";
 import type { InboxEvent } from "./inbox.ts";
+import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
 import { generateWithOutcomeTools } from "./outcome-tools.ts";
-import { rememberCompletedSteps } from "./remember-completed-steps.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import { systemPrompt } from "./system-prompt.ts";
+import { reacted, replied, silent, unanswered } from "./stored-turn.ts";
+import type { TurnEnding } from "./stored-turn.ts";
 import { approvalAskingOf, deliverTurnOutcome } from "./turn-delivery.ts";
 import { recordTurnMetric } from "./turn-metric.ts";
 import { unpreparedTurn } from "./turn-preparation.ts";
@@ -31,12 +28,12 @@ import {
   modelFailureReason,
   responseMessagesOf,
   stepLimitReason,
+  stepMessagesOfReply,
 } from "./turn-record.ts";
 import type { ModelTraceInput } from "./turn-record.ts";
 import { recordSuperseded, restartCountForTurn } from "./turn-restart.ts";
 import type { Restart } from "./turn-restart.ts";
-
-export type BeforeFirstStep = "Proceed" | "Stopped";
+import type { TurnSession } from "./turn-session.ts";
 
 export interface ModelTurnKind<Failure, Requirements> {
   readonly task: "reply" | "scheduled_task" | "proactive";
@@ -51,77 +48,72 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly restartBeforeDelivery?: (
     restartsDone: number
   ) => Effect.Effect<Option.Option<Restart>, Failure, Requirements>;
-  readonly checkBeforeFirstStep?: (
-    startedAt: number
-  ) => Effect.Effect<BeforeFirstStep, Failure, Requirements>;
   readonly prepare?: Effect.Effect<TurnPreparation, Failure, Requirements>;
   readonly tracesSendFailure?: boolean;
-  readonly whenSent?: Effect.Effect<void, Failure, Requirements>;
-  readonly whenSilent?: Effect.Effect<void, Failure, Requirements>;
-  readonly whenSendFailed?: Effect.Effect<void, Failure, Requirements>;
-  readonly whenFailed: (
-    reason: string
-  ) => Effect.Effect<void, Failure, Requirements>;
 }
+
+export type ModelTurnResult =
+  | { readonly _tag: "Sent" }
+  | { readonly _tag: "Silent" }
+  | { readonly _tag: "Failed"; readonly reason: string }
+  | { readonly _tag: "SendFailed"; readonly reason: string }
+  | { readonly _tag: "Superseded" };
+
+const sent: ModelTurnResult = { _tag: "Sent" };
+const silentResult: ModelTurnResult = { _tag: "Silent" };
+const superseded: ModelTurnResult = { _tag: "Superseded" };
 
 interface ModelTurn<Failure, Requirements> {
   readonly ownerId: OwnerId;
   readonly behavior: BehaviorConfig;
+  readonly session: TurnSession;
   readonly kind: ModelTurnKind<Failure, Requirements>;
 }
 
 export const runModelTurn = <Failure, Requirements>({
   ownerId,
   behavior,
+  session,
   kind,
 }: ModelTurn<Failure, Requirements>) =>
   Effect.gen(function* runModelTurnEffect() {
     const { event } = kind;
+    const { eventId } = event;
     const { database } = yield* AgentStorage;
-    const inbox = yield* Inbox;
-    const conversation = yield* Conversation;
     const traces = yield* TurnTraces;
     const redactor = yield* Redactor;
-    const profile = yield* Profile;
     const progress = yield* TurnProgress;
 
     const startedAt = yield* Clock.currentTimeMillis;
     const restartsDone = yield* restartCountForTurn(event.eventId);
-    const stepsUsed = yield* progress.usedStepCount(event.eventId);
-    if (stepsUsed === 0 && kind.checkBeforeFirstStep !== undefined) {
-      const check = yield* kind.checkBeforeFirstStep(startedAt);
-      if (check === "Stopped") {
-        return;
-      }
-    }
+    const stepsUsed = yield* progress.usedStepCount(eventId);
     const preparation =
       kind.prepare === undefined ? unpreparedTurn : yield* kind.prepare;
-    const history = yield* conversation.recent;
-    const system = systemPrompt({
+    const earlier = yield* progress.completedFor(eventId);
+    const { system, history, messages } = yield* session.request({
       behavior,
-      profile: yield* profile.read,
-      currentTime: yield* ownerCurrentTimeText(behavior),
       situation: [
         ...(restartsDone > 0 && kind.restartSection !== undefined
           ? [kind.restartSection]
           : []),
         ...preparation.situation,
       ],
+      inputs: kind.inputs,
+      earlier,
     });
-    const savedInputs = kind.inputs.map((input) =>
-      redactor.redactMessage(input)
-    );
-    const earlier = yield* progress.completedFor(event.eventId);
+    const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
+      session.commit({ eventId, inputs: kind.inputs, steps, ending });
     const stepsLeft = behavior.maxToolSteps - stepsUsed;
     if (stepsLeft <= 0) {
-      yield* conversation.append(event.eventId, [...savedInputs, ...earlier]);
-      yield* kind.whenFailed(stepLimitReason(behavior.maxToolSteps));
-      return;
+      yield* finished(earlier, unanswered);
+      return {
+        _tag: "Failed",
+        reason: stepLimitReason(behavior.maxToolSteps),
+      } satisfies ModelTurnResult;
     }
-    const messages = [...history, ...kind.inputs, ...earlier];
     const trust = turnTrustGiven(kind, { history, ...preparation }, earlier);
     const decided = yield* generateWithOutcomeTools({
-      eventId: event.eventId,
+      eventId,
       earlierMessages: earlier,
       request: {
         task: kind.task,
@@ -157,7 +149,7 @@ export const runModelTurn = <Failure, Requirements>({
     ) =>
       recordTurnMetric({
         ownerId,
-        eventId: event.eventId,
+        eventId,
         outcome,
         result,
         outcomeKind,
@@ -177,78 +169,87 @@ export const runModelTurn = <Failure, Requirements>({
           delivered: false,
           restart: { coveredEventIds, newEventIds },
         }),
-        event.eventId
+        eventId
       );
       yield* recordMetric("superseded", undefined, restart.value.restartCount);
-      return "Superseded" as const;
+      return superseded;
     }
     yield* recordTrace(true);
 
-    const remember = rememberCompletedSteps({
-      eventId: event.eventId,
-      inputs: savedInputs,
-      earlier,
-      outcome,
+    const keptSteps = (turnMessages: readonly ModelMessage[]) =>
+      keepFinishedSteps({ eventId, earlier, turnMessages });
+    const endFailed = Effect.fnUntraced(function* endFailed(
+      reason: string,
+      steps: Option.Option<readonly ModelMessage[]>
+    ) {
+      yield* dropDraftsOf(eventId);
+      yield* finished(
+        Option.isSome(steps)
+          ? steps.value
+          : yield* progress.completedFor(eventId),
+        unanswered
+      );
+      yield* recordMetric("model_failed");
+      return { _tag: "Failed", reason } satisfies ModelTurnResult;
     });
     if (outcome._tag === "ModelFailed") {
-      yield* dropDraftsOf(event.eventId);
-      yield* remember;
-      yield* kind.whenFailed(modelFailureReason(outcome.error, redactor));
-      yield* recordMetric("model_failed");
-      return;
+      return yield* endFailed(
+        modelFailureReason(outcome.error, redactor),
+        yield* keptSteps(responseMessagesOf(outcome))
+      );
     }
     if (decided.kind === "silent") {
-      yield* database.transaction(() =>
-        conversation
-          .append(event.eventId, [
-            ...savedInputs,
-            ...earlier,
-            ...responseMessagesOf(outcome).map((message) =>
-              redactor.redactMessage(message)
-            ),
-          ])
-          .pipe(
-            Effect.andThen(staySilent(event)),
-            Effect.andThen(inbox.markDone([event])),
-            Effect.andThen(kind.whenSilent ?? Effect.void)
+      const stayedSilent = yield* database.transaction(() =>
+        keptSteps(responseMessagesOf(outcome)).pipe(
+          Effect.flatMap((steps) =>
+            Option.isNone(steps)
+              ? Effect.succeed(false)
+              : finished(steps.value, silent).pipe(
+                  Effect.andThen(staySilent(event)),
+                  Effect.as(true)
+                )
           )
+        )
       );
+      if (!stayedSilent) {
+        return yield* endFailed(stepsNotKeptReason, Option.none());
+      }
       yield* recordMetric("silent", "silent");
-      return;
+      return silentResult;
     }
     const outcomeKind = decided.reaction === undefined ? "reply" : "reaction";
+    const kept = yield* keptSteps(
+      outcomeKind === "reply"
+        ? stepMessagesOfReply(outcome)
+        : responseMessagesOf(outcome)
+    );
+    if (Option.isNone(kept)) {
+      return yield* endFailed(stepsNotKeptReason, Option.none());
+    }
+    const steps = kept.value;
+    const text = preparation.lateText(redactor.redact(outcome.reply.text));
     const delivery = yield* deliverTurnOutcome({
       event,
-      text: preparation.lateText(redactor.redact(outcome.reply.text)),
+      text,
       drafts: decided.drafts,
       reaction: decided.reaction,
       replyTo: kind.replyTo ?? event,
     });
     if (delivery._tag === "Failed") {
-      yield* remember;
+      yield* finished(steps, unanswered);
       if (kind.tracesSendFailure === true) {
         yield* recordTrace(false);
       }
-      if (kind.whenSendFailed !== undefined) {
-        yield* kind.whenSendFailed;
-      }
-      yield* fail(event, delivery.reason);
       yield* recordMetric("send_failed", outcomeKind);
-      return;
+      return {
+        _tag: "SendFailed",
+        reason: delivery.reason,
+      } satisfies ModelTurnResult;
     }
-    if (kind.whenSent !== undefined) {
-      yield* kind.whenSent;
-    }
-    yield* conversation.append(event.eventId, [
-      ...savedInputs,
-      ...earlier,
-      ...responseMessagesOf(outcome).map((message) =>
-        redactor.redactMessage(message)
-      ),
-    ]);
-    yield* inbox.markDone([event]);
+    yield* finished(steps, outcomeKind === "reply" ? replied(text) : reacted);
     yield* recordMetric(
       outcomeKind === "reply" ? "replied" : "reacted",
       outcomeKind
     );
+    return sent;
   });
