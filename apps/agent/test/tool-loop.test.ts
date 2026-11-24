@@ -16,8 +16,12 @@ import { honestFailureText } from "../src/personal-agent/delivery.ts";
 import { Inbox } from "../src/personal-agent/inbox.ts";
 import personalAgentMigrations from "../src/personal-agent/migrations/migrations.js";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
+import {
+  replied,
+  storeFinishedTurn,
+} from "../src/personal-agent/stored-turn.ts";
 import { TurnProgress } from "../src/personal-agent/turn-progress.ts";
-import { redactedMark } from "../src/tracing/redactor.ts";
+import { Redactor, redactedMark } from "../src/tracing/redactor.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import {
   fakeMetrics,
@@ -295,7 +299,7 @@ describe("Tool loop", () => {
 
     const history = await inPersonalAgent(
       ownerId,
-      Conversation.pipe(Effect.flatMap((conversation) => conversation.recent))
+      Conversation.pipe(Effect.flatMap((conversation) => conversation.history))
     );
     expect(JSON.stringify(history)).not.toContain(env.AI_GATEWAY_TOKEN);
     expect(JSON.stringify(history)).toContain(redactedMark);
@@ -315,7 +319,7 @@ describe("Tool loop", () => {
     expect(JSON.stringify(stored?.trace.steps)).toContain(redactedMark);
     const history = await inPersonalAgent(
       ownerId,
-      Conversation.pipe(Effect.flatMap((conversation) => conversation.recent))
+      Conversation.pipe(Effect.flatMap((conversation) => conversation.history))
     );
     expect(JSON.stringify(history)).not.toContain(env.AI_GATEWAY_TOKEN);
   });
@@ -363,72 +367,104 @@ const toolTurn = (index: number) =>
     { role: "assistant", content: `done ${index}` },
   ] satisfies ModelMessage[];
 
+const migrationsBefore = (name: string): AgentMigrations => ({
+  migrations: Object.fromEntries(
+    Object.entries(personalAgentMigrations.migrations).filter(
+      ([migration]) => migration < name
+    )
+  ),
+});
+
+const conversationLayoutMigration = "20261124202916";
+
 describe("Conversation history", () => {
-  it("never starts the recent window between a tool call and its result", async () => {
+  it("sends every stored row with no window, and each row has its Turn Event id and row kind", async () => {
     const agent = await personalAgentFor(
       env.PERSONAL_AGENT,
-      OwnerIdSchema.make("owner-window")
+      OwnerIdSchema.make("owner-no-window")
     );
-    const recent = await runInDurableObject(agent, (instance) =>
+    const turns = 8;
+    const { history, rows } = await runInDurableObject(agent, (instance) =>
       instance.runtime.runPromise(
-        Effect.gen(function* windowEffect() {
+        Effect.gen(function* noWindowEffect() {
           const conversation = yield* Conversation;
-          for (let index = 0; index < 6; index += 1) {
-            yield* conversation.append(`seed-${index}`, toolTurn(index));
+          const { database } = yield* AgentStorage;
+          for (let index = 0; index < turns; index += 1) {
+            const turn = toolTurn(index);
+            yield* storeFinishedTurn({
+              eventId: `seed-${index}`,
+              turnContext: `[Turn context] ${index}`,
+              inputs: turn.slice(0, 1),
+              steps: turn.slice(1, 3),
+              ending: replied(`done ${index}`),
+            });
           }
-          return yield* conversation.recent;
-        })
+          return {
+            history: yield* conversation.history,
+            rows: yield* database.all<{ event_id: string; kind: string }>(
+              sql`SELECT event_id, kind FROM conversation_messages ORDER BY sequence`
+            ),
+          };
+        }).pipe(Effect.provide(Redactor.layer([])))
       )
     );
 
-    expect(recent[0]?.role).toBe("user");
-    expect(recent.length).toBeLessThanOrEqual(20);
-    const callIds = recent.flatMap((message) =>
-      message.role === "assistant" && typeof message.content !== "string"
-        ? message.content.flatMap((part) =>
-            part.type === "tool-call" ? [part.toolCallId] : []
-          )
-        : []
-    );
-    const resultIds = recent.flatMap((message) =>
-      message.role === "tool"
-        ? message.content.flatMap((part) =>
-            part.type === "tool-result" ? [part.toolCallId] : []
-          )
-        : []
-    );
-    expect(resultIds).toEqual(callIds);
+    expect(history).toHaveLength(turns * 4);
+    expect(history[0]).toEqual({
+      role: "user",
+      content: "[Turn context] 0\nask 0",
+    });
+    expect(history.at(-1)).toEqual({
+      role: "assistant",
+      content: `done ${turns - 1}`,
+    });
+    expect(rows.slice(0, 4)).toEqual([
+      { event_id: "seed-0", kind: "input" },
+      { event_id: "seed-0", kind: "step" },
+      { event_id: "seed-0", kind: "step" },
+      { event_id: "seed-0", kind: "reply" },
+    ]);
   });
 
-  it("converts existing text rows to valid model messages", async () => {
+  it("converts existing text rows to valid model messages, and the layout migration then deletes the stored Conversation", async () => {
     const agent = await personalAgentFor(
       env.PERSONAL_AGENT,
       OwnerIdSchema.make("owner-legacy-rows")
     );
-    const legacyMigrations: AgentMigrations = {
-      migrations: Object.fromEntries(
-        Object.entries(personalAgentMigrations.migrations).filter(
-          ([name]) => name < "20261115141734"
-        )
-      ),
-    };
 
-    const messages = await runInDurableObject(
+    const { converted, afterLayout } = await runInDurableObject(
       agent,
       async (_instance, state) => {
-        await Effect.runPromise(
+        const run = <A>(
+          migrations: AgentMigrations,
+          effect: Effect.Effect<A, unknown, AgentStorage>
+        ) =>
+          Effect.runPromise(
+            effect.pipe(
+              Effect.provide(AgentStorage.layer(state.storage, migrations))
+            )
+          );
+        await run(
+          migrationsBefore("20261115141734"),
           Effect.gen(function* legacyEffect() {
             const { database } = yield* AgentStorage;
             yield* database.run(
               sql`INSERT INTO conversation_messages (role, text, recorded_at) VALUES ('owner', 'Hello', 'then'), ('agent', 'Hi there', 'then')`
             );
-          }).pipe(
-            Effect.provide(AgentStorage.layer(state.storage, legacyMigrations))
-          )
+          })
         );
-        return Effect.runPromise(
+        const convertedRows = await run(
+          migrationsBefore(conversationLayoutMigration),
+          Effect.gen(function* convertedEffect() {
+            const { database } = yield* AgentStorage;
+            return yield* database.all<{ message: string }>(
+              sql`SELECT message FROM conversation_messages ORDER BY sequence`
+            );
+          })
+        );
+        const history = await Effect.runPromise(
           Conversation.pipe(
-            Effect.flatMap((conversation) => conversation.recent),
+            Effect.flatMap((conversation) => conversation.history),
             Effect.provide(
               Conversation.layer.pipe(
                 Layer.provideMerge(AgentStorage.layer(state.storage))
@@ -436,15 +472,22 @@ describe("Conversation history", () => {
             )
           )
         );
+        return {
+          converted: convertedRows.map(
+            (row) => JSON.parse(row.message) as unknown
+          ),
+          afterLayout: history,
+        };
       }
     );
 
-    expect(messages).toEqual([
+    expect(converted).toEqual([
       { role: "user", content: "Hello" },
       { role: "assistant", content: "Hi there" },
     ]);
-    for (const message of messages) {
+    for (const message of converted) {
       expect(modelMessageSchema.safeParse(message).success).toBe(true);
     }
+    expect(afterLayout).toEqual([]);
   });
 });

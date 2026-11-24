@@ -53,7 +53,7 @@ const personalAgentLayer = (
   );
   return Layer.mergeAll(
     schedules,
-    Inbox.layer.pipe(Layer.provide(journal)),
+    Inbox.layer.pipe(Layer.provide(Layer.merge(journal, TurnProgress.layer))),
     journal,
     Notes.layer(ownerId).pipe(Layer.provide(journal)),
     Profile.layer(ownerId).pipe(Layer.provide(journal)),

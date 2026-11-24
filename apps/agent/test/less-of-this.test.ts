@@ -12,7 +12,13 @@ import { muteProactiveMessageToolName } from "../src/proactive/mute-proactive-me
 import { briefPrompt } from "../src/schedule/brief-prompt.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const warsaw = DateTime.zoneMakeNamedUnsafe("Europe/Warsaw");
@@ -293,10 +299,10 @@ describe("a follow-up for a muted Open Loop", () => {
     scriptModel([{ say: "Brief" }]);
     await makeDue(ownerId, briefPrompt);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(sent + 1));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
-    expect(JSON.stringify(system?.content)).toContain(note.noteId);
+    const instructionsAndContext = instructionsAndContextOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
+    expect(instructionsAndContext).toContain(note.noteId);
   });
 
   it("folds once when the same Event is decided again", async () => {
@@ -341,10 +347,10 @@ describe("a follow-up for a muted Open Loop", () => {
     await makeDue(ownerId, briefPrompt);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
 
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
-    expect(JSON.stringify(system?.content)).toContain(folded.noteId);
+    const instructionsAndContext = instructionsAndContextOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
+    expect(instructionsAndContext).toContain(folded.noteId);
   });
 
   it("names a newly folded Open Loop when 20 folded ones were already in an earlier Brief", async () => {
@@ -382,10 +388,10 @@ describe("a follow-up for a muted Open Loop", () => {
     await makeDue(ownerId, briefPrompt);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
 
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
-    expect(JSON.stringify(system?.content)).toContain(later.noteId);
+    const instructionsAndContext = instructionsAndContextOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
+    expect(instructionsAndContext).toContain(later.noteId);
   });
 
   it("sends a mixed follow-up that lists only the unmuted Open Loop and names the muted one", async () => {
@@ -399,10 +405,10 @@ describe("a follow-up for a muted Open Loop", () => {
     await makeDue(ownerId, followUpPrompt);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
-    const text = JSON.stringify(system?.content);
+    const instructionsAndContext = instructionsAndContextOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
+    const text = instructionsAndContext;
     expect(text).toContain(`- ${kept.noteId} (task`);
     expect(text).not.toContain(`- ${muted.noteId} (task`);
     expect(text).toContain(

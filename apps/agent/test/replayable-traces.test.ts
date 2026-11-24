@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Journal } from "../src/journal/journal.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { textAfterTurnContext } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { redactedMark } from "../src/tracing/redactor.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
@@ -85,7 +86,15 @@ describe("Replayable Traces", () => {
         attemptTimeoutMillis: 30_000,
         reasoningEffort: "none",
       },
-      messages: [{ role: "user", content: "Hello" }],
+      messages: [
+        { role: "user", content: expect.stringMatching(/^\[Owner context\]/u) },
+        {
+          role: "user",
+          content: expect.stringMatching(
+            /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
+          ),
+        },
+      ],
       steps: [
         {
           toolCalls: [],
@@ -135,7 +144,12 @@ describe("Replayable Traces", () => {
     ]);
     expect(
       second?.trace.messages.map((message) => textOf(message.content))
-    ).toEqual(["First", `${fakeReplyPrefix}First`, "Second"]);
+    ).toEqual([
+      expect.stringMatching(/^\[Owner context\]/u),
+      expect.stringMatching(/^\[Turn context\][^]*\nFirst$/u),
+      `${fakeReplyPrefix}First`,
+      expect.stringMatching(/^\[Turn context\][^]*\nSecond$/u),
+    ]);
   });
 
   it("records a failed Turn with its error and no secret", async () => {
@@ -150,7 +164,15 @@ describe("Replayable Traces", () => {
       result: "model_failed",
       reply: null,
       modelSettings: { reasoningEffort: "none" },
-      messages: [{ role: "user", content: "Hello" }],
+      messages: [
+        { role: "user", content: expect.stringMatching(/^\[Owner context\]/u) },
+        {
+          role: "user",
+          content: expect.stringMatching(
+            /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
+          ),
+        },
+      ],
     });
     expect(stored?.trace.error).toContain(redactedMark);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
@@ -174,7 +196,9 @@ describe("Replayable Traces", () => {
     }
     const marks = allSecrets.map(() => redactedMark).join(" ");
     const [stored] = await tracesOf(ownerId);
-    expect(stored?.trace.messages[0]?.content).toBe(`Keys ${marks}`);
+    expect(
+      textAfterTurnContext(String(stored?.trace.messages.at(-1)?.content))
+    ).toBe(`Keys ${marks}`);
     expect(stored?.trace.reply).toBe(`${fakeReplyPrefix}Keys ${marks}`);
   });
 

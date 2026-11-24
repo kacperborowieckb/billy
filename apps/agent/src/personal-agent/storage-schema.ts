@@ -15,6 +15,7 @@ import type { OwnerMessage } from "../event.ts";
 import type { OwnerId } from "../owner-id.ts";
 import {
   approvalAnswers,
+  conversationRowKinds,
   eventKinds,
   inboxStates,
   modelTasks,
@@ -76,30 +77,22 @@ export const ownerChannelConversations = sqliteTable(
   ]
 );
 
-export const conversationMessages = sqliteTable("conversation_messages", {
-  sequence: integer("sequence").primaryKey({ autoIncrement: true }),
-  message: text("message").notNull(),
-  recordedAt: text("recorded_at").notNull(),
-});
-
-export const turnProgress = sqliteTable(
-  "turn_progress",
+export const conversationMessages = sqliteTable(
+  "conversation_messages",
   {
     sequence: integer("sequence").primaryKey({ autoIncrement: true }),
     eventId: text("event_id").notNull(),
+    kind: text("kind", { enum: conversationRowKinds }).notNull(),
     message: text("message").notNull(),
     recordedAt: text("recorded_at").notNull(),
   },
-  (table) => [index("turn_progress_event").on(table.eventId)]
-);
-
-export const turnModelSteps = sqliteTable(
-  "turn_model_steps",
-  {
-    eventId: text("event_id").notNull(),
-    modelStepKey: integer("model_step_key").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.eventId, table.modelStepKey] })]
+  (table) => [
+    index("conversation_messages_event").on(table.eventId),
+    check(
+      "conversation_messages_kind_check",
+      valueIn(table.kind, conversationRowKinds)
+    ),
+  ]
 );
 
 export const conversationRecordedEvents = sqliteTable(

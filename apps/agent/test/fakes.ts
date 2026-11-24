@@ -1,5 +1,10 @@
 import { MockLanguageModelV4 } from "ai/test";
 
+import {
+  ownerContextLabel,
+  textAfterTurnContext,
+  turnContextLabel,
+} from "../src/personal-agent/context-labels.ts";
 import { burstMessageLabel } from "../src/personal-agent/event-message.ts";
 
 export const fakeTelegramApiUrl = "https://telegram.fake";
@@ -268,8 +273,7 @@ const lastOwnerText = (
   prompt: MockLanguageModelV4["doGenerateCalls"][number]["prompt"]
 ) => {
   const message = prompt.findLast((candidate) => candidate.role === "user");
-  const part = message?.content.find((candidate) => candidate.type === "text");
-  return part?.type === "text" ? part.text : "";
+  return message === undefined ? "" : textAfterTurnContext(userTextOf(message));
 };
 
 export interface ScriptedToolCall {
@@ -292,6 +296,44 @@ export type ScriptedModelStep =
     };
 
 type ModelPrompt = MockLanguageModelV4["doGenerateCalls"][number]["prompt"];
+
+const userTextOf = (message: ModelPrompt[number]) =>
+  message.role === "user"
+    ? message.content
+        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .join("\n")
+    : "";
+
+export const lastUserTextOf = (prompt: ModelPrompt) =>
+  prompt.map(userTextOf).findLast((text) => text !== "") ?? "";
+
+export const systemTextOf = (prompt: ModelPrompt) => {
+  const system = prompt.find((message) => message.role === "system");
+  return system?.role === "system" ? system.content : "";
+};
+
+const blockOf = (text: string) =>
+  text.startsWith(turnContextLabel)
+    ? text.slice(0, text.length - textAfterTurnContext(text).length)
+    : text;
+
+export const contextBlockOf = (prompt: ModelPrompt, label: string) =>
+  blockOf(
+    prompt.map(userTextOf).findLast((text) => text.startsWith(label)) ?? ""
+  );
+
+export const ownerTextsOf = (prompt: ModelPrompt) =>
+  prompt
+    .map(userTextOf)
+    .filter((text) => text !== "" && !text.startsWith(ownerContextLabel))
+    .map(textAfterTurnContext);
+
+export const instructionsAndContextOf = (prompt: ModelPrompt) =>
+  [
+    systemTextOf(prompt),
+    contextBlockOf(prompt, ownerContextLabel),
+    contextBlockOf(prompt, turnContextLabel),
+  ].join("\n");
 
 const lastToolOutput = (prompt: ModelPrompt): Record<string, unknown> => {
   const message = prompt.findLast((candidate) => candidate.role === "tool");

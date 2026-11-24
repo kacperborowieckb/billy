@@ -14,6 +14,15 @@ export const approvalRunResults = [
 
 export const inboxStates = ["pending", "done", "failed"] as const;
 
+export const conversationRowKinds = [
+  "input",
+  "step",
+  "reply",
+  "approval_status",
+] as const;
+
+export type ConversationRowKind = (typeof conversationRowKinds)[number];
+
 export const trustLevels = ["owner", "untrusted"] as const;
 
 export const noteChanges = ["text", "links", "text_and_links"] as const;

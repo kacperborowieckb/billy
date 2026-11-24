@@ -5,8 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
-import { fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
-import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  lastUserTextOf,
+  resetFakes,
+  scriptModel,
+} from "./fakes.ts";
+import { ownerInWarsaw } from "./owner-with-data.ts";
+import { telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 const agentOf = (ownerId: string) =>
   personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId));
@@ -44,6 +51,12 @@ const pendingEventCountOf = async (ownerId: string) =>
         .one().pending
   );
 
+const sentOwnerMessageRow = () =>
+  JSON.stringify({
+    role: "user",
+    content: lastUserTextOf(fakeModel.doGenerateCalls[0]?.prompt ?? []),
+  });
+
 const captureThenReply = () =>
   scriptModel([
     { callTool: captureNoteToolName, input: { text: "buy tea" } },
@@ -56,7 +69,7 @@ beforeEach(() => {
 
 describe("The stored form of a Turn", () => {
   it("is the same bytes when recovery after a reset stores the Turn as when the normal path stores it", async () => {
-    const normalOwner = await addOwner(7301);
+    const normalOwner = await ownerInWarsaw(7301);
     captureThenReply();
     await telegramWebhook(textUpdate({ fromUserId: 7301, text: "buy tea" }));
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
@@ -64,9 +77,10 @@ describe("The stored form of a Turn", () => {
       expect(await pendingEventCountOf(normalOwner)).toBe(0)
     );
     const normal = await storedConversationOf(normalOwner);
+    const normalSentOwnerMessage = sentOwnerMessageRow();
 
     resetFakes();
-    const recoveredOwner = await addOwner(7302);
+    const recoveredOwner = await ownerInWarsaw(7302);
     await runInDurableObject(
       await agentOf(recoveredOwner),
       async (instance, state) => {
@@ -80,6 +94,7 @@ describe("The stored form of a Turn", () => {
     await telegramWebhook(textUpdate({ fromUserId: 7302, text: "buy tea" }));
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
     expect(await storedConversationOf(recoveredOwner)).toEqual([]);
+    const recoveredSentOwnerMessage = sentOwnerMessageRow();
     expect(await pendingEventCountOf(recoveredOwner)).toBe(1);
 
     await runInDurableObject(
@@ -98,6 +113,10 @@ describe("The stored form of a Turn", () => {
       "tool",
       "assistant",
     ]);
-    expect(await storedConversationOf(recoveredOwner)).toEqual(normal);
+    const recovered = await storedConversationOf(recoveredOwner);
+    expect(normalSentOwnerMessage).toContain("Current local time of the Owner");
+    expect(normal[0]).toBe(normalSentOwnerMessage);
+    expect(recovered[0]).toBe(recoveredSentOwnerMessage);
+    expect(recovered.slice(1)).toEqual(normal.slice(1));
   });
 });

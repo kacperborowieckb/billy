@@ -33,6 +33,7 @@ import {
   holdModel,
   resetFakes,
   scriptModel,
+  instructionsAndContextOf,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
@@ -218,15 +219,15 @@ describe("the system prompt of a Scheduled Task Turn", () => {
     await fireTheAlarm(ownerId);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
-    const system = lastModelCall().prompt.find(
-      (message) => message.role === "system"
+    const instructionsAndContext = instructionsAndContextOf(
+      lastModelCall().prompt
     );
     const setAt = localTimeOf(
       schedule.createdAt,
       DateTime.zoneMakeNamedUnsafe("Europe/Warsaw")
     );
-    expect(system?.content).toContain("The Owner is not present.");
-    expect(system?.content).toContain(`set at ${setAt} (Europe/Warsaw)`);
+    expect(instructionsAndContext).toContain("The Owner is not present.");
+    expect(instructionsAndContext).toContain(`set at ${setAt} (Europe/Warsaw)`);
   });
 });
 

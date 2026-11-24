@@ -15,6 +15,8 @@ import { AgentStorage } from "./agent-storage.ts";
 import { staySilent } from "./delivery.ts";
 import type { InboxEvent } from "./inbox.ts";
 import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
+import { sent, silentResult, superseded } from "./model-turn-result.ts";
+import type { ModelTurnResult } from "./model-turn-result.ts";
 import { generateWithOutcomeTools } from "./outcome-tools.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import { reacted, replied, silent, unanswered } from "./stored-turn.ts";
@@ -40,6 +42,7 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly event: InboxEvent;
   readonly replyTo?: InboxEvent;
   readonly inputs: readonly ModelMessage[];
+  readonly instructions?: readonly string[];
   readonly tools: AgentTools;
   readonly trustLevel: TrustLevel;
   readonly asksOwnerForApproval?: boolean;
@@ -51,17 +54,6 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly prepare?: Effect.Effect<TurnPreparation, Failure, Requirements>;
   readonly tracesSendFailure?: boolean;
 }
-
-export type ModelTurnResult =
-  | { readonly _tag: "Sent" }
-  | { readonly _tag: "Silent" }
-  | { readonly _tag: "Failed"; readonly reason: string }
-  | { readonly _tag: "SendFailed"; readonly reason: string }
-  | { readonly _tag: "Superseded" };
-
-const sent: ModelTurnResult = { _tag: "Sent" };
-const silentResult: ModelTurnResult = { _tag: "Silent" };
-const superseded: ModelTurnResult = { _tag: "Superseded" };
 
 interface ModelTurn<Failure, Requirements> {
   readonly ownerId: OwnerId;
@@ -90,8 +82,24 @@ export const runModelTurn = <Failure, Requirements>({
     const preparation =
       kind.prepare === undefined ? unpreparedTurn : yield* kind.prepare;
     const earlier = yield* progress.completedFor(eventId);
-    const { system, history, messages } = yield* session.request({
+    const stepsLeft = behavior.maxToolSteps - stepsUsed;
+    if (stepsLeft <= 0) {
+      yield* session.commit({
+        eventId,
+        turnContext: yield* progress.turnContextFor(eventId),
+        inputs: kind.inputs,
+        steps: earlier,
+        ending: unanswered,
+      });
+      return {
+        _tag: "Failed",
+        reason: stepLimitReason(behavior.maxToolSteps),
+      } satisfies ModelTurnResult;
+    }
+    const { system, history, turnContext, messages } = yield* session.request({
+      eventId,
       behavior,
+      instructions: kind.instructions ?? [],
       situation: [
         ...(restartsDone > 0 && kind.restartSection !== undefined
           ? [kind.restartSection]
@@ -101,16 +109,9 @@ export const runModelTurn = <Failure, Requirements>({
       inputs: kind.inputs,
       earlier,
     });
+    const turn = { eventId, turnContext, inputs: kind.inputs };
     const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
-      session.commit({ eventId, inputs: kind.inputs, steps, ending });
-    const stepsLeft = behavior.maxToolSteps - stepsUsed;
-    if (stepsLeft <= 0) {
-      yield* finished(earlier, unanswered);
-      return {
-        _tag: "Failed",
-        reason: stepLimitReason(behavior.maxToolSteps),
-      } satisfies ModelTurnResult;
-    }
+      session.commit({ ...turn, steps, ending });
     const trust = turnTrustGiven(kind, { history, ...preparation }, earlier);
     const decided = yield* generateWithOutcomeTools({
       eventId,

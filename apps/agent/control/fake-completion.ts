@@ -1,5 +1,11 @@
 import { Schema } from "effect";
 
+import {
+  ownerContextLabel,
+  textAfterTurnContext,
+  turnContextLabel,
+} from "../src/personal-agent/context-labels.ts";
+
 export const ChatCompletionBodySchema = Schema.Struct({
   model: Schema.String,
   messages: Schema.Array(
@@ -13,17 +19,31 @@ export const lastOwnerText = (
   const content = messages.findLast(
     (message) => message.role === "user"
   )?.content;
-  return typeof content === "string" ? content : "";
+  return typeof content === "string" ? textAfterTurnContext(content) : "";
 };
 
-export const systemTextOf = (
+const textContentOf = (content: unknown) =>
+  typeof content === "string" ? content : "";
+
+const latestContextBlock = (
+  messages: (typeof ChatCompletionBodySchema.Type)["messages"],
+  label: string
+) =>
+  messages
+    .filter((message) => message.role === "user")
+    .map((message) => textContentOf(message.content))
+    .findLast((text) => text.startsWith(label)) ?? "";
+
+export const instructionsAndContextOf = (
   messages: (typeof ChatCompletionBodySchema.Type)["messages"]
-) => {
-  const content = messages.find(
-    (message) => message.role === "system"
-  )?.content;
-  return typeof content === "string" ? content : "";
-};
+) =>
+  [
+    textContentOf(
+      messages.find((message) => message.role === "system")?.content
+    ),
+    latestContextBlock(messages, ownerContextLabel),
+    latestContextBlock(messages, turnContextLabel),
+  ].join("\n");
 
 export const toolResultOf = (
   messages: (typeof ChatCompletionBodySchema.Type)["messages"]

@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Journal } from "../src/journal/journal.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import {
+  ownerContextLabel,
+  textAfterTurnContext,
+  turnContextLabel,
+} from "../src/personal-agent/context-labels.ts";
 import { Inbox } from "../src/personal-agent/inbox.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import {
@@ -101,7 +106,7 @@ describe("Owner texts, agent replies", () => {
     expect(fakeTelegram.sent).toHaveLength(1);
   });
 
-  it("sends the static system prompt first, then the conversation, then the new message", async () => {
+  it("sends the fixed system prompt, the Owner Context Block, the stored Conversation, then the new message that starts with its Turn Context Block", async () => {
     const ownerId = await addOwner(5002);
 
     await telegramWebhook(textUpdate({ fromUserId: 5002, text: "first" }));
@@ -113,8 +118,24 @@ describe("Owner texts, agent replies", () => {
     expect(secondPrompt.map((message) => message.role)).toEqual([
       "system",
       "user",
+      "user",
       "assistant",
       "user",
+    ]);
+    const texts = secondPrompt.slice(1).map((message) => {
+      const [part] = typeof message.content === "string" ? [] : message.content;
+      return part?.type === "text" ? part.text : "";
+    });
+    expect(texts.map((text) => text.split("\n")[0])).toEqual([
+      ownerContextLabel,
+      turnContextLabel,
+      `${fakeReplyPrefix}first`,
+      turnContextLabel,
+    ]);
+    expect(texts.map(textAfterTurnContext).slice(1)).toEqual([
+      "first",
+      `${fakeReplyPrefix}first`,
+      "second",
     ]);
     expect(secondPrompt[0]).toEqual(fakeModel.doGenerateCalls[0]?.prompt[0]);
     expect(await journalOf(ownerId)).toHaveLength(8);

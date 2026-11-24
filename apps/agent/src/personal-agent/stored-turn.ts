@@ -3,6 +3,8 @@ import { Effect } from "effect";
 
 import { Redactor } from "../tracing/redactor.ts";
 import { Conversation } from "./conversation.ts";
+import type { ConversationRow } from "./conversation.ts";
+import { withTurnContext } from "./turn-context.ts";
 
 export type TurnEnding =
   | { readonly _tag: "Replied"; readonly text: string }
@@ -81,26 +83,38 @@ export const withRecordedToolParts = (
 
 export interface FinishedTurn {
   readonly eventId: string;
+  readonly recordedAs?: string | undefined;
+  readonly turnContext?: string | undefined;
   readonly inputs: readonly ModelMessage[];
   readonly steps: readonly ModelMessage[];
   readonly ending: TurnEnding;
 }
 
-const endingMessagesOf = (ending: TurnEnding): readonly ModelMessage[] =>
+const endingRowsOf = (ending: TurnEnding): readonly ConversationRow[] =>
   ending._tag === "Replied"
-    ? [{ role: "assistant", content: ending.text }]
+    ? [{ kind: "reply", message: { role: "assistant", content: ending.text } }]
     : [];
 
+const rowsOfKind = (
+  kind: ConversationRow["kind"],
+  messages: readonly ModelMessage[]
+): readonly ConversationRow[] => messages.map((message) => ({ kind, message }));
+
 export const storedFormOf = (
-  { inputs, steps, ending }: FinishedTurn,
+  { turnContext, inputs, steps, ending }: FinishedTurn,
   redactor: Redactor["Service"]
-): readonly ModelMessage[] =>
+): readonly ConversationRow[] =>
   ending._tag === "Unanswered" && steps.length === 0
     ? []
     : [
-        ...inputs.map((input) => redactor.redactMessage(input)),
-        ...steps,
-        ...endingMessagesOf(ending),
+        ...rowsOfKind(
+          "input",
+          withTurnContext(turnContext, inputs).map((input) =>
+            redactor.redactMessage(input)
+          )
+        ),
+        ...rowsOfKind("step", steps),
+        ...endingRowsOf(ending),
       ];
 
 export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
@@ -108,8 +122,12 @@ export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
 ) {
   const conversation = yield* Conversation;
   const redactor = yield* Redactor;
-  const stored = storedFormOf(turn, redactor);
-  if (stored.length > 0) {
-    yield* conversation.append(turn.eventId, stored);
+  const rows = storedFormOf(turn, redactor);
+  if (rows.length > 0) {
+    yield* conversation.append({
+      eventId: turn.eventId,
+      recordedAs: turn.recordedAs,
+      rows,
+    });
   }
 });

@@ -168,7 +168,8 @@ export const fail = Effect.fnUntraced(function* fail(
 export const rememberFailureNotice = (event: InboxEvent, text: string) =>
   event._tag === "ScheduleFired"
     ? storeFinishedTurn({
-        eventId: `${event.eventId}:failure-notice`,
+        eventId: event.eventId,
+        recordedAs: `${event.eventId}:failure-notice`,
         inputs: [],
         steps: [],
         ending: replied(text),

@@ -63,12 +63,19 @@ const expireWithConversationEntry = Effect.fnUntraced(
     const { database } = yield* AgentStorage;
     const conversation = yield* Conversation;
     if (yield* expireApproval(database, approval, now)) {
-      yield* conversation.append(approval.pendingApprovalId, [
-        {
-          role: "assistant",
-          content: conversationEntryOf(approval.summary, expiredStatus),
-        },
-      ]);
+      yield* conversation.append({
+        eventId: approval.turnEventId,
+        recordedAs: approval.pendingApprovalId,
+        rows: [
+          {
+            kind: "approval_status",
+            message: {
+              role: "assistant",
+              content: conversationEntryOf(approval.summary, expiredStatus),
+            },
+          },
+        ],
+      });
     }
   }
 );

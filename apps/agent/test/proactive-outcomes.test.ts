@@ -14,6 +14,7 @@ import { OwnerChannelConversation } from "../src/personal-agent/owner-channel-co
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { receiveEvent } from "../src/personal-agent/receive-event.ts";
 import { staySilentToolName } from "../src/personal-agent/stay-silent-tool.ts";
+import { TurnProgress } from "../src/personal-agent/turn-progress.ts";
 import type { OwnerPreferences } from "../src/preferences/owner-preferences.ts";
 import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { ProactiveMessages } from "../src/proactive/proactive-messages.ts";
@@ -25,6 +26,7 @@ import {
   fakeTelegram,
   resetFakes,
   scriptModel,
+  instructionsAndContextOf,
 } from "./fakes.ts";
 import { quietHoursLaterToday } from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
@@ -145,10 +147,9 @@ const ownerWrites = async (telegramUserId: number, text: string) => {
   await telegramWebhook(textUpdate({ fromUserId: telegramUserId, text }));
 };
 
-const systemPromptOfLastModelCall = () => {
+const instructionsAndContextOfLastModelCall = () => {
   const call = fakeModel.doGenerateCalls.at(-1);
-  const system = call?.prompt.find((message) => message.role === "system");
-  return typeof system?.content === "string" ? system.content : "";
+  return instructionsAndContextOf(call?.prompt ?? []);
 };
 
 beforeEach(() => {
@@ -173,17 +174,13 @@ describe("the Outcome of a Proactive Message in a connected Turn", () => {
     await vi.waitFor(async () =>
       expect(await outcomeOf(ownerId)).toBe("acted")
     );
-    const system = fakeModel.doGenerateCalls
-      .map((call) => call.prompt.find((message) => message.role === "system"))
-      .find(
-        (message) =>
-          typeof message?.content === "string" &&
-          message.content.includes("follows a Proactive Message")
-      );
-    expect(system?.content).toContain(
+    const instructionsAndContext = fakeModel.doGenerateCalls
+      .map((call) => instructionsAndContextOf(call.prompt))
+      .find((text) => text.includes("follows a Proactive Message"));
+    expect(instructionsAndContext).toContain(
       "The Proactive Message said: Good morning. Buy a gift for Ana today."
     );
-    expect(system?.content).toContain(`- ${note.noteId} (task, open`);
+    expect(instructionsAndContext).toContain(`- ${note.noteId} (task, open`);
     const [row] = await proactiveRowsOf(ownerId);
     expect(await outcomeEntriesOf(ownerId)).toEqual([
       {
@@ -242,7 +239,7 @@ describe("the Outcome of a Proactive Message in a connected Turn", () => {
     await ownerWrites(9803, "and another thing");
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(4));
 
-    expect(systemPromptOfLastModelCall()).not.toContain(
+    expect(instructionsAndContextOfLastModelCall()).not.toContain(
       "follows a Proactive Message"
     );
     expect(await outcomeEntriesOf(ownerId)).toHaveLength(1);
@@ -423,7 +420,7 @@ describe("the ignored Outcome", () => {
 
     await sendBrief(ownerId, 2);
 
-    const system = systemPromptOfLastModelCall();
+    const system = instructionsAndContextOfLastModelCall();
     expect(system).toContain("Renew the passport");
     expect(system).toContain(
       "recent Outcomes of earlier Proactive Messages about it, newest first: ignored"
@@ -458,7 +455,7 @@ const withStore = async <A, E>(
     const services = Layer.mergeAll(
       ProactiveMessages.layer.pipe(Layer.provide(journal)),
       Schedules.layer(ownerId, alarmClock).pipe(Layer.provide(journal)),
-      Inbox.layer.pipe(Layer.provide(journal)),
+      Inbox.layer.pipe(Layer.provide(Layer.merge(journal, TurnProgress.layer))),
       OwnerChannelConversation.layer,
       journal
     ).pipe(

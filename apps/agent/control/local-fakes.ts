@@ -15,7 +15,7 @@ import { fakeChatActions, isSendChatAction } from "./fake-chat-actions.ts";
 import {
   ChatCompletionBodySchema,
   lastOwnerText,
-  systemTextOf,
+  instructionsAndContextOf,
   toolResultOf,
 } from "./fake-completion.ts";
 import { readBody, sendJson } from "./fake-http.ts";
@@ -165,7 +165,7 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
         : fakeAssistantMessage(
             lastOwnerText(completion.messages),
             toolResultOf(completion.messages),
-            systemTextOf(completion.messages)
+            instructionsAndContextOf(completion.messages)
           );
     modelCalls.push({
       model: completion.model,

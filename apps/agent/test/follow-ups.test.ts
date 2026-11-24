@@ -13,7 +13,13 @@ import { listSchedulesToolName } from "../src/schedule/list-schedules-tool.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import type { TurnTraces } from "../src/tracing/turn-trace.ts";
-import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import {
+  fakeModel,
+  fakeTelegram,
+  resetFakes,
+  scriptModel,
+  instructionsAndContextOf,
+} from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 interface ScheduleRow extends Record<string, SqlStorageValue> {
@@ -458,12 +464,12 @@ describe("a follow-up that fires", () => {
     );
     expect(rows).toHaveLength(2);
     expect(rows[1]?.open_loop_ids).toBe(JSON.stringify([note.noteId]));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
-    expect(system?.content).toContain("The Owner is not present.");
-    expect(system?.content).toContain("Buy a gift for Ana");
-    expect(system?.content).not.toContain("Renew the passport");
+    const instructionsAndContext = instructionsAndContextOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
+    expect(instructionsAndContext).toContain("The Owner is not present.");
+    expect(instructionsAndContext).toContain("Buy a gift for Ana");
+    expect(instructionsAndContext).not.toContain("Renew the passport");
   });
 
   it("is held in Quiet Hours with no model call", async () => {
@@ -523,10 +529,10 @@ describe("a follow-up that fires", () => {
     await makeAgentSchedulesDue(ownerId, followUpPrompt);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
-    const system = fakeModel.doGenerateCalls
-      .at(-1)
-      ?.prompt.find((message) => message.role === "system");
-    expect(system?.content).toContain(
+    const instructionsAndContext = instructionsAndContextOf(
+      fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
+    );
+    expect(instructionsAndContext).toContain(
       "recent Outcomes of earlier Proactive Messages about it, newest first: ignored"
     );
   });
