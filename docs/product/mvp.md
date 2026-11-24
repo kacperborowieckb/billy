@@ -64,7 +64,7 @@ The MVP limits scope, not quality (vision principle 9). Each part in scope is bu
 - Google Mail and Calendar, and the email Channel.
 - MCP servers that the Owner adds by URL, and servers with a bearer token or an API key. Only the MCP Catalog entries are supported.
 - Voice memos, photos, files, R2, and Vectorize.
-- Helpers and Workflows. The MVP has no long work.
+- Helpers: durable Cloudflare Workflows for long work. The MVP has no long work. This is not the personal workflows of journey 12, which are in scope.
 - Skills beyond what the workflows spec needs ([#187](https://github.com/kacperborowieckb/billy/issues/187)).
 - Browser and web search.
 - Scheduled self-reflection. Traces are recorded so it can come later.
