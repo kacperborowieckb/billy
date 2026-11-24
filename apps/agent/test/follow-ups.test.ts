@@ -18,7 +18,7 @@ import {
   fakeTelegram,
   resetFakes,
   scriptModel,
-  instructionsAndContextMessageOf,
+  instructionsAndContextOf,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
@@ -464,12 +464,12 @@ describe("a follow-up that fires", () => {
     );
     expect(rows).toHaveLength(2);
     expect(rows[1]?.open_loop_ids).toBe(JSON.stringify([note.noteId]));
-    const system = instructionsAndContextMessageOf(
+    const instructionsAndContext = instructionsAndContextOf(
       fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
     );
-    expect(system?.content).toContain("The Owner is not present.");
-    expect(system?.content).toContain("Buy a gift for Ana");
-    expect(system?.content).not.toContain("Renew the passport");
+    expect(instructionsAndContext).toContain("The Owner is not present.");
+    expect(instructionsAndContext).toContain("Buy a gift for Ana");
+    expect(instructionsAndContext).not.toContain("Renew the passport");
   });
 
   it("is held in Quiet Hours with no model call", async () => {
@@ -529,10 +529,10 @@ describe("a follow-up that fires", () => {
     await makeAgentSchedulesDue(ownerId, followUpPrompt);
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
-    const system = instructionsAndContextMessageOf(
+    const instructionsAndContext = instructionsAndContextOf(
       fakeModel.doGenerateCalls.at(-1)?.prompt ?? []
     );
-    expect(system?.content).toContain(
+    expect(instructionsAndContext).toContain(
       "recent Outcomes of earlier Proactive Messages about it, newest first: ignored"
     );
   });

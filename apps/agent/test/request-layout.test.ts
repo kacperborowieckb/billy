@@ -104,7 +104,11 @@ describe("The request of an Owner message Turn", () => {
     await ownerSays(9802, "hello", 1);
     const sentOwnerMessage = lastUserTextOf(lastCall().prompt);
 
-    const rows = await storedRowsOf(ownerId, "conversation_messages");
+    const rows = await vi.waitFor(async () => {
+      const stored = await storedRowsOf(ownerId, "conversation_messages");
+      expect(stored).toHaveLength(2);
+      return stored;
+    });
 
     expect(sentOwnerMessage).toMatch(
       /^\[Turn context\]\nCurrent local time of the Owner: .*\n\[End of Turn context\]\nhello$/su

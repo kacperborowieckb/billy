@@ -26,7 +26,6 @@ import {
   fakeTelegram,
   resetFakes,
   scriptModel,
-  instructionsAndContextMessageOf,
   instructionsAndContextOf,
 } from "./fakes.ts";
 import { quietHoursLaterToday } from "./quiet-hours-setup.ts";
@@ -175,17 +174,13 @@ describe("the Outcome of a Proactive Message in a connected Turn", () => {
     await vi.waitFor(async () =>
       expect(await outcomeOf(ownerId)).toBe("acted")
     );
-    const system = fakeModel.doGenerateCalls
-      .map((call) => instructionsAndContextMessageOf(call.prompt))
-      .find(
-        (message) =>
-          typeof message?.content === "string" &&
-          message.content.includes("follows a Proactive Message")
-      );
-    expect(system?.content).toContain(
+    const instructionsAndContext = fakeModel.doGenerateCalls
+      .map((call) => instructionsAndContextOf(call.prompt))
+      .find((text) => text.includes("follows a Proactive Message"));
+    expect(instructionsAndContext).toContain(
       "The Proactive Message said: Good morning. Buy a gift for Ana today."
     );
-    expect(system?.content).toContain(`- ${note.noteId} (task, open`);
+    expect(instructionsAndContext).toContain(`- ${note.noteId} (task, open`);
     const [row] = await proactiveRowsOf(ownerId);
     expect(await outcomeEntriesOf(ownerId)).toEqual([
       {

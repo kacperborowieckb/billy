@@ -542,23 +542,44 @@ describe("One outcome for each Event: silence", () => {
 
     const ownerId = await ownerSays(6110, "I live in Not/AZone");
 
-    const progress = await runInDurableObject(
+    const stepsOfTurn = await runInDurableObject(
       await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
       (_, state) =>
         state.storage.sql
           .exec<{ message: string }>(
-            "SELECT message FROM conversation_messages WHERE kind = 'step' ORDER BY sequence"
+            "SELECT message FROM conversation_messages WHERE kind = 'step' AND event_id = (SELECT event_id FROM inbox_events) ORDER BY sequence"
           )
           .toArray()
           .map((row) => JSON.parse(row.message) as unknown)
     );
-    expect(progress).toMatchObject([
+    expect(stepsOfTurn).toMatchObject([
       { role: "assistant", content: [{ toolName: setTimeZoneToolName }] },
       {
         role: "tool",
         content: [
           { toolName: setTimeZoneToolName, output: { type: "error-text" } },
         ],
+      },
+    ]);
+
+    scriptModel([{ say: "Tell me your city." }]);
+    await telegramWebhook(textUpdate({ fromUserId: 6110, text: "why?" }));
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
+    const nextTurnSteps = (fakeModel.doGenerateCalls.at(-1)?.prompt ?? [])
+      .flatMap((message): readonly { readonly type: string }[] =>
+        message.role === "assistant" || message.role === "tool"
+          ? message.content
+          : []
+      )
+      .filter(
+        (part) => part.type === "tool-call" || part.type === "tool-result"
+      );
+    expect(nextTurnSteps).toMatchObject([
+      { type: "tool-call", toolName: setTimeZoneToolName },
+      {
+        type: "tool-result",
+        toolName: setTimeZoneToolName,
+        output: { type: "error-text" },
       },
     ]);
   });

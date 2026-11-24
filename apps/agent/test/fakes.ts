@@ -273,8 +273,7 @@ const lastOwnerText = (
   prompt: MockLanguageModelV4["doGenerateCalls"][number]["prompt"]
 ) => {
   const message = prompt.findLast((candidate) => candidate.role === "user");
-  const part = message?.content.find((candidate) => candidate.type === "text");
-  return part?.type === "text" ? textAfterTurnContext(part.text) : "";
+  return message === undefined ? "" : textAfterTurnContext(userTextOf(message));
 };
 
 export interface ScriptedToolCall {
@@ -335,10 +334,6 @@ export const instructionsAndContextOf = (prompt: ModelPrompt) =>
     contextBlockOf(prompt, ownerContextLabel),
     contextBlockOf(prompt, turnContextLabel),
   ].join("\n");
-
-export const instructionsAndContextMessageOf = (prompt: ModelPrompt) => ({
-  content: instructionsAndContextOf(prompt),
-});
 
 const lastToolOutput = (prompt: ModelPrompt): Record<string, unknown> => {
   const message = prompt.findLast((candidate) => candidate.role === "tool");
