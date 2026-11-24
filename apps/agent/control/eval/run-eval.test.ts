@@ -44,7 +44,16 @@ const runFakeEval = (
         model: {
           aiGatewayUrl: fakes.aiGatewayUrl,
           aiGatewayToken: "local-eval-token",
-          vars: { EVAL_JUDGE_MODEL: fakeJudgeModel },
+          modelRoutes: {
+            primary: { model: "fake-agent-model", reasoningEffort: "none" },
+            secondary: { model: fakeJudgeModel, reasoningEffort: "low" },
+            tasks: {
+              reply: "primary",
+              scheduled_task: "primary",
+              proactive: "primary",
+              eval_judge: "secondary",
+            },
+          },
         },
       });
       return { results, modelCalls: fakes.modelCalls() };

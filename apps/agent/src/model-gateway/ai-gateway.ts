@@ -4,17 +4,13 @@ import { Layer, Schema } from "effect";
 
 import type { OwnerId } from "../owner-id.ts";
 import { ModelProvider } from "./model-provider.ts";
-import type { ModelTask, ReasoningEffort } from "./model-provider.ts";
-
-export interface ModelRoute {
-  readonly model: string;
-  readonly reasoningEffort: ReasoningEffort;
-}
+import { routeOf } from "./model-routes.ts";
+import type { ModelRouteTable } from "./model-routes.ts";
 
 export interface AiGatewayConfig {
   readonly url: string;
   readonly gatewayId: string;
-  readonly routes: Readonly<Record<ModelTask, ModelRoute>>;
+  readonly routes: ModelRouteTable;
   readonly fetch?: typeof fetch;
 }
 
@@ -58,7 +54,7 @@ export const aiGatewayModelProvider = (
   });
   return Layer.succeed(ModelProvider, {
     route: (task) => {
-      const { model, reasoningEffort } = config.routes[task];
+      const { model, reasoningEffort } = routeOf(config.routes, task);
       return {
         reasoningEffort,
         model: wrapLanguageModel({

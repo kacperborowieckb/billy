@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 import { createTestHarness, experimental_readRawConfig } from "wrangler";
 
+import type { ModelRouteTable } from "../src/model-gateway/model-routes.ts";
 import { agentRoot, wranglerConfigPath } from "./workspace.ts";
 
 export interface LocalWorkerSecrets {
@@ -21,7 +22,7 @@ export const temporarySecrets = (): LocalWorkerSecrets => ({
 
 export interface LocalWorkerOptions {
   readonly main?: string;
-  readonly vars: Readonly<Record<string, string>>;
+  readonly vars: Readonly<Record<string, string | ModelRouteTable>>;
   readonly secrets: LocalWorkerSecrets;
 }
 

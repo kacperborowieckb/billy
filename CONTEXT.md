@@ -90,6 +90,7 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 
 ## Model
 
-- **Model Gateway**: the one interface to all model providers. It picks the model for a task and the credentials for the Owner.
+- **Model Gateway**: the one interface to all model providers. It picks the route of each Model Task from the Model Route table, and the credentials for the Owner.
+- **Model Route table**: the one configuration of models (`MODEL_ROUTES`, decision 0034): a primary and a secondary route, each a model and a reasoning effort, and for each Model Task which of the two it uses. Every Model Task has a row; there is no default route.
 - **Hit Rate**: the cached input tokens of a model step divided by its input tokens. Step 1 of a Turn shows reuse of the earlier Turn, and later steps show reuse inside the Turn. A miss that code did not plan is a bug (decision 0033).
 - **Model Credentials**: what the Model Gateway uses to call models for one Owner: the AI Gateway token and the billing mode. A self-host Instance uses Unified Billing with the Operator's Cloudflare credits by default, or the Operator's own provider key (BYOK). The hosted product uses the platform's credits and bills the Usage.

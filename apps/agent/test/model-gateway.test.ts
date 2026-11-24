@@ -2,7 +2,7 @@ import { generateText } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { env } from "cloudflare:test";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
-import { Effect, Exit, Layer } from "effect";
+import { Effect, Exit, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -17,9 +17,12 @@ import {
 import { ModelGateway } from "../src/model-gateway/model-gateway.ts";
 import { ModelProvider } from "../src/model-gateway/model-provider.ts";
 import type { ResolvedRoute } from "../src/model-gateway/model-provider.ts";
+import { ModelRouteTableSchema } from "../src/model-gateway/model-routes.ts";
+import type { ModelRouteTable } from "../src/model-gateway/model-routes.ts";
 import type { ModelStep } from "../src/model-gateway/model-step.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { modelTasks } from "../src/personal-agent/storage-values.ts";
 import { decodeTurnEnv } from "../src/personal-agent/turn-services.ts";
 import { fakeModel, resetFakes, scriptModel } from "./fakes.ts";
 
@@ -50,21 +53,19 @@ describe("Model Gateway transport", () => {
         url: "https://api.cloudflare.com/client/v4/accounts/account-1/ai/v1",
         gatewayId: "assistant",
         routes: {
-          reply: {
+          primary: {
             model: "anthropic/claude-sonnet-5-5",
             reasoningEffort: "none",
           },
-          scheduled_task: {
-            model: "anthropic/claude-sonnet-5-5",
-            reasoningEffort: "none",
-          },
-          proactive: {
-            model: "anthropic/claude-sonnet-5-5",
-            reasoningEffort: "none",
-          },
-          eval_judge: {
+          secondary: {
             model: "anthropic/claude-opus-5-5",
             reasoningEffort: "low",
+          },
+          tasks: {
+            reply: "primary",
+            scheduled_task: "primary",
+            proactive: "primary",
+            eval_judge: "secondary",
           },
         },
         fetch: recordingFetch,
@@ -73,19 +74,26 @@ describe("Model Gateway transport", () => {
       OwnerIdSchema.make("owner-7")
     );
 
-    const reply = await Effect.runPromise(
+    const [reply] = await Effect.runPromise(
       ModelProvider.pipe(
         Effect.flatMap((models) =>
-          Effect.promise(() =>
-            generateText({ model: models.route("reply").model, prompt: "Hi" })
-          )
+          Effect.promise(async () => [
+            await generateText({
+              model: models.route("reply").model,
+              prompt: "Hi",
+            }),
+            await generateText({
+              model: models.route("eval_judge").model,
+              prompt: "Hi",
+            }),
+          ])
         ),
         Effect.provide(provider)
       )
     );
 
-    expect(reply.text).toBe("Hi there");
-    const [request] = requests;
+    expect(reply?.text).toBe("Hi there");
+    const [request, judgeRequest] = requests;
     expect(request?.url).toBe(
       "https://api.cloudflare.com/client/v4/accounts/account-1/ai/v1/chat/completions"
     );
@@ -100,6 +108,44 @@ describe("Model Gateway transport", () => {
       model: "anthropic/claude-sonnet-5-5",
       reasoning_effort: "none",
     });
+    expect(await judgeRequest?.json()).toMatchObject({
+      model: "anthropic/claude-opus-5-5",
+      reasoning_effort: "low",
+    });
+  });
+
+  it("gives each Model Task the route it had before the route table", () => {
+    const configuredRoutes: ModelRouteTable = env.MODEL_ROUTES;
+    const decoded = Schema.decodeUnknownSync(ModelRouteTableSchema)(
+      configuredRoutes
+    );
+    const flash = "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
+
+    expect(
+      Object.fromEntries(
+        modelTasks.map((task) => [task, decoded[decoded.tasks[task]]])
+      )
+    ).toStrictEqual({
+      reply: { model: flash, reasoningEffort: "none" },
+      scheduled_task: { model: flash, reasoningEffort: "none" },
+      proactive: { model: flash, reasoningEffort: "none" },
+      eval_judge: { model: flash, reasoningEffort: "low" },
+    });
+  });
+
+  it("refuses a route table with no row for a Model Task", async () => {
+    const { eval_judge: _judge, ...tasksWithoutJudge } = env.MODEL_ROUTES.tasks;
+    const error = await Effect.runPromise(
+      Effect.flip(
+        decodeTurnEnv({
+          ...env,
+          AI_GATEWAY_URL: "https://gateway.example",
+          MODEL_ROUTES: { ...env.MODEL_ROUTES, tasks: tasksWithoutJudge },
+        } as unknown as Env)
+      )
+    );
+
+    expect(error.names).toStrictEqual(["MODEL_ROUTES"]);
   });
 
   it("blocks the Unified Billing fallback when the billing mode is BYOK", () => {
