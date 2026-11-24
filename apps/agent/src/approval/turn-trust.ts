@@ -98,13 +98,14 @@ export const turnTrustOf = (
     ? turnTrustFollowingToolResults(trustLevel, earlierMessagesOfTurn)
     : fixedTurnTrust(trustLevel);
 
+export interface TurnTrustContext {
+  readonly situation: readonly string[];
+  readonly listsUntrustedPendingApproval?: boolean | undefined;
+}
+
 export const turnTrustGiven = (
-  source: TurnTrustSource,
-  context: {
-    readonly history: readonly ModelMessage[];
-    readonly situation: readonly string[];
-    readonly holdsUntrustedContent?: boolean | undefined;
-  },
+  source: TurnTrustSource & { readonly inputs: readonly ModelMessage[] },
+  { situation, listsUntrustedPendingApproval }: TurnTrustContext,
   earlierMessagesOfTurn: readonly ModelMessage[]
 ): TurnTrust =>
   turnTrustOf(
@@ -113,8 +114,8 @@ export const turnTrustGiven = (
       trustLevel:
         source.asksOwnerForApproval === true &&
         source.trustLevel === "owner" &&
-        (context.holdsUntrustedContent === true ||
-          holdsUntrustedContent(context))
+        (listsUntrustedPendingApproval === true ||
+          holdsUntrustedContent([source.inputs, situation]))
           ? "untrusted"
           : source.trustLevel,
     },

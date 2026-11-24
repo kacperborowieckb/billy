@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
+import { markUntrustedContent } from "../notes/note.ts";
 import type { Note } from "../notes/notes.ts";
 import { openLoopForModel, textForModel } from "../notes/recalled-note.ts";
 import type { OwnerTimeZone } from "../notes/recalled-note.ts";
@@ -8,6 +9,7 @@ import { ProactiveMessages } from "../proactive/proactive-messages.ts";
 import { ownerTimeZone } from "../time/owner-current-time.ts";
 import { agentToolServices } from "./agent-tool-services.ts";
 import type { Burst } from "./burst.ts";
+import { Conversation } from "./conversation.ts";
 import { deliveryStateOf } from "./delivery.ts";
 import type { TurnPreparation } from "./turn-preparation.ts";
 
@@ -37,6 +39,8 @@ export const connectedProactivePreparation = Effect.fnUntraced(
     }
     const delivery = yield* deliveryStateOf(connected.eventId);
     const sentText = delivery._tag === "Sent" ? delivery.text : undefined;
+    const sentTextIsTrusted =
+      yield* (yield* Conversation).turnReplyIsStoredInFull(connected.eventId);
     const timeZone = yield* ownerTimeZone(behavior);
     const openLoops = yield* notes.byIds(connected.openLoopIds);
     return {
@@ -45,7 +49,7 @@ export const connectedProactivePreparation = Effect.fnUntraced(
           "This message of the Owner follows a Proactive Message that you sent. The Owner may be answering it. Code connected the two, because this is the next message of the Owner after it, within the response window. The Owner used no reply-to. Treat the message as an answer when it fits. Otherwise treat it as a normal message.",
           sentText === undefined
             ? "The text of the Proactive Message is not known."
-            : `The Proactive Message said: ${sentText}`,
+            : `The Proactive Message said: ${sentTextIsTrusted ? sentText : markUntrustedContent(sentText)}`,
           openLoops.length === 0
             ? "The Proactive Message was about no Open Loops."
             : [

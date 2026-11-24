@@ -96,7 +96,7 @@ export const runModelTurn = <Failure, Requirements>({
         reason: stepLimitReason(behavior.maxToolSteps),
       } satisfies ModelTurnResult;
     }
-    const { system, history, turnContext, messages } = yield* session.request({
+    const { system, turnContext, messages } = yield* session.request({
       eventId,
       behavior,
       instructions: kind.instructions ?? [],
@@ -112,7 +112,7 @@ export const runModelTurn = <Failure, Requirements>({
     const turn = { eventId, turnContext, inputs: kind.inputs };
     const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
       session.commit({ ...turn, steps, ending });
-    const trust = turnTrustGiven(kind, { history, ...preparation }, earlier);
+    const trust = turnTrustGiven(kind, preparation, earlier);
     const decided = yield* generateWithOutcomeTools({
       eventId,
       earlierMessages: earlier,

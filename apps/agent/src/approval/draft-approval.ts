@@ -6,11 +6,27 @@ import type { ApprovalRequestedCall } from "../model-gateway/model-step.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import { fitsOneApprovalRow } from "./approval-summary.ts";
+import {
+  isPendingApprovalId,
+  pendingApprovalIdLength,
+} from "./pending-approval-id.ts";
 import { PendingApprovals } from "./pending-approvals.ts";
 import type { DraftApproval } from "./pending-approvals.ts";
 
+const waitingForApprovalOpening =
+  "This call did not run. It waits for the Owner's Approval, id ";
+
 export const waitingForApprovalOutput = (pendingApprovalId: string) =>
-  `This call did not run. It waits for the Owner's Approval, id ${pendingApprovalId}. The Owner gets Approve and Reject buttons with your reply. Tell the Owner what waits for their Approval, and never say that it is done.`;
+  `${waitingForApprovalOpening}${pendingApprovalId}. The Owner gets Approve and Reject buttons with your reply. Tell the Owner what waits for their Approval, and never say that it is done.`;
+
+export const pendingApprovalIdOfOutput = (output: string) => {
+  if (!output.startsWith(waitingForApprovalOpening)) {
+    return;
+  }
+  const idStart = waitingForApprovalOpening.length;
+  const id = output.slice(idStart, idStart + pendingApprovalIdLength);
+  return isPendingApprovalId(id) ? id : undefined;
+};
 
 export const operatorSecretRefusal =
   "This call holds a secret of the Operator, so it cannot wait for the Owner's Approval, and it did not run. Tell the Owner that you could not do it.";

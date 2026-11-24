@@ -205,7 +205,7 @@ describe("Pending Approvals expire", { timeout: 40_000 }, () => {
     ]);
     expect(await lastConversationEntry(ownerId)).toEqual({
       role: "assistant",
-      content: `Approval for ${reminderSummary}: expired`,
+      content: `Approval ${id} (${setScheduleToolName}): expired`,
     });
     expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls);
     expect(await countOf(ownerId, "turn_traces")).toBe(traces);

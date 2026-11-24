@@ -135,7 +135,8 @@ const answer = (
         asksOwnerForApproval: true,
         prepare: Effect.succeed({
           ...preparation,
-          holdsUntrustedContent: openApprovals.holdsUntrustedContent,
+          listsUntrustedPendingApproval:
+            openApprovals.listsUntrustedPendingApproval,
           situation: [...openApprovals.situation, ...preparation.situation],
         }),
         traceOf: (model) => traceOf({ event, ...model }),

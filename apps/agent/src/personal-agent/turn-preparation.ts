@@ -1,6 +1,6 @@
 export interface TurnPreparation {
   readonly situation: readonly string[];
-  readonly holdsUntrustedContent?: boolean;
+  readonly listsUntrustedPendingApproval?: boolean;
   readonly lateText: (text: string) => string;
 }
 

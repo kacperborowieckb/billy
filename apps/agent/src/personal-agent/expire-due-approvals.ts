@@ -71,7 +71,7 @@ const expireWithConversationEntry = Effect.fnUntraced(
             kind: "approval_status",
             message: {
               role: "assistant",
-              content: conversationEntryOf(approval.summary, expiredStatus),
+              content: conversationEntryOf(approval, expiredStatus),
             },
           },
         ],

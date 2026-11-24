@@ -257,13 +257,13 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     expect(await ownerScheduleSetEntries(ownerId)).toHaveLength(1);
     expect(await lastConversationEntry(ownerId)).toEqual({
       role: "assistant",
-      content: `Approval for ${reminderSummary}: approved, done`,
+      content: `Approval ${id} (${setScheduleToolName}): approved, done`,
     });
     expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls);
     expect(fakeTelegram.sent).toHaveLength(3);
   });
 
-  it("runs nothing on Reject and shows Rejected", async () => {
+  it("runs nothing on Reject, shows Rejected, and names only the id, the tool, and the status of the untrusted Pending Approval in the Conversation", async () => {
     const { ownerId, id, messageId } = await askForReminder(9202);
 
     await press(9202, `reject:${id}`, { messageId });
@@ -281,7 +281,9 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     expect(approval?.state).toBe("rejected");
     expect(await journalOf(ownerId, "ApprovalRun")).toEqual([]);
     const entry = await lastConversationEntry(ownerId);
-    expect(entry?.content).toBe(`Approval for ${reminderSummary}: rejected`);
+    expect(entry?.content).toBe(
+      `Approval ${id} (${setScheduleToolName}): rejected`
+    );
   });
 
   it("sends no Event to the Personal Agent for a press from another Telegram user", async () => {

@@ -19,7 +19,7 @@ export const openApprovalsSection = Effect.gen(
                 ),
               ].join("\n"),
             ],
-      holdsUntrustedContent: open.some(
+      listsUntrustedPendingApproval: open.some(
         ({ trustLevel }) => trustLevel === "untrusted"
       ),
     };

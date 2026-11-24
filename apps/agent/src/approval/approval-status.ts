@@ -26,6 +26,11 @@ const boundedReason = (reason: string) => {
   return `${cut.isWellFormed() ? cut : cut.slice(0, -1)}${ellipsis}`;
 };
 
+const failedStatusWithoutReason = "Approved, but it failed";
+
+const statusWithoutReason = (status: string) =>
+  status.startsWith(failedStatusPrefix) ? failedStatusWithoutReason : status;
+
 export const failedStatus = (reason: string) =>
   `${failedStatusPrefix}${boundedReason(reason)}`;
 
@@ -57,8 +62,21 @@ export const statusOfApproval = (approval: PendingApproval) =>
 const lowerFirst = (text: string) =>
   `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 
-export const conversationEntryOf = (summary: string, status: string) =>
-  `Approval for ${summary}: ${lowerFirst(status)}`;
+export const conversationEntryOf = (
+  {
+    pendingApprovalId,
+    toolName,
+    summary,
+    trustLevel,
+  }: Pick<
+    PendingApproval,
+    "pendingApprovalId" | "toolName" | "summary" | "trustLevel"
+  >,
+  status: string
+) =>
+  trustLevel === "untrusted"
+    ? `Approval ${pendingApprovalId} (${toolName}): ${lowerFirst(statusWithoutReason(status))}`
+    : `Approval for ${summary}: ${lowerFirst(status)}`;
 
 const hasExpired = (approval: PendingApproval, now: DateTime.Utc) =>
   approval.state === "expired" ||

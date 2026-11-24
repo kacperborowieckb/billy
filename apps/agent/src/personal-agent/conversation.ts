@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import { asc } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
@@ -7,6 +7,7 @@ import {
   ModelMessageSchema,
 } from "../model-gateway/model-message-schema.ts";
 import { AgentStorage } from "./agent-storage.ts";
+import { untrustedReplyStub } from "./conversation-stubs.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
@@ -72,7 +73,29 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       })
     );
 
-  return { history, append };
+  const turnReplyIsStoredInFull = Effect.fnUntraced(
+    function* turnReplyIsStoredInFull(eventId: string) {
+      const rows = yield* database
+        .select({ message: conversationMessages.message })
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.eventId, eventId),
+            eq(conversationMessages.kind, "reply")
+          )
+        )
+        .pipe(Effect.orDie);
+      const replies = yield* Effect.all(
+        rows.map((row) => decodeMessage(row.message))
+      ).pipe(Effect.orDie);
+      return (
+        replies.length > 0 &&
+        replies.every((reply) => reply.content !== untrustedReplyStub)
+      );
+    }
+  );
+
+  return { history, append, turnReplyIsStoredInFull };
 });
 
 export class Conversation extends Context.Service<

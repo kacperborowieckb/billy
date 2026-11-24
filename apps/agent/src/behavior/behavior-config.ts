@@ -2,6 +2,7 @@ export interface BehaviorConfig {
   readonly textingStyle: string;
   readonly maxToolSteps: number;
   readonly maxProfileCharacters: number;
+  readonly maxStoredToolResultCharacters: number;
   readonly reminderGraceMillis: number;
   readonly scheduledTaskDailyTokenBudget: number;
   readonly maxActiveScheduledTasks: number;
@@ -25,6 +26,7 @@ export const defaultBehaviorConfig: BehaviorConfig = {
     "Write like a person who texts: short messages in plain text. Do not use markdown, headings, or lists.",
   maxToolSteps: 8,
   maxProfileCharacters: 2000,
+  maxStoredToolResultCharacters: 4000,
   reminderGraceMillis: 5 * 60 * 1000,
   scheduledTaskDailyTokenBudget: 200_000,
   maxActiveScheduledTasks: 10,
