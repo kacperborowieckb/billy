@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0034](0034-architecture-review-changes.md) changes the match rule: the search looks first for Notes that have all words of the query, and for Notes that have any word only when none matches. The code follows 0034 when [#185](https://github.com/kacperborowieckb/billy/issues/185) ships.
+
 Date: 2026-11-15
 
 Supersedes the rule of [0007](0007-typed-queries-and-migrations.md) that no SQL string stays in a storage module, for the Note search only. Issue #33.

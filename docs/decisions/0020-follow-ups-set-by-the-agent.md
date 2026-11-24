@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0034](0034-architecture-review-changes.md) changes "Tools": in a Proactive Turn that read Untrusted Content, `set_schedule` still runs, but code writes the prompt of the follow-up from a fixed template, and the model chooses only the time and the Open Loop ids. The code follows 0034 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
+
 Date: 2026-11-20
 
 Spec #97 (Proactivity), ticket #103. Builds on [0019](0019-proactivity.md), which says that `set_schedule` with Open Loop ids, when the Owner did not ask for a Schedule in the Turn, gets `setBy: agent` from code. It supersedes none of it.

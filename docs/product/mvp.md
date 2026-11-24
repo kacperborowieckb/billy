@@ -4,7 +4,7 @@ Terms follow [CONTEXT.md](../../CONTEXT.md). The reasons are in [the vision](vis
 
 ## First job
 
-Capture, Recall, and a proactive Brief through Telegram, for one Owner on a self-hosted Instance.
+Capture, Recall, and a proactive Brief through Telegram, for one Owner on a self-hosted Instance. The agent can also change the Owner's data with Approval, read and change connected services through MCP Connections, and run repeated personal workflows ([decision 0034](../decisions/0034-architecture-review-changes.md)).
 
 The MVP proves one thing: an Owner uses the agent every day because it remembers for them and comes to them first.
 
@@ -21,6 +21,9 @@ The MVP limits scope, not quality (vision principle 9). Each part in scope is bu
 7. **Proactive follow-up.** The agent sets its own Schedules. It follows up on an item that stopped about a day later and merges small items into one message. It keeps to the Budget.
 8. **Less of this.** The Owner replies "less of this" to a Proactive Message. The agent saves an Owner Preference and records the Outcome.
 9. **Forget.** The Owner says "forget everything about project X." The agent shows what it will delete, deletes the content for good, and leaves Tombstones in the Journal.
+10. **Approval.** The Owner forwards an invitation and writes "remind me". The agent does not act on text from another person by itself: it shows what it will do, with Approve and Reject buttons, and runs the exact call only after the Owner approves ([0027](../decisions/0027-actions-and-approval.md)).
+11. **Connected service.** The Owner writes "connect Notion" and finishes the sign-in. The agent then reads the service when the Owner asks, and each call that changes the service waits for Approval ([#150](https://github.com/kacperborowieckb/billy/issues/150)).
+12. **Workflow.** The Owner sets up repeated personal work in the chat, for example a habit tracker or a gym log. The agent asks at the right time, records each entry, and answers questions about the record with correct numbers. The design is not decided ([#187](https://github.com/kacperborowieckb/billy/issues/187)).
 
 ## In scope
 
@@ -36,6 +39,9 @@ The MVP limits scope, not quality (vision principle 9). Each part in scope is bu
 - Model Gateway: the providers behind one interface, through Cloudflare AI Gateway, with Unified Billing by default and BYOK as an option ([0005](../decisions/0005-model-transport-and-billing.md)).
 - Usage metering for each Owner.
 - Reliability base: a Trace for every Turn and a starter Eval set measured as pass^k.
+- Approval: a Risk Class for each tool, the Trust Level of a Turn, one gate in code, and Pending Approvals with Channel buttons ([0027](../decisions/0027-actions-and-approval.md)).
+- MCP Connections: remote MCP servers from a typed MCP Catalog, connected from the chat, with an MCP Hub, sealed tokens, and Approval for each call that changes a service ([#150](https://github.com/kacperborowieckb/billy/issues/150)).
+- Workflows: repeated personal work such as a habit tracker or a gym log, built from general primitives and not as one feature for each workflow ([#187](https://github.com/kacperborowieckb/billy/issues/187), spec first).
 - Setup: `packages/create-billy`, one command that creates resources, writes config, and asks for secrets, plus a "Deploy to Cloudflare" button.
 
 ## Starter Eval set
@@ -46,6 +52,7 @@ The MVP limits scope, not quality (vision principle 9). Each part in scope is bu
 - Brief: content is correct and fits the Behavior Config.
 - Proactivity: no Proactive Message in Quiet Hours, keeps to the Budget, merges small items, respects "less of this".
 - Forget: the content is gone from storage and Recall, and the Tombstone exists.
+- Approval: a change that an `untrusted` Turn asks for waits for the Owner, and the reply does not say that it is done.
 - Untrusted Content: an instruction inside a saved link or note is not followed.
 - Isolation: an Event for one Owner never reads or writes another Owner's data.
 
@@ -53,11 +60,12 @@ The MVP limits scope, not quality (vision principle 9). Each part in scope is bu
 
 - Web chat and any web app for Owners.
 - The mobile app, the marketing site, and `apps/platform` (accounts, billing, open Registration).
-- Write tools, Approval, and Auto-review. Add them with the first write tool.
-- MCP client, Google Mail and Calendar, and the email Channel.
+- Auto-review. It follows the MVP. In the MVP, the Owner sees and answers every call that needs Approval. The spec of Auto-review ([#140](https://github.com/kacperborowieckb/billy/issues/140)) can start when the first `approve`-class call exists.
+- Google Mail and Calendar, and the email Channel.
+- MCP servers that the Owner adds by URL, and servers with a bearer token or an API key. Only the MCP Catalog entries are supported.
 - Voice memos, photos, files, R2, and Vectorize.
-- Helpers and Workflows. The MVP has no long work.
-- Skills as saved reusable work.
+- Helpers: durable Cloudflare Workflows for long work. The MVP has no long work. This is not the personal workflows of journey 12, which are in scope.
+- Skills beyond what the workflows spec needs ([#187](https://github.com/kacperborowieckb/billy/issues/187)).
 - Browser and web search.
 - Scheduled self-reflection. Traces are recorded so it can come later.
 
@@ -74,3 +82,8 @@ The MVP is done when all of these are true:
 - The default values for Quiet Hours, the message Budget, and the token Budget.
 - The value of k for pass^k, and how many runs a release needs.
 - The format of the Brief.
+- The design of workflows ([#187](https://github.com/kacperborowieckb/billy/issues/187)).
+
+## Order of the work
+
+The order is in [#183](https://github.com/kacperborowieckb/billy/issues/183). [Decision 0034](../decisions/0034-architecture-review-changes.md) gives the reason: measure first (the repository owner's own Instance with daily use, and Eval Cases for the built journeys), then extend (MCP Connections, then workflows), then Forget and the setup command.

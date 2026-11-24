@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0034](0034-architecture-review-changes.md) makes the daily token Budget of proactive work a cost Budget when Usage records the real cost ([#27](https://github.com/kacperborowieckb/billy/issues/27)), and changes "Tools of a proactive Turn": the Turn also has `set_schedule` for its own next follow-up ([0020](0020-follow-ups-set-by-the-agent.md)), and a Proactive Turn that read Untrusted Content gets a code-written follow-up prompt and no `close_open_loop`.
+
 Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes the place of the Open Loops in reach (the run block of a Side Session) and of the connected Proactive Message (the Turn Context Block). Both were "in the system prompt". A Proactive Turn runs as a Side Session. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
 
 Date: 2026-11-19
