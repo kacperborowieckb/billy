@@ -22,6 +22,7 @@ import {
   turnEventOf,
 } from "./burst.ts";
 import type { Burst } from "./burst.ts";
+import { compactWhenOverLimit } from "./compaction.ts";
 import { connectedProactivePreparation } from "./connected-proactive-section.ts";
 import { fail, failWithNotice } from "./delivery.ts";
 import { handleFiredSchedule } from "./fired-schedule.ts";
@@ -218,5 +219,9 @@ export const takeTurn = (
     }
     yield* schedules.rearmWithoutFailing;
     const untaken = !newBurstIsDue || (yield* inbox.burstGrewSince(startedAt));
-    return { nextBurstIsDue: untaken && (yield* inbox.burstIsDue(wait)) };
+    if (untaken && (yield* inbox.burstIsDue(wait))) {
+      return { nextBurstIsDue: true };
+    }
+    const compaction = yield* compactWhenOverLimit(behavior);
+    return { nextBurstIsDue: compaction === "StoppedByBurst" };
   });

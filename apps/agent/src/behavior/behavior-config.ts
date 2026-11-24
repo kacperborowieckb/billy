@@ -17,6 +17,9 @@ export interface BehaviorConfig {
   readonly burstMaxWaitMillis: number;
   readonly burstMaxRestarts: number;
   readonly pendingApprovalExpiryMillis: number;
+  readonly compactionHistoryTokenLimit: number;
+  readonly compactionKeptTokens: number;
+  readonly maxSummaryTokens: number;
   readonly quietHours: { readonly start: string; readonly end: string };
   readonly defaultTimeZone?: string | undefined;
 }
@@ -41,5 +44,8 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   burstMaxWaitMillis: 10_000,
   burstMaxRestarts: 2,
   pendingApprovalExpiryMillis: 24 * 60 * 60 * 1000,
+  compactionHistoryTokenLimit: 30_000,
+  compactionKeptTokens: 8000,
+  maxSummaryTokens: 1500,
   quietHours: { start: "22:00", end: "08:00" },
 };

@@ -52,6 +52,7 @@ const runFakeEval = (
               scheduled_task: "primary",
               proactive: "primary",
               eval_judge: "secondary",
+              compaction: "primary",
             },
           },
         },

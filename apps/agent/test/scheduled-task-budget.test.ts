@@ -34,6 +34,7 @@ const budgetIsSpentAt = (isoInstant: string, spent: readonly SpentTokens[]) => {
     Layer.succeed(UsageLedger, {
       record: () => Effect.die("not used"),
       read: Effect.succeed([]),
+      stepsAfterEvent: () => Effect.die("not used"),
       tokensSpent: (_task, since) =>
         Effect.succeed(
           spent

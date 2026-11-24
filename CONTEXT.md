@@ -71,7 +71,7 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 - **Follow-up**: a Proactive Message about one or more Open Loops, from a Schedule that the agent set.
 - **Merge**: when the gate sends a Proactive Message, it takes every other agent Schedule with a prompt (not the Brief) that is due within the merge window (default 30 minutes) into the same Turn, so the agent writes one message that counts as one send for the Budget. A follow-up that is due when the Brief is due within the window folds into the Brief.
 - **Outcome**: what the Owner did with a Proactive Message: `acted`, `replied`, `muted`, or `ignored`. Code connects the next Owner message to the last Proactive Message, when it comes within the response window. An Outcome is recorded once.
-- **Behavior Config**: the typed defaults for each Instance (texting style, quiet hours, budgets, proactivity limits, the default reaction, the Burst wait and restart limits).
+- **Behavior Config**: the typed defaults for each Instance (texting style, quiet hours, budgets, proactivity limits, the default reaction, the Burst wait and restart limits, and the token limits of Compaction).
 - **Owner Preferences**: values in the Personal Agent that override the Behavior Config for one Owner, for example Quiet Hours or a "less of this" reply. Each stored value records its source (`owner` now).
 - **Mute**: the Owner Preference from a "less of this" reply: the Open Loops of a Proactive Message, or their kind. A muted Open Loop gets no follow-up of its own and appears only in the Brief. "Less" means less often, not never; "stop" closes the Open Loop or cancels the Schedule. The Owner can undo it in the chat.
 - **Quiet Hours**: the local time range when the agent sends no Proactive Messages (default 22:00 to 08:00). Code holds a Proactive Message that is due in Quiet Hours and moves it to the end of Quiet Hours. The Owner changes them in the chat, and the stored value records its source. Reminders and Scheduled Tasks that the Owner set still arrive.
@@ -90,7 +90,7 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 - **Eval**: a repeatable case that scores the full sequence of steps of a Turn. Measured as pass^k: it passes on every one of k runs.
 - **Eval Case**: one Eval: the Notes and Profile entries to seed (optional), the Owner Events to send, and the checks on storage, the Trace, and the replies.
 - **Judge**: the model that checks the replies of an Eval Case against the fixed rubric of the case. It is its own Model Task, `eval_judge`.
-- **Usage**: the tokens, messages, and cost for each Owner.
+- **Usage**: the tokens, messages, and cost for each Owner. Code records one row for each model step, with its Model Task and the Event of the request, so Compaction reads the input tokens that the provider reported.
 
 ## Model
 

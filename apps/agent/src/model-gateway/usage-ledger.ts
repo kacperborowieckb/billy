@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, sum } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNotNull, max, sum } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import { OwnerIdSchema } from "../owner-id.ts";
@@ -41,6 +41,16 @@ export const UsageRecordSchema = Schema.Struct({
 
 export type UsageRecord = typeof UsageRecordSchema.Type;
 
+export interface UsageSource {
+  readonly task: ModelTask;
+  readonly eventId?: string | undefined;
+}
+
+export interface ReportedStep {
+  readonly eventId: string;
+  readonly inputTokens: number | null;
+}
+
 const toUsageRecord = (row: typeof modelUsage.$inferSelect): UsageRecord => ({
   ownerId: row.ownerId,
   task: row.task,
@@ -56,7 +66,7 @@ const makeUsageLedger = (ownerId: OwnerId) =>
     const { database } = yield* AgentStorage;
 
     const record = Effect.fnUntraced(function* record(
-      task: ModelTask,
+      { task, eventId }: UsageSource,
       modelId: string,
       usage: Usage
     ) {
@@ -64,6 +74,7 @@ const makeUsageLedger = (ownerId: OwnerId) =>
         ownerId,
         recordedAt: DateTime.formatIso(yield* DateTime.now),
         task,
+        eventId: eventId ?? null,
         modelId,
         inputTokens: usage.inputTokens ?? null,
         outputTokens: usage.outputTokens ?? null,
@@ -92,13 +103,45 @@ const makeUsageLedger = (ownerId: OwnerId) =>
           )
         );
 
+    const lastSequenceOf = (eventId: string) =>
+      database
+        .select({ last: max(modelUsage.sequence) })
+        .from(modelUsage)
+        .where(eq(modelUsage.eventId, eventId))
+        .pipe(Effect.map(([row]) => row?.last ?? 0));
+
+    const stepsAfterEvent = Effect.fnUntraced(function* stepsAfterEvent(
+      task: ModelTask,
+      afterEventId: string | undefined
+    ) {
+      const after =
+        afterEventId === undefined ? 0 : yield* lastSequenceOf(afterEventId);
+      const rows = yield* database
+        .select({
+          eventId: modelUsage.eventId,
+          inputTokens: modelUsage.inputTokens,
+        })
+        .from(modelUsage)
+        .where(
+          and(
+            eq(modelUsage.task, task),
+            isNotNull(modelUsage.eventId),
+            gt(modelUsage.sequence, after)
+          )
+        )
+        .orderBy(asc(modelUsage.sequence));
+      return rows.flatMap(({ eventId, inputTokens }): ReportedStep[] =>
+        eventId === null ? [] : [{ eventId, inputTokens }]
+      );
+    });
+
     const read = database
       .select()
       .from(modelUsage)
       .orderBy(asc(modelUsage.sequence))
       .pipe(Effect.map((rows) => rows.map(toUsageRecord)));
 
-    return { record, read, tokensSpent };
+    return { record, read, tokensSpent, stepsAfterEvent };
   });
 
 export class UsageLedger extends Context.Service<

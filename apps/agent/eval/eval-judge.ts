@@ -75,6 +75,7 @@ const collectedUsageLedger = (collected: Usage[]) =>
       }),
     read: Effect.succeed([]),
     tokensSpent: () => Effect.succeed(0),
+    stepsAfterEvent: () => Effect.succeed([]),
   });
 
 export const judgeExchanges = Effect.fnUntraced(function* judgeExchanges(

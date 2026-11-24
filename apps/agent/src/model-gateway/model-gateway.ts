@@ -34,6 +34,7 @@ import type { Usage } from "./usage-ledger.ts";
 
 export interface ModelRequest {
   readonly task: ModelTask;
+  readonly eventId?: string;
   readonly system: string;
   readonly messages: readonly ModelMessage[];
   readonly tools?: AgentTools;
@@ -132,13 +133,15 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
   const ledger = yield* UsageLedger;
 
   const recordUsage = (
-    task: ModelTask,
+    request: ModelRequest,
     modelId: string,
     steps: readonly ModelStep[]
   ) =>
-    Effect.forEach(steps, (step) => ledger.record(task, modelId, step.usage), {
-      discard: true,
-    });
+    Effect.forEach(
+      steps,
+      (step) => ledger.record(request, modelId, step.usage),
+      { discard: true }
+    );
 
   const generate = (request: ModelRequest) =>
     Effect.gen(function* generateEffect() {
@@ -168,13 +171,11 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             steps: finishedSteps.map(modelStepOf),
           }),
       }).pipe(
-        Effect.tapError((error) =>
-          recordUsage(request.task, modelId, error.steps)
-        )
+        Effect.tapError((error) => recordUsage(request, modelId, error.steps))
       );
 
       const steps = result.steps.map(modelStepOf);
-      yield* recordUsage(request.task, modelId, steps);
+      yield* recordUsage(request, modelId, steps);
 
       const lastStep = result.steps.at(-1);
       const endedWith =

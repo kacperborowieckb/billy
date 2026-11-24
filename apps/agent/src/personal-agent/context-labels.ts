@@ -10,3 +10,7 @@ export const textAfterTurnContext = (text: string) =>
   text.startsWith(turnContextLabel) && text.includes(turnContextEnd)
     ? text.slice(text.indexOf(turnContextEnd) + turnContextEnd.length)
     : text;
+
+export const summaryLabel = "[Summary of earlier chat]";
+
+export const summaryEndLabel = "[End of summary]";
