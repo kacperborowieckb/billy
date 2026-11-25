@@ -2,12 +2,12 @@ import { sql } from "drizzle-orm";
 import { check, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { valueIn } from "../check-values.ts";
-import { historyBreaks, turnModelTasks } from "./storage-values.ts";
+import { historyBreaks, sessionTasks } from "./storage-values.ts";
 
 export const prefixCacheSessions = sqliteTable(
   "prefix_cache_sessions",
   {
-    turnKind: text("turn_kind", { enum: turnModelTasks }).primaryKey(),
+    task: text("task", { enum: sessionTasks }).primaryKey(),
     lastCallAtMillis: integer("last_call_at_millis").notNull(),
     systemHash: text("system_hash").notNull(),
     toolsHash: text("tools_hash").notNull(),
@@ -16,8 +16,8 @@ export const prefixCacheSessions = sqliteTable(
   },
   (table) => [
     check(
-      "prefix_cache_sessions_turn_kind_check",
-      valueIn(table.turnKind, turnModelTasks)
+      "prefix_cache_sessions_task_check",
+      valueIn(table.task, sessionTasks)
     ),
     check(
       "prefix_cache_sessions_history_break_check",

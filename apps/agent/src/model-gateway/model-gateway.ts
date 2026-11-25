@@ -70,13 +70,18 @@ const aiSdkToolsOf = (
     ])
   );
 
+interface AgentRun {
+  readonly runTool: RunToolEffect;
+  readonly onCallStarted: () => void;
+}
+
 const toolLoopAgentOf = (
   route: ResolvedRoute,
   request: ModelRequest,
-  runTool: RunToolEffect
+  { runTool, onCallStarted }: AgentRun
 ) =>
   new ToolLoopAgent({
-    model: retryingModelCalls(route.model),
+    model: retryingModelCalls(route.model, onCallStarted),
     instructions: request.system,
     tools: aiSdkToolsOf(request.tools ?? noTools, request, runTool),
     toolApproval: approvalStatusOf(request.tools ?? noTools, request),
@@ -86,12 +91,14 @@ const toolLoopAgentOf = (
   });
 
 const retryingModelCalls = (
-  model: ResolvedRoute["model"]
+  model: ResolvedRoute["model"],
+  onCallStarted: () => void
 ): ResolvedRoute["model"] =>
   wrapLanguageModel({
     model,
     middleware: {
       wrapGenerate: async ({ params }) => {
+        onCallStarted();
         const attempt = Effect.tryPromise({
           try: (abortSignal) => model.doGenerate({ ...params, abortSignal }),
           catch: (cause) => new ModelCallFailed({ cause }),
@@ -157,16 +164,18 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const { reasoningEffort } = route;
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       const runTool = runToolEffect(runPromise);
-      const agent = toolLoopAgentOf(route, request, runTool);
       const clock = yield* Clock.Clock;
+      const calledAt: number[] = [];
+      const agent = toolLoopAgentOf(route, request, {
+        runTool,
+        onCallStarted: () => {
+          calledAt.push(clock.currentTimeMillisUnsafe());
+        },
+      });
       const finishedSteps: StepResult<ToolSet>[] = [];
-      const finishedAt: number[] = [];
       const modelStepsOf = (results: readonly StepResult<ToolSet>[]) =>
         results.map((step, index) =>
-          modelStepOf(
-            step,
-            finishedAt[index] ?? clock.currentTimeMillisUnsafe()
-          )
+          modelStepOf(step, calledAt[index] ?? clock.currentTimeMillisUnsafe())
         );
 
       const result = yield* Effect.tryPromise({
@@ -176,7 +185,6 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             abortSignal,
             onStepFinish: (step) => {
               finishedSteps.push(step);
-              finishedAt.push(clock.currentTimeMillisUnsafe());
               request.trust.readToolResults(step.toolResults);
             },
           }),

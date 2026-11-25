@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 
+import { turnModelTasks } from "../src/personal-agent/storage-values.ts";
 import {
   cacheLifetimeMinutes,
   noPlannedMiss,
@@ -86,6 +87,7 @@ export const hitRateQuery = (dataset: string) =>
     `FROM ${dataset}`,
     `WHERE timestamp > NOW() - INTERVAL '${hitRateWindowHours}' HOUR`,
     "AND blob1 = 'model_step'",
+    `AND blob6 IN (${turnModelTasks.map((task) => `'${task}'`).join(", ")})`,
     `AND blob2 = '${noPlannedMiss}'`,
     `AND (double6 >= 2 OR (double9 >= 0 AND double9 <= ${cacheLifetimeMinutes}))`,
     "GROUP BY step_group",

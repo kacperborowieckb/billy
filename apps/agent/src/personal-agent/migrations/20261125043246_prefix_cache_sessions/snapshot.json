@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "723d946c-8e70-4a9b-9832-9c101d0c4b76",
+  "id": "ee3e1553-751a-4dcd-b28c-f826b2b7feed",
   "prevIds": ["3173e2a6-3262-4123-9ab9-51d4bfb9c407"],
   "ddl": [
     {
@@ -37,10 +37,6 @@
       "entityType": "tables"
     },
     {
-      "name": "prefix_cache_sessions",
-      "entityType": "tables"
-    },
-    {
       "name": "profile_entries",
       "entityType": "tables"
     },
@@ -66,6 +62,10 @@
     },
     {
       "name": "write_back_markers",
+      "entityType": "tables"
+    },
+    {
+      "name": "prefix_cache_sessions",
       "entityType": "tables"
     },
     {
@@ -725,66 +725,6 @@
       "entityType": "columns"
     },
     {
-      "table": "prefix_cache_sessions",
-      "name": "turn_kind",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "prefix_cache_sessions",
-      "name": "last_call_at_millis",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "prefix_cache_sessions",
-      "name": "system_hash",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "prefix_cache_sessions",
-      "name": "tools_hash",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "prefix_cache_sessions",
-      "name": "owner_context_hash",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "prefix_cache_sessions",
-      "name": "history_break",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
       "table": "profile_entries",
       "name": "entry_id",
       "type": "text",
@@ -1169,6 +1109,66 @@
       "name": "recorded_at",
       "type": "text",
       "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "task",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "last_call_at_millis",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "system_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "tools_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "owner_context_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "history_break",
+      "type": "text",
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -1832,13 +1832,6 @@
       "entityType": "pks"
     },
     {
-      "table": "prefix_cache_sessions",
-      "name": "prefix_cache_sessions_pk",
-      "columns": ["turn_kind"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
       "table": "profile_entries",
       "name": "profile_entries_pk",
       "columns": ["entry_id"],
@@ -1877,6 +1870,13 @@
       "table": "write_back_markers",
       "name": "write_back_markers_pk",
       "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_pk",
+      "columns": ["task"],
       "nameExplicit": false,
       "entityType": "pks"
     },
@@ -2012,18 +2012,6 @@
       "entityType": "checks"
     },
     {
-      "table": "prefix_cache_sessions",
-      "name": "prefix_cache_sessions_turn_kind_check",
-      "value": "\"turn_kind\" IN ('reply', 'scheduled_task', 'proactive')",
-      "entityType": "checks"
-    },
-    {
-      "table": "prefix_cache_sessions",
-      "name": "prefix_cache_sessions_history_break_check",
-      "value": "\"history_break\" IS NULL OR \"history_break\" IN ('compaction', 'stub_in_turn_before')",
-      "entityType": "checks"
-    },
-    {
       "table": "profile_entries",
       "name": "profile_entries_kind_check",
       "value": "\"kind\" IN ('fact', 'style_rule')",
@@ -2063,6 +2051,18 @@
       "table": "write_back_markers",
       "name": "write_back_markers_kind_check",
       "value": "\"kind\" IN ('Brief', 'Follow-up', 'Scheduled Task', 'Reminder', 'Schedule')",
+      "entityType": "checks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive', 'compaction')",
+      "entityType": "checks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_history_break_check",
+      "value": "\"history_break\" IS NULL OR \"history_break\" IN ('compaction', 'stub_in_turn_before')",
       "entityType": "checks"
     },
     {

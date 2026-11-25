@@ -6,7 +6,7 @@ import { proactiveOutcomes } from "../personal-agent/storage-values.ts";
 import type {
   OutcomeKind,
   PlannedMiss,
-  TurnModelTask,
+  SessionTask,
 } from "../personal-agent/storage-values.ts";
 import { noEarlierCallMinutes, noPlannedMiss } from "./hit-rate-values.ts";
 
@@ -39,7 +39,7 @@ export interface ModelStepMetric {
   readonly kind: "model_step";
   readonly ownerId: OwnerId;
   readonly eventId: string;
-  readonly turnKind: TurnModelTask;
+  readonly task: SessionTask;
   readonly modelId: string;
   readonly stepNumber: number;
   readonly usage: Usage;
@@ -116,7 +116,7 @@ const modelStepDataPointOf = (
     metric.modelId,
     costBlob(metric.usage),
     metric.eventId,
-    metric.turnKind,
+    metric.task,
   ],
   doubles: [
     0,

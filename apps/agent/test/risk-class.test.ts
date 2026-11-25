@@ -310,7 +310,7 @@ const deniedOutput = {
 const errorOutput = { type: "error-text", value: "The store is down" } as const;
 
 const stepWith = (responseMessages: readonly ModelMessage[]): ModelStep => ({
-  finishedAtMillis: 0,
+  calledAtMillis: 0,
   usage: {
     inputTokens: undefined,
     outputTokens: undefined,

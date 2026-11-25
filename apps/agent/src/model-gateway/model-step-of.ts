@@ -135,10 +135,10 @@ export const pendingToolCallsOf = (
 
 export const modelStepOf = (
   step: StepResult<ToolSet>,
-  finishedAtMillis: number
+  calledAtMillis: number
 ): ModelStep => ({
   usage: usageOf(step.usage),
-  finishedAtMillis,
+  calledAtMillis,
   toolCalls: toolCallsOf(step),
   responseMessages: step.response.messages.map(withoutApprovalParts),
 });

@@ -143,6 +143,9 @@ describe("doctor Hit Rate check", () => {
     expect(query).toContain("FROM assistant_operator_metrics");
     expect(query).toContain("blob1 = 'model_step'");
     expect(query).toContain("blob2 = 'none'");
+    expect(query).toContain(
+      "blob6 IN ('reply', 'scheduled_task', 'proactive')"
+    );
     expect(query).toContain("INTERVAL '24' HOUR");
     expect(query).toContain("double9 >= 0 AND double9 <= 60");
     expect(report).not.toContain("value-of-cloudflare-api-token-5d1e");

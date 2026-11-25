@@ -12,7 +12,7 @@ import { prefixCacheSessions } from "./prefix-cache-schema.ts";
 import type {
   HistoryBreak,
   PlannedMiss,
-  TurnModelTask,
+  SessionTask,
 } from "./storage-values.ts";
 
 const millisPerMinute = 60_000;
@@ -52,13 +52,13 @@ const toolDefinitionsText = async (tools: AgentTools) => {
 export const requestPrefixOf = Effect.fnUntraced(function* requestPrefixOf(
   system: string,
   tools: AgentTools,
-  ownerContext: ModelMessage
+  ownerContext: ModelMessage | undefined
 ) {
   const definitions = yield* Effect.promise(() => toolDefinitionsText(tools));
   return {
     systemHash: yield* sha256Hex(system),
     toolsHash: yield* sha256Hex(definitions),
-    ownerContextHash: yield* sha256Hex(JSON.stringify(ownerContext)),
+    ownerContextHash: yield* sha256Hex(JSON.stringify(ownerContext ?? null)),
   } satisfies RequestPrefix;
 });
 
@@ -98,17 +98,17 @@ export const breakMainConversationPrefix = (
   database
     .update(prefixCacheSessions)
     .set({ historyBreak })
-    .where(eq(prefixCacheSessions.turnKind, "reply"));
+    .where(eq(prefixCacheSessions.task, "reply"));
 
 const makePrefixCacheSessions = Effect.gen(
   function* makePrefixCacheSessionsEffect() {
     const { database } = yield* AgentStorage;
 
-    const earlierCallOf = (turnKind: TurnModelTask) =>
+    const earlierCallOf = (task: SessionTask) =>
       database
         .select()
         .from(prefixCacheSessions)
-        .where(eq(prefixCacheSessions.turnKind, turnKind))
+        .where(eq(prefixCacheSessions.task, task))
         .pipe(
           Effect.map(([row]) =>
             Option.fromNullishOr(row).pipe(
@@ -125,16 +125,16 @@ const makePrefixCacheSessions = Effect.gen(
         );
 
     const recordCall = (
-      turnKind: TurnModelTask,
+      task: SessionTask,
       prefix: RequestPrefix,
       lastCallAtMillis: number
     ) => {
       const call = { ...prefix, lastCallAtMillis, historyBreak: null };
       return database
         .insert(prefixCacheSessions)
-        .values({ turnKind, ...call })
+        .values({ task, ...call })
         .onConflictDoUpdate({
-          target: prefixCacheSessions.turnKind,
+          target: prefixCacheSessions.task,
           set: call,
         });
     };

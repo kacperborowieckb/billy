@@ -92,6 +92,10 @@ export const turnModelTasks = ["reply", "scheduled_task", "proactive"] as const;
 
 export type TurnModelTask = (typeof turnModelTasks)[number];
 
+export const sessionTasks = [...turnModelTasks, "compaction"] as const;
+
+export type SessionTask = (typeof sessionTasks)[number];
+
 export const historyBreaks = ["compaction", "stub_in_turn_before"] as const;
 
 export type HistoryBreak = (typeof historyBreaks)[number];

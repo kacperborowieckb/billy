@@ -14,7 +14,7 @@ import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 interface StepPoint {
   readonly plannedMiss: string | undefined;
-  readonly turnKind: string | undefined;
+  readonly task: string | undefined;
   readonly stepNumber: number | undefined;
   readonly inputTokens: number | undefined;
   readonly cachedTokens: number | undefined;
@@ -24,7 +24,7 @@ interface StepPoint {
 const stepPoints = (): readonly StepPoint[] =>
   fakeMetrics.modelStepDataPoints.map((point) => ({
     plannedMiss: point.blobs?.[1] as string | undefined,
-    turnKind: point.blobs?.[5] as string | undefined,
+    task: point.blobs?.[5] as string | undefined,
     stepNumber: point.doubles?.[5],
     inputTokens: point.doubles?.[1],
     cachedTokens: point.doubles?.[4],
@@ -84,7 +84,7 @@ describe("Hit Rate metric of each model step", () => {
     expect(stepPoints()).toEqual([
       {
         plannedMiss: "no_earlier_call",
-        turnKind: "reply",
+        task: "reply",
         stepNumber: 1,
         inputTokens: 42,
         cachedTokens: 12,
@@ -92,7 +92,7 @@ describe("Hit Rate metric of each model step", () => {
       },
       expect.objectContaining({
         plannedMiss: "none",
-        turnKind: "reply",
+        task: "reply",
         stepNumber: 2,
       }),
     ]);
@@ -164,7 +164,7 @@ describe("Hit Rate metric of each model step", () => {
     expect(lastStepPoint()?.plannedMiss).toBe("none");
   });
 
-  it("records the Compaction for the first Turn after it, and no data point for the Compaction call", async () => {
+  it("records the Compaction for the first Turn after it, and the Compaction call as its own session", async () => {
     const ownerId = await ownerInWarsaw(9305);
     scriptModel([
       { say: "First answer", inputTokens: 2000 },
@@ -186,8 +186,20 @@ describe("Hit Rate metric of each model step", () => {
 
     expect(lastStepPoint()?.plannedMiss).toBe("compaction");
 
-    expect(stepPoints().map((point) => point.turnKind)).toEqual(
-      Array.from({ length: 5 }, () => "reply")
+    expect(stepPoints().map((point) => point.task)).toEqual([
+      "reply",
+      "reply",
+      "reply",
+      "reply",
+      "compaction",
+      "reply",
+    ]);
+    expect(stepPoints()[4]).toEqual(
+      expect.objectContaining({
+        plannedMiss: "no_earlier_call",
+        stepNumber: 1,
+        minutesSinceEarlierCall: -1,
+      })
     );
   }, 30_000);
 });

@@ -24,7 +24,7 @@ export interface ApprovalRequestedCall {
 
 export interface ModelStep {
   readonly usage: Usage;
-  readonly finishedAtMillis: number;
+  readonly calledAtMillis: number;
   readonly toolCalls: readonly ModelToolCall[];
   readonly responseMessages: readonly ModelMessage[];
 }
