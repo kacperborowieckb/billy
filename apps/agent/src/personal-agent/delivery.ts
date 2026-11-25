@@ -7,7 +7,7 @@ import type { JournalEntry } from "../journal/journal.ts";
 import { OperatorMetrics } from "../tracing/operator-metrics.ts";
 import type { OperatorMetric } from "../tracing/operator-metrics.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
-import type { TurnTrace } from "../tracing/turn-trace.ts";
+import type { EventTurnTrace } from "../tracing/turn-trace.ts";
 import { lastOf, latestPlanOf, textPlanOf } from "./delivery-plans.ts";
 import { sendPlanned } from "./delivery-send.ts";
 import { Inbox } from "./inbox.ts";
@@ -214,7 +214,7 @@ export const recordUnconfirmedSend = (event: InboxEvent) =>
   });
 
 interface EventOutcome {
-  readonly trace: TurnTrace;
+  readonly trace: EventTurnTrace;
   readonly metric: OperatorMetric;
 }
 

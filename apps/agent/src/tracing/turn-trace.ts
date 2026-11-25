@@ -148,6 +148,13 @@ export type ReminderDeliveryTurnTrace =
 
 export type TurnTrace = typeof TurnTraceSchema.Type;
 
+export type ModelTurnTrace =
+  | ReplyTurnTrace
+  | ScheduledTaskTurnTrace
+  | ProactiveTurnTrace;
+
+export type EventTurnTrace = Exclude<TurnTrace, ModelTurnTrace>;
+
 export interface StoredTurnTrace<Trace extends TurnTrace = TurnTrace> {
   readonly sequence: number;
   readonly ownerId: OwnerId;
@@ -176,7 +183,7 @@ const toStoredTrace = (
 });
 
 export interface ModelTurnRecord {
-  readonly trace: TurnTrace;
+  readonly trace: ModelTurnTrace;
   readonly requestParts: readonly RequestPart[];
 }
 
@@ -203,7 +210,8 @@ const makeTurnTraces = (ownerId: OwnerId) =>
       return { sequence: inserted?.sequence, recordedAt };
     });
 
-    const record = (trace: TurnTrace) => insertTrace(trace).pipe(Effect.asVoid);
+    const record = (trace: EventTurnTrace) =>
+      insertTrace(trace).pipe(Effect.asVoid);
 
     const recordModelTurn = ({ trace, requestParts }: ModelTurnRecord) =>
       database.transaction(() =>

@@ -5,7 +5,7 @@ import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import type { OwnerId } from "../owner-id.ts";
-import type { TurnTrace } from "../tracing/turn-trace.ts";
+import type { ModelTurnTrace } from "../tracing/turn-trace.ts";
 import type { InboxEvent } from "./inbox.ts";
 import type { ModelTurnTask } from "./storage-values.ts";
 import type { TurnPreparation } from "./turn-preparation.ts";
@@ -22,7 +22,7 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly tools: AgentTools;
   readonly trustLevel: TrustLevel;
   readonly asksOwnerForApproval?: boolean;
-  readonly traceOf: (model: ModelTraceInput) => TurnTrace;
+  readonly traceOf: (model: ModelTraceInput) => ModelTurnTrace;
   readonly restartSection?: string;
   readonly restartBeforeDelivery?: (
     restartsDone: number
