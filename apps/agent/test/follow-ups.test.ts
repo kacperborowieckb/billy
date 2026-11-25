@@ -3,6 +3,7 @@ import { DateTime, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
+import type { Journal } from "../src/journal/journal.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
@@ -20,6 +21,11 @@ import {
   scriptModel,
   instructionsAndContextOf,
 } from "./fakes.ts";
+import type { MinutesFromNow } from "./quiet-hours-setup.ts";
+import {
+  quietHoursAndBriefFromNow,
+  quietHoursAndBriefLaterToday,
+} from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
 interface ScheduleRow extends Record<string, SqlStorageValue> {
@@ -48,12 +54,21 @@ const localClock = (instant: DateTime.Utc) => {
 
 const followUpPrompt = "Check on the gift for Ana";
 
+const endingInsideMergeWindow: MinutesFromNow = {
+  startMinutes: -10 * 60,
+  endMinutes: 15,
+};
+
 const agentOf = (ownerId: string) =>
   personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId));
 
 const inAgent = async <A, E>(
   ownerId: string,
-  effect: Effect.Effect<A, E, Notes | OwnerPreferences | Schedules | TurnTraces>
+  effect: Effect.Effect<
+    A,
+    E,
+    Journal | Notes | OwnerPreferences | Schedules | TurnTraces
+  >
 ) =>
   runInDurableObject(await agentOf(ownerId), (instance) =>
     instance.runtime.runPromise(effect)
@@ -100,7 +115,7 @@ const keepOpenLoop = async (ownerId: string, text: string) => {
   return note;
 };
 
-const ownerInWarsaw = async (telegramUserId: number) => {
+const ownerWithWarsawTimeZone = async (telegramUserId: number) => {
   const ownerId = await addOwner(telegramUserId);
   scriptModel([
     {
@@ -113,22 +128,12 @@ const ownerInWarsaw = async (telegramUserId: number) => {
     textUpdate({ fromUserId: telegramUserId, text: "I live in Warsaw" })
   );
   await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
-  const now = DateTime.nowUnsafe();
-  await inAgent(
-    ownerId,
-    OwnerPreferences.pipe(
-      Effect.flatMap((preferences) =>
-        preferences.setQuietHours(
-          {
-            start: localClock(DateTime.add(now, { hours: 2 })),
-            end: localClock(DateTime.add(now, { hours: 3 })),
-          },
-          { start: "22:00", end: "08:00" },
-          "test-setup"
-        )
-      )
-    )
-  );
+  return ownerId;
+};
+
+const ownerInWarsaw = async (telegramUserId: number) => {
+  const ownerId = await ownerWithWarsawTimeZone(telegramUserId);
+  await inAgent(ownerId, quietHoursAndBriefLaterToday("Europe/Warsaw"));
   return ownerId;
 };
 
@@ -470,6 +475,26 @@ describe("a follow-up that fires", () => {
     expect(instructionsAndContext).toContain("The Owner is not present.");
     expect(instructionsAndContext).toContain("Buy a gift for Ana");
     expect(instructionsAndContext).not.toContain("Renew the passport");
+  });
+
+  it("sends when the Owner was set up in the half hour before the Brief", async () => {
+    const ownerId = await ownerWithWarsawTimeZone(9716);
+    await inAgent(
+      ownerId,
+      quietHoursAndBriefFromNow("Europe/Warsaw", endingInsideMergeWindow)
+    );
+    await inAgent(ownerId, quietHoursAndBriefLaterToday("Europe/Warsaw"));
+    const note = await keepOpenLoop(ownerId, "Buy a gift for Ana");
+    scriptModel([followUpCall([note.noteId]), { say: "Good morning" }]);
+    await briefFires(ownerId, 1);
+    scriptModel([{ say: "Did you buy the gift for Ana?" }]);
+
+    await makeAgentSchedulesDue(ownerId, followUpPrompt);
+
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
+    expect(fakeTelegram.sent[2]?.body.text).toBe(
+      "Did you buy the gift for Ana?"
+    );
   });
 
   it("is held in Quiet Hours with no model call", async () => {
