@@ -1,19 +1,14 @@
-import { DateTime, Effect, Option, Schema } from "effect";
+import { DateTime, Effect, Option } from "effect";
 
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { closedOpenLoopsAmong, knownNotesOf } from "../notes/known-notes.ts";
 import { noteToolFailureMessage } from "../notes/note-tool-failure-message.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import { setTimeZoneToolName } from "../preferences/set-time-zone-tool.ts";
-import {
-  localDueTimeFormat,
-  LocalDueTimeSchema,
-} from "../time/local-due-time.ts";
-import { RecurrenceRuleSchema } from "../time/recurrence-rule.ts";
+import { localDueTimeFormat } from "../time/local-due-time.ts";
 import { refuseAtAgentScheduleLimit } from "./active-agent-schedule-limit-reached.ts";
 import { refuseAtScheduledTaskLimit } from "./active-scheduled-task-limit-reached.ts";
 import { notOpenLoopsMessage, refuseNotOpenLoops } from "./not-open-loops.ts";
-import { ScheduleActionInputSchema } from "./schedule-action-input.ts";
 import { resolveScheduleDue } from "./schedule-due.ts";
 import { scheduleOf } from "./schedule-presentation.ts";
 import {
@@ -22,8 +17,11 @@ import {
 } from "./schedule-room.ts";
 import { scheduleActionText, scheduleDueText } from "./schedule-summary.ts";
 import type { ScheduleToolServices } from "./schedule-tool-services.ts";
-
-export const maxOpenLoopIdsPerSchedule = 20;
+import {
+  followUpWithFixedPrompt,
+  SetScheduleInput,
+} from "./set-schedule-input.ts";
+import type { SetScheduleCall } from "./set-schedule-input.ts";
 
 export const setScheduleToolName = "set_schedule";
 
@@ -46,50 +44,6 @@ export const mutedOpenLoopsMessage = (noteIds: readonly string[]) =>
 
 export const followUpNeedsOpenLoopsMessage = `A follow-up needs at least one Open Loop and the RunPrompt Action, so no Schedule was set. Pass the ids of the Open Loops in openLoopIds, with a RunPrompt action, and call ${setScheduleToolName} again.`;
 
-const SetScheduleInput = Schema.Struct({
-  action: ScheduleActionInputSchema,
-  localDueTime: Schema.optionalKey(
-    LocalDueTimeSchema.pipe(
-      Schema.annotate({
-        description: `For a one-time Schedule: the local date and time of the Owner when it is due, as ${localDueTimeFormat} with no time zone or offset, for example 2026-11-19T09:00. Work it out from the current local time that you were given. Leave it out when you give repeat.`,
-      })
-    )
-  ),
-  repeat: Schema.optionalKey(
-    RecurrenceRuleSchema.pipe(
-      Schema.annotate({
-        description:
-          'For a repeating Schedule: the rule, for example {"_tag":"Weekly","weekdays":["Monday"],"time":"09:00"}, {"_tag":"Daily","time":"08:00"}, or {"_tag":"Monthly","day":"last","time":"18:00"}. The time is the local time of the Owner and stays the same when daylight saving time changes. Leave out localDueTime when you give repeat.',
-      })
-    )
-  ),
-  noteId: Schema.optionalKey(
-    Schema.String.pipe(
-      Schema.annotate({
-        description:
-          "The id of the Note that this Schedule is about, when the Owner asked for the Schedule together with something to keep. Use an id that capture_note or search_notes returned.",
-      })
-    )
-  ),
-  openLoopIds: Schema.optionalKey(
-    Schema.Array(Schema.String).pipe(
-      Schema.check(Schema.isMaxLength(maxOpenLoopIdsPerSchedule)),
-      Schema.annotate({
-        description:
-          "The ids of the Open Loops (Notes with an Open Loop) that this Schedule is about. Give them for a follow-up that you set yourself: a RunPrompt Schedule before the due date of an Open Loop, or one check on an Open Loop that had no change for about a day. Use ids that list_open_loops, search_notes, or capture_note returned. Leave them out for a Schedule that the Owner asked for.",
-      })
-    )
-  ),
-  ownerAskedForSchedule: Schema.optionalKey(
-    Schema.Boolean.pipe(
-      Schema.annotate({
-        description:
-          "Set true only when the Owner asked in this message for this Schedule. Leave it out for a follow-up that you set yourself with openLoopIds.",
-      })
-    )
-  ),
-});
-
 const resolveSet = (
   {
     schedules,
@@ -109,7 +63,7 @@ const resolveSet = (
     noteId,
     openLoopIds = [],
     ownerAskedForSchedule,
-  }: typeof SetScheduleInput.Type) {
+  }: SetScheduleCall) {
     const hasOpenLoops = openLoopIds.length > 0;
     const isFollowUp =
       turnOrigin === "proactive" ||
@@ -223,6 +177,7 @@ export const setScheduleTool = (
       description:
         "Set a Schedule for the Owner, one-time with localDueTime or repeating with repeat. The action says what happens at the due time. With SendText, the saved text is sent to the Owner in the chat; use it for fixed words for the Owner, such as a Reminder. With RunPrompt, the agent runs the saved prompt at the due time and sends the result. This is a Scheduled Task. A follow-up is a RunPrompt Schedule that you set yourself with openLoopIds, when the Owner did not ask for a Schedule (leave out ownerAskedForSchedule): set one before the due date of an Open Loop, and one when an Open Loop had no change for about a day. When a follow-up fires, you can set the next one the same way. Use it for work to do at the due time, such as listing open tasks from the Notes of that day. Give times as the local time of the Owner. Fails with a message when the time zone is not known, neither or both of localDueTime and repeat are given, the time is in the past, or the time is not real. Say that the Schedule is set only after it succeeded, and give the local date, weekday, and time of the first due time that it returns, and for a repeating Schedule how it repeats.",
       inputSchema: SetScheduleInput,
+      codeWrittenInput: followUpWithFixedPrompt,
       failureMessage: (cause) =>
         noteToolFailureMessage(cause, {
           unknownNotesConsequence: "No Schedule was set.",

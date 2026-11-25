@@ -3,10 +3,25 @@ import type { ToolApprovalStatus } from "ai";
 import { gateDecisionOf } from "../approval/tool-gate.ts";
 import type { TurnTrust } from "../approval/turn-trust.ts";
 import { toolNamed } from "./agent-tool.ts";
-import type { AgentTools } from "./agent-tool.ts";
+import type { AgentTool, AgentTools, ToolInputGate } from "./agent-tool.ts";
+
+export interface TurnGate {
+  readonly trust: TurnTrust;
+  readonly asksOwnerForApproval: boolean;
+}
+
+export const toolInputGateOf =
+  (tool: AgentTool, { trust, asksOwnerForApproval }: TurnGate): ToolInputGate =>
+  (input) =>
+    gateDecisionOf({
+      tool,
+      input,
+      trustLevel: trust.current(),
+      asksOwnerForApproval,
+    });
 
 export const approvalStatusOf =
-  (tools: AgentTools, trust: TurnTrust) =>
+  (tools: AgentTools, turnGate: TurnGate) =>
   ({
     toolCall,
   }: {
@@ -16,11 +31,7 @@ export const approvalStatusOf =
     if (tool === undefined) {
       return "not-applicable";
     }
-    const decision = gateDecisionOf({
-      tool,
-      input: toolCall.input,
-      trustLevel: trust.current(),
-    });
+    const decision = toolInputGateOf(tool, turnGate)(toolCall.input);
     if (decision._tag === "Deny") {
       return { type: "denied", reason: decision.reason };
     }

@@ -53,6 +53,7 @@ const compactionCall = Effect.fnUntraced(function* compactionCall(
       system: compactionInstructions(behavior.maxSummaryTokens),
       messages: [compactionInput(block)],
       trust: fixedTurnTrust("owner"),
+      asksOwnerForApproval: false,
       stepLimit: 1,
     })
     .pipe(

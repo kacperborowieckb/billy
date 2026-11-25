@@ -112,7 +112,7 @@ export const runModelTurn = <Failure, Requirements>({
     const turn = { eventId, turnContext, inputs: kind.inputs };
     const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
       session.commit({ ...turn, steps, ending });
-    const trust = turnTrustGiven(kind, preparation, earlier);
+    const trust = turnTrustGiven({ ...kind, ...preparation, ...turn }, earlier);
     const decided = yield* generateWithOutcomeTools({
       eventId,
       earlierMessages: earlier,

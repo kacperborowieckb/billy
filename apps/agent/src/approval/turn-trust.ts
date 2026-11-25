@@ -22,11 +22,6 @@ export interface TurnTrust {
   readonly readToolResults: (results: readonly ToolResultOfTurn[]) => void;
 }
 
-interface TurnTrustSource {
-  readonly trustLevel: TrustLevel;
-  readonly asksOwnerForApproval?: boolean | undefined;
-}
-
 const toolResultsOf = (
   messages: readonly ModelMessage[]
 ): readonly ToolResultOfTurn[] =>
@@ -90,34 +85,30 @@ export const turnTrustFollowingToolResults = (
 export const fixedTurnTrust = (trustLevel: TrustLevel): TurnTrust =>
   turnTrust(trustLevel, false, []);
 
-export const turnTrustOf = (
-  { trustLevel, asksOwnerForApproval }: TurnTrustSource,
-  earlierMessagesOfTurn: readonly ModelMessage[]
-): TurnTrust =>
-  asksOwnerForApproval === true
-    ? turnTrustFollowingToolResults(trustLevel, earlierMessagesOfTurn)
-    : fixedTurnTrust(trustLevel);
-
-export interface TurnTrustContext {
-  readonly situation: readonly string[];
+export interface TurnTrustSource {
+  readonly trustLevel: TrustLevel;
+  readonly inputs: readonly ModelMessage[];
+  readonly turnContext: string;
   readonly listsUntrustedPendingApproval?: boolean | undefined;
 }
 
+const startTrustLevelOf = ({
+  trustLevel,
+  inputs,
+  turnContext,
+  listsUntrustedPendingApproval,
+}: TurnTrustSource): TrustLevel =>
+  trustLevel === "owner" &&
+  (listsUntrustedPendingApproval === true ||
+    holdsUntrustedContent([inputs, turnContext]))
+    ? "untrusted"
+    : trustLevel;
+
 export const turnTrustGiven = (
-  source: TurnTrustSource & { readonly inputs: readonly ModelMessage[] },
-  { situation, listsUntrustedPendingApproval }: TurnTrustContext,
+  source: TurnTrustSource,
   earlierMessagesOfTurn: readonly ModelMessage[]
 ): TurnTrust =>
-  turnTrustOf(
-    {
-      ...source,
-      trustLevel:
-        source.asksOwnerForApproval === true &&
-        source.trustLevel === "owner" &&
-        (listsUntrustedPendingApproval === true ||
-          holdsUntrustedContent([source.inputs, situation]))
-          ? "untrusted"
-          : source.trustLevel,
-    },
+  turnTrustFollowingToolResults(
+    startTrustLevelOf(source),
     earlierMessagesOfTurn
   );

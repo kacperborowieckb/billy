@@ -14,7 +14,7 @@ import type {
   RiskClassified,
 } from "../approval/risk-class.ts";
 import { blockedCallReason } from "../approval/tool-gate.ts";
-import type { GatedTool } from "../approval/tool-gate.ts";
+import type { GateDecision, GatedTool } from "../approval/tool-gate.ts";
 
 export class ToolFailed extends Data.TaggedError("ToolFailed")<{
   readonly message: string;
@@ -26,6 +26,8 @@ export type RunToolEffect = <Output>(
   effect: Effect.Effect<Output, ToolFailed>
 ) => Promise<Output>;
 
+export type ToolInputGate = (input: unknown) => GateDecision;
+
 export interface AgentTool extends GatedTool {
   readonly approvalSummaryOf: ApprovalSummaryOf;
   readonly approvalExpiryMillis?: number;
@@ -33,7 +35,7 @@ export interface AgentTool extends GatedTool {
     frozenInput: unknown,
     toolCallId: string
   ) => Effect.Effect<unknown, ToolFailed>;
-  readonly toAiSdkTool: (runEffect: RunToolEffect) => Tool;
+  readonly toAiSdkTool: (runEffect: RunToolEffect, gate: ToolInputGate) => Tool;
 }
 
 export type AgentTools = Readonly<Record<string, AgentTool>>;
@@ -88,6 +90,7 @@ type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;
   readonly marksItsWorkUntrusted?: InputCheck<Input>;
+  readonly codeWrittenInput?: (input: Input) => Input;
   readonly execute: (
     input: Input,
     call: { readonly toolCallId: string; readonly modelStepKey: number }
@@ -142,6 +145,15 @@ const executeApprovedOf =
           )
         );
 
+const inputToRun = <Input>(
+  codeWrittenInput: ((input: Input) => Input) | undefined,
+  gate: ToolInputGate,
+  input: Input
+): Input =>
+  codeWrittenInput !== undefined && gate(input)._tag === "RunCodeWrittenInput"
+    ? codeWrittenInput(input)
+    : input;
+
 export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
 ): AgentTool => {
@@ -153,11 +165,12 @@ export const agentTool = <Input, Output>(
     executeApproved: executeApprovedOf(definition, classified),
     ...classified,
     marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
+    hasCodeWrittenInput: definition.codeWrittenInput !== undefined,
     approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
     ...(definition.approvalExpiryMillis === undefined
       ? {}
       : { approvalExpiryMillis: definition.approvalExpiryMillis }),
-    toAiSdkTool: (runEffect) =>
+    toAiSdkTool: (runEffect, gate) =>
       definition.riskClass === "blocked"
         ? blockedAiSdkTool(definition, runEffect)
         : tool<Input, unknown, Record<string, unknown>>({
@@ -165,10 +178,13 @@ export const agentTool = <Input, Output>(
             inputSchema: definition.inputSchema,
             execute: (input: Input, { toolCallId, messages }) =>
               runEffect(
-                definition.execute(input, {
-                  toolCallId,
-                  modelStepKey: messages.length,
-                })
+                definition.execute(
+                  inputToRun(definition.codeWrittenInput, gate, input),
+                  {
+                    toolCallId,
+                    modelStepKey: messages.length,
+                  }
+                )
               ),
           }),
   };
@@ -212,6 +228,7 @@ export const outcomeTool = <Input>(
 ): AgentTool => ({
   ...riskClassified("read"),
   marksItsWorkUntrusted: () => false,
+  hasCodeWrittenInput: false,
   approvalSummaryOf: () => Effect.succeed(Option.none()),
   executeApproved: () =>
     Effect.fail(new ToolFailed({ message: outcomeToolRunMessage })),

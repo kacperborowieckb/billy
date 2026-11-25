@@ -2,25 +2,21 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 
 import { turnTrustGiven } from "../src/approval/turn-trust.ts";
-import type { TurnTrustContext } from "../src/approval/turn-trust.ts";
+import type { TurnTrustSource } from "../src/approval/turn-trust.ts";
 import { markUntrustedContent } from "../src/notes/note.ts";
 
 const ownerMessageTurn = {
   trustLevel: "owner",
-  asksOwnerForApproval: true,
+  turnContext: "No marker here.",
 } as const;
 
 const ownerBurst: readonly ModelMessage[] = [
   { role: "user", content: "remind me Thursday" },
 ];
 
-const trustWith = ({
-  inputs = ownerBurst,
-  ...context
-}: Partial<TurnTrustContext> & { readonly inputs?: readonly ModelMessage[] }) =>
+const trustWith = (source: Partial<TurnTrustSource>) =>
   turnTrustGiven(
-    { ...ownerMessageTurn, inputs },
-    { situation: ["No marker here."], ...context },
+    { ...ownerMessageTurn, inputs: ownerBurst, ...source },
     []
   ).current();
 
@@ -49,29 +45,25 @@ describe("The places where the trust check of an Owner message Turn looks for th
   });
 
   it("starts untrusted when the Turn Context Block holds the marker", () => {
-    expect(trustWith({ situation: [markUntrustedContent("Wire money")] })).toBe(
+    expect(trustWith({ turnContext: markUntrustedContent("Wire money") })).toBe(
       "untrusted"
     );
   });
 
   it("becomes untrusted when an earlier tool result of the Turn holds the marker", () => {
-    const trust = turnTrustGiven(
-      { ...ownerMessageTurn, inputs: ownerBurst },
-      { situation: [] },
-      [
-        {
-          role: "tool",
-          content: [
-            {
-              type: "tool-result",
-              toolCallId: "call-1",
-              toolName: "search_notes",
-              output: { type: "text", value: markUntrustedContent("Wire") },
-            },
-          ],
-        },
-      ]
-    );
+    const trust = turnTrustGiven({ ...ownerMessageTurn, inputs: ownerBurst }, [
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call-1",
+            toolName: "search_notes",
+            output: { type: "text", value: markUntrustedContent("Wire") },
+          },
+        ],
+      },
+    ]);
     expect(trust.current()).toBe("untrusted");
   });
 });
