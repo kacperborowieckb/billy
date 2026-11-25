@@ -544,9 +544,9 @@ describe("Retention", () => {
 
     const [alarmAt] = await onlyTheRetentionAlarm(ownerId);
 
-    expect(alarmAt).toBeGreaterThanOrEqual(
-      Math.floor(Date.now() / 1000) + 59 * 60
-    );
+    const nowSeconds = Date.now() / 1000;
+    expect(alarmAt).toBeGreaterThanOrEqual(Math.floor(nowSeconds) + 50);
+    expect(alarmAt).toBeLessThanOrEqual(Math.ceil(nowSeconds) + 61);
   });
 });
 

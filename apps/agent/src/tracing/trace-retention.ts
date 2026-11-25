@@ -19,7 +19,7 @@ export type TraceRetentionRun = "Ran" | "NotDue";
 
 const retentionRunInterval = { days: 1 } as const;
 
-const retentionRetryDelay = { hours: 1 } as const;
+const retentionRetryDelay = { minutes: 1 } as const;
 
 const instantOf = (iso: string | null | undefined) =>
   Option.fromNullishOr(iso).pipe(Option.flatMap(DateTime.make));
