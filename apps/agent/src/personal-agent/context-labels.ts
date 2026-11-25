@@ -22,3 +22,7 @@ export const textAfterContextBlock = (text: string) => {
     ? text
     : text.slice(text.indexOf(block.end) + block.end.length);
 };
+
+export const summaryLabel = "[Summary of earlier chat]";
+
+export const summaryEndLabel = "[End of summary]";

@@ -66,6 +66,7 @@ describe("Model Gateway transport", () => {
             scheduled_task: "primary",
             proactive: "primary",
             eval_judge: "secondary",
+            compaction: "primary",
           },
         },
         fetch: recordingFetch,
@@ -130,6 +131,7 @@ describe("Model Gateway transport", () => {
       scheduled_task: { model: flash, reasoningEffort: "none" },
       proactive: { model: flash, reasoningEffort: "none" },
       eval_judge: { model: flash, reasoningEffort: "low" },
+      compaction: { model: flash, reasoningEffort: "none" },
     });
   });
 
@@ -181,6 +183,7 @@ describe("Model Gateway transport", () => {
         ),
       read: Effect.succeed([]),
       tokensSpent: () => Effect.succeed(0),
+      stepsAfterEvent: () => Effect.succeed([]),
     });
     const gateway = ModelGateway.layer.pipe(
       Layer.provide(failingLedger),
@@ -218,6 +221,7 @@ const gatewayWith = (model: ResolvedRoute["model"]) =>
         record: () => Effect.void,
         read: Effect.succeed([]),
         tokensSpent: () => Effect.succeed(0),
+        stepsAfterEvent: () => Effect.succeed([]),
       })
     ),
     Layer.provide(

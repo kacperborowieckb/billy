@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
@@ -21,6 +21,24 @@ export interface ConversationRow {
   readonly kind: ConversationRowKind;
   readonly message: ModelMessage;
 }
+
+export interface StoredConversationRow extends ConversationRow {
+  readonly sequence: number;
+  readonly eventId: string;
+}
+
+export interface NewSummary {
+  readonly compactionId: string;
+  readonly lastCompactedSequence: number;
+  readonly message: ModelMessage;
+}
+
+const summaryFirst = <Row extends { readonly kind: ConversationRowKind }>(
+  rows: readonly Row[]
+) => [
+  ...rows.filter((row) => row.kind === "summary"),
+  ...rows.filter((row) => row.kind !== "summary"),
+];
 
 const chatTextRowKinds: readonly ConversationRowKind[] = [
   "input",
@@ -52,16 +70,43 @@ const decodedRows = (
 const makeConversation = Effect.gen(function* makeConversationEffect() {
   const { database } = yield* AgentStorage;
 
-  const history = database
-    .select({ message: conversationMessages.message })
+  const uncompactedRows = database
+    .select()
     .from(conversationMessages)
+    .where(isNull(conversationMessages.compactedAt))
     .orderBy(asc(conversationMessages.sequence))
     .pipe(
       Effect.flatMap((rows) =>
-        Effect.all(rows.map((row) => decodeMessage(row.message)))
-      ),
-      Effect.orDie
+        Effect.all(
+          summaryFirst(rows).map((row) =>
+            decodeMessage(row.message).pipe(
+              Effect.map((message): StoredConversationRow => ({
+                sequence: row.sequence,
+                eventId: row.eventId,
+                kind: row.kind,
+                message,
+              }))
+            )
+          )
+        ).pipe(Effect.orDie)
+      )
     );
+
+  const summaryEventId = database
+    .select({ eventId: conversationMessages.eventId })
+    .from(conversationMessages)
+    .where(
+      and(
+        isNull(conversationMessages.compactedAt),
+        eq(conversationMessages.kind, "summary")
+      )
+    )
+    .pipe(Effect.map(([row]) => row?.eventId));
+
+  const history = uncompactedRows.pipe(
+    Effect.map((rows) => rows.map((row) => row.message)),
+    Effect.orDie
+  );
 
   const writeRows = Effect.fnUntraced(function* writeRows(
     eventId: string,
@@ -93,6 +138,36 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       })
     );
 
+  const replaceWithSummary = ({
+    compactionId,
+    lastCompactedSequence,
+    message,
+  }: NewSummary) =>
+    database.transaction(() =>
+      Effect.gen(function* replaceWithSummaryEffect() {
+        const compactedAt = DateTime.formatIso(yield* DateTime.now);
+        yield* database
+          .update(conversationMessages)
+          .set({ compactedAt })
+          .where(
+            and(
+              isNull(conversationMessages.compactedAt),
+              lte(conversationMessages.sequence, lastCompactedSequence)
+            )
+          );
+        yield* database
+          .update(conversationMessages)
+          .set({ compactedAt })
+          .where(
+            and(
+              isNull(conversationMessages.compactedAt),
+              eq(conversationMessages.kind, "summary")
+            )
+          );
+        yield* writeRows(compactionId, [{ kind: "summary", message }]);
+      })
+    );
+
   const recentTextRows = Effect.fnUntraced(function* recentTextRows(
     count: number
   ) {
@@ -102,7 +177,12 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
         message: conversationMessages.message,
       })
       .from(conversationMessages)
-      .where(inArray(conversationMessages.kind, chatTextRowKinds))
+      .where(
+        and(
+          isNull(conversationMessages.compactedAt),
+          inArray(conversationMessages.kind, chatTextRowKinds)
+        )
+      )
       .orderBy(desc(conversationMessages.sequence))
       .limit(count)
       .pipe(Effect.orDie);
@@ -131,7 +211,15 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     }
   );
 
-  return { history, append, recentTextRows, sentTextIsStoredInFull };
+  return {
+    history,
+    uncompactedRows,
+    summaryEventId,
+    replaceWithSummary,
+    append,
+    recentTextRows,
+    sentTextIsStoredInFull,
+  };
 });
 
 export class Conversation extends Context.Service<

@@ -21,6 +21,7 @@ export const conversationRowKinds = [
   "write_back",
   "write_back_stub",
   "approval_status",
+  "summary",
 ] as const;
 
 export type ConversationRowKind = (typeof conversationRowKinds)[number];
@@ -84,6 +85,7 @@ export const modelTasks = [
   "scheduled_task",
   "proactive",
   "eval_judge",
+  "compaction",
 ] as const;
 
 export const proactiveOutcomes = [

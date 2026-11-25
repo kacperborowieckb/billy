@@ -920,7 +920,7 @@ const recordUsage = (
     ownerId,
     UsageLedger.pipe(
       Effect.flatMap((ledger) =>
-        ledger.record(task, "model", {
+        ledger.record({ task }, "model", {
           inputTokens,
           outputTokens: 0,
           cachedInputTokens: undefined,

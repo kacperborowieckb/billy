@@ -284,11 +284,16 @@ export interface ScriptedToolCall {
   readonly input: Record<string, unknown>;
 }
 
+export interface ScriptedUsage {
+  readonly inputTokens?: number | "unreported";
+  readonly outputTokens?: number;
+}
+
 export type ScriptedModelStep =
-  | { readonly say: string }
+  | ({ readonly say: string } & ScriptedUsage)
   | { readonly error: string }
   | { readonly callTools: readonly ScriptedToolCall[] }
-  | {
+  | ({
       readonly callTool: string;
       readonly times?: number;
       readonly input:
@@ -296,7 +301,7 @@ export type ScriptedModelStep =
         | ((
             previousToolOutput: Record<string, unknown>
           ) => Record<string, unknown>);
-    };
+    } & ScriptedUsage);
 
 type ModelPrompt = MockLanguageModelV4["doGenerateCalls"][number]["prompt"];
 
@@ -393,6 +398,33 @@ const defaultModelFailureMessage = "The model provider is down";
 
 const modelFailure = { remaining: 0, message: defaultModelFailureMessage };
 
+const inputUsageOf = (inputTokens: number | "unreported") =>
+  inputTokens === "unreported"
+    ? {
+        total: undefined,
+        noCache: undefined,
+        cacheRead: undefined,
+        cacheWrite: undefined,
+      }
+    : {
+        total: inputTokens,
+        noCache: inputTokens - 12,
+        cacheRead: 12,
+        cacheWrite: 0,
+      };
+
+const usageOf = ({ inputTokens = 42, outputTokens = 7 }: ScriptedUsage) => ({
+  inputTokens: inputUsageOf(inputTokens),
+  outputTokens: { total: outputTokens, text: outputTokens, reasoning: 0 },
+});
+
+const scriptedUsageOf = (scripted: ScriptedModelStep | undefined) =>
+  usageOf(
+    scripted !== undefined && ("say" in scripted || "callTool" in scripted)
+      ? scripted
+      : {}
+  );
+
 let releaseModel = Promise.resolve();
 let callsBeforeHold = 0;
 
@@ -406,6 +438,7 @@ export const fakeModel = new MockLanguageModelV4({
     if (fakeModel.doGenerateCalls.length > callsBeforeHold) {
       await releaseModel;
     }
+    options.abortSignal?.throwIfAborted();
     if (modelFailure.remaining > 0) {
       modelFailure.remaining -= 1;
       throw new Error(modelFailure.message);
@@ -430,10 +463,7 @@ export const fakeModel = new MockLanguageModelV4({
       finishReason: callsTool
         ? { unified: "tool-calls", raw: "tool_calls" }
         : { unified: "stop", raw: "stop" },
-      usage: {
-        inputTokens: { total: 42, noCache: 30, cacheRead: 12, cacheWrite: 0 },
-        outputTokens: { total: 7, text: 7, reasoning: 0 },
-      },
+      usage: scriptedUsageOf(scripted),
       warnings: [],
     };
   },

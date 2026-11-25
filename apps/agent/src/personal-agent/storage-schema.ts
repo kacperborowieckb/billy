@@ -85,9 +85,11 @@ export const conversationMessages = sqliteTable(
     kind: text("kind", { enum: conversationRowKinds }).notNull(),
     message: text("message").notNull(),
     recordedAt: text("recorded_at").notNull(),
+    compactedAt: text("compacted_at"),
   },
   (table) => [
     index("conversation_messages_event").on(table.eventId),
+    index("conversation_messages_compacted").on(table.compactedAt),
     check(
       "conversation_messages_kind_check",
       valueIn(table.kind, conversationRowKinds)
@@ -116,6 +118,7 @@ export const modelUsage = sqliteTable(
     ownerId: text("owner_id").$type<OwnerId>().notNull(),
     recordedAt: text("recorded_at").notNull(),
     task: text("task", { enum: modelTasks }).notNull(),
+    eventId: text("event_id"),
     modelId: text("model_id").notNull(),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
@@ -124,6 +127,7 @@ export const modelUsage = sqliteTable(
   },
   (table) => [
     index("model_usage_budget").on(table.ownerId, table.task, table.recordedAt),
+    index("model_usage_event").on(table.eventId),
   ]
 );
 

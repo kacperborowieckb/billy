@@ -106,6 +106,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
       const generated = yield* modelGateway
         .generate({
           ...request,
+          eventId,
           messages: [
             ...request.messages,
             ...earlier.flatMap((step) => step.responseMessages),
