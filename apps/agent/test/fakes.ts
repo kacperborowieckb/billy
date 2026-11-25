@@ -425,12 +425,40 @@ const usageOf = ({ inputTokens = 42, outputTokens = 7 }: ScriptedUsage) => ({
   outputTokens: { total: outputTokens, text: outputTokens, reasoning: 0 },
 });
 
-const scriptedUsageOf = (scripted: ScriptedModelStep | undefined) =>
-  usageOf(
-    scripted !== undefined && ("say" in scripted || "callTool" in scripted)
-      ? scripted
-      : {}
-  );
+const scriptedUsageOf = (
+  scripted: ScriptedModelStep | undefined
+): ScriptedUsage =>
+  scripted !== undefined && ("say" in scripted || "callTool" in scripted)
+    ? scripted
+    : {};
+
+const withinOutputLimit = (
+  usage: ScriptedUsage,
+  maxOutputTokens: number | undefined
+) =>
+  maxOutputTokens !== undefined &&
+  usage.outputTokens !== undefined &&
+  usage.outputTokens > maxOutputTokens
+    ? {
+        usage: { ...usage, outputTokens: maxOutputTokens },
+        reachedOutputLimit: true,
+      }
+    : { usage, reachedOutputLimit: false };
+
+const finishReasonOf = ({
+  callsTool,
+  reachedOutputLimit,
+}: {
+  readonly callsTool: boolean;
+  readonly reachedOutputLimit: boolean;
+}) => {
+  if (reachedOutputLimit) {
+    return { unified: "length", raw: "length" } as const;
+  }
+  return callsTool
+    ? ({ unified: "tool-calls", raw: "tool_calls" } as const)
+    : ({ unified: "stop", raw: "stop" } as const);
+};
 
 let releaseModel = Promise.resolve();
 let callsBeforeHold = 0;
@@ -457,6 +485,10 @@ export const fakeModel = new MockLanguageModelV4({
     const callsTool =
       scripted !== undefined &&
       ("callTool" in scripted || "callTools" in scripted);
+    const { usage, reachedOutputLimit } = withinOutputLimit(
+      scriptedUsageOf(scripted),
+      options.maxOutputTokens
+    );
     return {
       content:
         scripted === undefined
@@ -467,10 +499,8 @@ export const fakeModel = new MockLanguageModelV4({
               },
             ]
           : [...scriptedContent(scripted, options.prompt)],
-      finishReason: callsTool
-        ? { unified: "tool-calls", raw: "tool_calls" }
-        : { unified: "stop", raw: "stop" },
-      usage: scriptedUsageOf(scripted),
+      finishReason: finishReasonOf({ callsTool, reachedOutputLimit }),
+      usage: usageOf(usage),
       warnings: [],
     };
   },

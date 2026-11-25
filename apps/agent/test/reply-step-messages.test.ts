@@ -29,6 +29,7 @@ const repliedWith = (steps: readonly ModelStep[]): ModelOutcome => ({
     steps,
     endedWith: [],
     awaitingApproval: [],
+    reachedOutputLimit: false,
   },
 });
 

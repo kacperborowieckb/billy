@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai";
-import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import {
   ModelMessageJsonSchema,
@@ -18,6 +18,7 @@ import { breakMainConversationPrefix } from "./prefix-cache.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
+  refusedCompactionBlocks,
 } from "./storage-schema.ts";
 import type { ConversationRowKind } from "./storage-values.ts";
 
@@ -184,6 +185,27 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       })
     );
 
+  const lastRefusedBlockEnd = database
+    .select({ sequence: refusedCompactionBlocks.lastCompactedSequence })
+    .from(refusedCompactionBlocks)
+    .pipe(Effect.map(([row]) => Option.fromNullishOr(row?.sequence)));
+
+  const recordRefusedBlock = Effect.fnUntraced(function* recordRefusedBlock(
+    lastCompactedSequence: number
+  ) {
+    const refusedAt = DateTime.formatIso(yield* DateTime.now);
+    yield* database
+      .insert(refusedCompactionBlocks)
+      .values({ slot: 0, lastCompactedSequence, refusedAt })
+      .onConflictDoUpdate({
+        target: refusedCompactionBlocks.slot,
+        set: {
+          lastCompactedSequence: sql`max(${refusedCompactionBlocks.lastCompactedSequence}, excluded.last_compacted_sequence)`,
+          refusedAt,
+        },
+      });
+  });
+
   const recentTextRows = Effect.fnUntraced(function* recentTextRows(
     count: number
   ) {
@@ -233,6 +255,8 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     sentRows,
     summaryEventId,
     replaceWithSummary,
+    lastRefusedBlockEnd,
+    recordRefusedBlock,
     append,
     recentTextRows,
     sentTextIsStoredInFull,

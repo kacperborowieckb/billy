@@ -27,6 +27,7 @@ export type CompactionResult =
   | "StoppedByBurst"
   | "ModelFailed"
   | "SummaryRefused"
+  | "RefusedBlockSkipped"
   | "StorageFailed";
 
 const burstPollInterval = "250 millis";
@@ -36,8 +37,19 @@ type CompactionCall =
   | { readonly _tag: "ModelFailed"; readonly cause: unknown }
   | { readonly _tag: "StoppedByBurst" };
 
+type SummaryAttempts =
+  | { readonly _tag: "Accepted"; readonly summary: string }
+  | { readonly _tag: "Refused" }
+  | Exclude<CompactionCall, { readonly _tag: "Generated" }>;
+
+const summaryTargetsOf = (maxSummaryTokens: number) => [
+  maxSummaryTokens,
+  Math.floor(maxSummaryTokens / 2),
+];
+
 const summaryIsAccepted = (reply: ModelReply, maxSummaryTokens: number) =>
   reply.text.trim() !== "" &&
+  !reply.reachedOutputLimit &&
   reply.usage.outputTokens !== undefined &&
   reply.usage.outputTokens <= maxSummaryTokens;
 
@@ -48,15 +60,20 @@ interface CompactionRequest {
   readonly block: CompactionBlock;
 }
 
+interface SummaryRequest extends CompactionRequest {
+  readonly summaryTarget: number;
+}
+
 const compactionCall = Effect.fnUntraced(function* compactionCall({
   ownerId,
   behavior,
   compactionId,
   block,
-}: CompactionRequest) {
+  summaryTarget,
+}: SummaryRequest) {
   const gateway = yield* ModelGateway;
   const inbox = yield* Inbox;
-  const system = compactionInstructions(behavior.maxSummaryTokens);
+  const system = compactionInstructions(summaryTarget);
   const recordSteps = (
     reply: Parameters<typeof recordCompactionSteps>[0]["reply"]
   ) => recordCompactionSteps({ ownerId, compactionId, system, reply });
@@ -69,6 +86,7 @@ const compactionCall = Effect.fnUntraced(function* compactionCall({
       trust: fixedTurnTrust("owner"),
       asksOwnerForApproval: false,
       stepLimit: 1,
+      maxOutputTokens: behavior.maxSummaryTokens,
     })
     .pipe(
       Effect.tap(recordSteps),
@@ -97,6 +115,34 @@ const compactionCall = Effect.fnUntraced(function* compactionCall({
   return yield* Effect.raceFirst(generated, burstBecameDue);
 });
 
+const summaryAttempts = Effect.fnUntraced(function* summaryAttempts(
+  request: CompactionRequest
+) {
+  const inbox = yield* Inbox;
+  const { maxSummaryTokens } = request.behavior;
+  for (const summaryTarget of summaryTargetsOf(maxSummaryTokens)) {
+    const call = yield* compactionCall({ ...request, summaryTarget });
+    if (call._tag !== "Generated") {
+      return call satisfies SummaryAttempts;
+    }
+    if (summaryIsAccepted(call.reply, maxSummaryTokens)) {
+      return {
+        _tag: "Accepted",
+        summary: call.reply.text.trim(),
+      } satisfies SummaryAttempts;
+    }
+    yield* Effect.logWarning("The Compaction Summary was refused", {
+      summaryTarget,
+      outputTokens: call.reply.usage.outputTokens,
+      reachedOutputLimit: call.reply.reachedOutputLimit,
+    });
+    if (yield* inbox.burstIsDue(burstWaitOf(request.behavior))) {
+      return { _tag: "StoppedByBurst" } satisfies SummaryAttempts;
+    }
+  }
+  return { _tag: "Refused" } satisfies SummaryAttempts;
+});
+
 export const compactWhenOverLimit = Effect.fnUntraced(
   function* compactWhenOverLimit(ownerId: OwnerId, behavior: BehaviorConfig) {
     const conversation = yield* Conversation;
@@ -121,25 +167,34 @@ export const compactWhenOverLimit = Effect.fnUntraced(
     if (Option.isNone(block)) {
       return "NotNeeded" satisfies CompactionResult;
     }
+    const lastRefusedBlockEnd = yield* conversation.lastRefusedBlockEnd;
+    if (
+      Option.exists(
+        lastRefusedBlockEnd,
+        (refusedEnd) => block.value.lastCompactedSequence <= refusedEnd
+      )
+    ) {
+      return "RefusedBlockSkipped" satisfies CompactionResult;
+    }
     const compactionId = `compaction-${crypto.randomUUID()}`;
-    const call = yield* compactionCall({
+    const attempts = yield* summaryAttempts({
       ownerId,
       behavior,
       compactionId,
       block: block.value,
     });
-    if (call._tag === "StoppedByBurst") {
+    if (attempts._tag === "StoppedByBurst") {
       return "StoppedByBurst" satisfies CompactionResult;
     }
-    if (call._tag === "ModelFailed") {
-      yield* Effect.logWarning("The Compaction model call failed", call.cause);
+    if (attempts._tag === "ModelFailed") {
+      yield* Effect.logWarning(
+        "The Compaction model call failed",
+        attempts.cause
+      );
       return "ModelFailed" satisfies CompactionResult;
     }
-    if (!summaryIsAccepted(call.reply, behavior.maxSummaryTokens)) {
-      yield* Effect.logWarning(
-        "The Compaction Summary was refused",
-        call.reply.usage.outputTokens
-      );
+    if (attempts._tag === "Refused") {
+      yield* conversation.recordRefusedBlock(block.value.lastCompactedSequence);
       return "SummaryRefused" satisfies CompactionResult;
     }
     if (yield* inbox.burstIsDue(burstWaitOf(behavior))) {
@@ -148,7 +203,7 @@ export const compactWhenOverLimit = Effect.fnUntraced(
     yield* conversation.replaceWithSummary({
       compactionId,
       lastCompactedSequence: block.value.lastCompactedSequence,
-      message: summaryMessage(call.reply.text.trim()),
+      message: summaryMessage(attempts.summary),
     });
     return "Compacted" satisfies CompactionResult;
   }

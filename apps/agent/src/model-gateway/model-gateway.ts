@@ -43,6 +43,7 @@ export interface ModelRequest {
   readonly trust: TurnTrust;
   readonly asksOwnerForApproval: boolean;
   readonly stepLimit: number;
+  readonly maxOutputTokens?: number;
 }
 
 export interface ModelReply {
@@ -53,6 +54,7 @@ export interface ModelReply {
   readonly steps: readonly ModelStep[];
   readonly endedWith: readonly PendingToolCall[];
   readonly awaitingApproval: readonly ApprovalRequestedCall[];
+  readonly reachedOutputLimit: boolean;
 }
 
 const attemptTimeout = `${attemptTimeoutMillis} millis` as const;
@@ -88,6 +90,9 @@ const toolLoopAgentOf = (
     repairToolCall: blockedCallReachingTheGate(request.tools ?? noTools),
     stopWhen: isStepCount(request.stepLimit),
     maxRetries: 0,
+    ...(request.maxOutputTokens === undefined
+      ? {}
+      : { maxOutputTokens: request.maxOutputTokens }),
   });
 
 const retryingModelCalls = (
@@ -136,7 +141,10 @@ const replyOf = (
   route: ResolvedRoute,
   text: string,
   steps: readonly ModelStep[]
-): Omit<ModelReply, "endedWith" | "awaitingApproval"> => ({
+): Omit<
+  ModelReply,
+  "endedWith" | "awaitingApproval" | "reachedOutputLimit"
+> => ({
   modelId: route.model.modelId,
   reasoningEffort: route.reasoningEffort,
   text,
@@ -221,6 +229,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
         ...replyOf(route, result.text, steps),
         endedWith,
         awaitingApproval,
+        reachedOutputLimit: lastStep?.finishReason === "length",
       } satisfies ModelReply;
     });
 
