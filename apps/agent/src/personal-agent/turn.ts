@@ -228,7 +228,7 @@ export const takeTurn = (
     if (untaken && (yield* inbox.burstIsDue(wait))) {
       return { nextBurstIsDue: true };
     }
-    const compaction = yield* compactWhenOverLimit(behavior).pipe(
+    const compaction = yield* compactWhenOverLimit(ownerId, behavior).pipe(
       Effect.catch((error) =>
         Effect.logError("Compaction did not run", error).pipe(
           Effect.as<CompactionResult>("StorageFailed")

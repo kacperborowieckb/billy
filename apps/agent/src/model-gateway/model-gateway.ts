@@ -1,6 +1,6 @@
 import { isStepCount, ToolLoopAgent, wrapLanguageModel } from "ai";
-import type { ModelMessage, StepResult, ToolSet } from "ai";
-import { Context, Effect, Layer, Schedule } from "effect";
+import type { ModelMessage } from "ai";
+import { Clock, Context, Effect, Layer, Schedule } from "effect";
 
 import type { TurnTrust } from "../approval/turn-trust.ts";
 import { noTools, runToolEffect } from "./agent-tool.ts";
@@ -70,13 +70,18 @@ const aiSdkToolsOf = (
     ])
   );
 
+interface AgentRun {
+  readonly runTool: RunToolEffect;
+  readonly onCallStarted: () => void;
+}
+
 const toolLoopAgentOf = (
   route: ResolvedRoute,
   request: ModelRequest,
-  runTool: RunToolEffect
+  { runTool, onCallStarted }: AgentRun
 ) =>
   new ToolLoopAgent({
-    model: retryingModelCalls(route.model),
+    model: retryingModelCalls(route.model, onCallStarted),
     instructions: request.system,
     tools: aiSdkToolsOf(request.tools ?? noTools, request, runTool),
     toolApproval: approvalStatusOf(request.tools ?? noTools, request),
@@ -86,14 +91,18 @@ const toolLoopAgentOf = (
   });
 
 const retryingModelCalls = (
-  model: ResolvedRoute["model"]
+  model: ResolvedRoute["model"],
+  onCallStarted: () => void
 ): ResolvedRoute["model"] =>
   wrapLanguageModel({
     model,
     middleware: {
       wrapGenerate: async ({ params }) => {
         const attempt = Effect.tryPromise({
-          try: (abortSignal) => model.doGenerate({ ...params, abortSignal }),
+          try: (abortSignal) => {
+            onCallStarted();
+            return model.doGenerate({ ...params, abortSignal });
+          },
           catch: (cause) => new ModelCallFailed({ cause }),
         }).pipe(
           Effect.timeoutOrElse({
@@ -157,8 +166,15 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const { reasoningEffort } = route;
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       const runTool = runToolEffect(runPromise);
-      const agent = toolLoopAgentOf(route, request, runTool);
-      const finishedSteps: StepResult<ToolSet>[] = [];
+      const clock = yield* Clock.Clock;
+      let callStartedAt = clock.currentTimeMillisUnsafe();
+      const agent = toolLoopAgentOf(route, request, {
+        runTool,
+        onCallStarted: () => {
+          callStartedAt = clock.currentTimeMillisUnsafe();
+        },
+      });
+      const finishedSteps: ModelStep[] = [];
 
       const result = yield* Effect.tryPromise({
         try: (abortSignal) =>
@@ -166,7 +182,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             messages: [...request.messages],
             abortSignal,
             onStepFinish: (step) => {
-              finishedSteps.push(step);
+              finishedSteps.push(modelStepOf(step, callStartedAt));
               request.trust.readToolResults(step.toolResults);
             },
           }),
@@ -175,13 +191,13 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             modelId,
             reasoningEffort,
             cause,
-            steps: finishedSteps.map(modelStepOf),
+            steps: [...finishedSteps],
           }),
       }).pipe(
         Effect.tapError((error) => recordUsage(request, modelId, error.steps))
       );
 
-      const steps = result.steps.map(modelStepOf);
+      const steps: readonly ModelStep[] = [...finishedSteps];
       yield* recordUsage(request, modelId, steps);
 
       const lastStep = result.steps.at(-1);

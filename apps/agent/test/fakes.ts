@@ -249,9 +249,15 @@ const recordedDataPoints: AnalyticsEngineDataPoint[] = [];
 
 const metricsState = { failing: false };
 
+const isModelStepPoint = (dataPoint: AnalyticsEngineDataPoint) =>
+  dataPoint.blobs?.[0] === "model_step";
+
 export const fakeMetrics = {
   get dataPoints(): readonly AnalyticsEngineDataPoint[] {
-    return recordedDataPoints;
+    return recordedDataPoints.filter((point) => !isModelStepPoint(point));
+  },
+  get modelStepDataPoints(): readonly AnalyticsEngineDataPoint[] {
+    return recordedDataPoints.filter(isModelStepPoint);
   },
   failWrites: () => {
     metricsState.failing = true;

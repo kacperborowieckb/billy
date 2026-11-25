@@ -14,6 +14,7 @@ const usage = {
 
 const stepOf = (responseMessages: readonly ModelMessage[]): ModelStep => ({
   usage,
+  calledAtMillis: 0,
   toolCalls: [],
   responseMessages,
 });

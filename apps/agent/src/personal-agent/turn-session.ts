@@ -52,6 +52,7 @@ const conversationRequest = Effect.fnUntraced(function* conversationRequest({
   yield* (yield* TurnProgress).recordTurnContext(eventId, turnContext);
   return {
     system: systemPrompt({ behavior, instructions }),
+    ownerContext,
     turnContext,
     messages: [
       ownerContext,
@@ -106,6 +107,7 @@ const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
     );
     return {
       system: systemPrompt({ behavior, instructions }),
+      ownerContext,
       turnContext: block,
       messages: [ownerContext, ...withTurnContext(block, inputs), ...earlier],
     };
