@@ -1,3 +1,11 @@
+CREATE TABLE `write_back_markers` (
+	`event_id` text PRIMARY KEY,
+	`kind` text NOT NULL,
+	`local_time` text NOT NULL,
+	`recorded_at` text NOT NULL,
+	CONSTRAINT "write_back_markers_kind_check" CHECK("kind" IN ('Brief', 'Follow-up', 'Scheduled Task', 'Reminder', 'Schedule'))
+);
+--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_conversation_messages` (
 	`sequence` integer PRIMARY KEY AUTOINCREMENT,
@@ -5,7 +13,7 @@ CREATE TABLE `__new_conversation_messages` (
 	`kind` text NOT NULL,
 	`message` text NOT NULL,
 	`recorded_at` text NOT NULL,
-	CONSTRAINT "conversation_messages_kind_check" CHECK("kind" IN ('input', 'step', 'reply', 'write_back', 'approval_status'))
+	CONSTRAINT "conversation_messages_kind_check" CHECK("kind" IN ('input', 'step', 'reply', 'write_back', 'write_back_stub', 'approval_status'))
 );
 --> statement-breakpoint
 INSERT INTO `__new_conversation_messages`(`sequence`, `event_id`, `kind`, `message`, `recorded_at`) SELECT `sequence`, `event_id`, `kind`, `message`, `recorded_at` FROM `conversation_messages`;--> statement-breakpoint

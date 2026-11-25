@@ -30,6 +30,7 @@ import { localTimeOf } from "../src/time/local-time.ts";
 import {
   failModel,
   fakeModel,
+  holdModel,
   fakeTelegram,
   lastUserTextOf,
   resetFakes,
@@ -359,12 +360,71 @@ describe("The Write-back of a Side Session", { timeout: 30_000 }, () => {
     await waitForNoPendingEvent(ownerId);
 
     const rows = await conversationRowsAfter(ownerId, before);
+    expect(rows.map((row) => row.kind)).toEqual(["write_back_stub"]);
     expect(rows.map(messageOf)).toEqual([
       {
         role: "assistant",
         content: `[Scheduled Task, ${localTimeOf(task.nextDueAt, warsaw)}] sent to the Owner. Text removed from the history\n(read: ${searchNotesToolName})`,
       },
     ]);
+  });
+
+  it("names a repeated set_schedule call once, because the second call set nothing", async () => {
+    const ownerId = await ownerInWarsaw(9908);
+    const followedId = await keepOpenLoop(ownerId, "Book the dentist");
+    const before = await lastSequenceOf(ownerId);
+    const followUp = {
+      callTool: setScheduleToolName,
+      input: {
+        action: { _tag: "RunPrompt", prompt: "Ask about the dentist" },
+        localDueTime: `${nextYear}-01-14T09:00`,
+        openLoopIds: [followedId],
+      },
+    } as const;
+    await makeBriefDue(ownerId);
+    scriptModel([followUp, followUp, { say: "Good morning." }]);
+
+    await fireTheAlarm(ownerId);
+    await waitForSends(2);
+    await waitForNoPendingEvent(ownerId);
+
+    const [row] = await conversationRowsAfter(ownerId, before);
+    expect(
+      String(messageOf(row).content).split("set a follow-up")
+    ).toHaveLength(2);
+  });
+
+  it("keeps the marker that the fired Event got first, also when the time zone changes before the Write-back", async () => {
+    const ownerId = await ownerInWarsaw(9909);
+    const before = await lastSequenceOf(ownerId);
+    const task = await seedOwnerSchedule(ownerId, {
+      _tag: "RunPrompt",
+      prompt,
+    });
+    const calls = fakeModel.doGenerateCalls.length;
+    const release = holdModel(calls);
+
+    const firing = fireTheAlarm(ownerId);
+    await vi.waitFor(() =>
+      expect(fakeModel.doGenerateCalls.length).toBeGreaterThan(calls)
+    );
+    await inAgent(
+      ownerId,
+      OwnerPreferences.pipe(
+        Effect.flatMap((preferences) =>
+          preferences.setTimeZone("America/New_York", "test-setup")
+        )
+      )
+    );
+    release();
+    await firing;
+    await waitForSends(2);
+    await waitForNoPendingEvent(ownerId);
+
+    const [row] = await conversationRowsAfter(ownerId, before);
+    expect(messageOf(row).content).toBe(
+      `[Scheduled Task, ${localTimeOf(task.nextDueAt, warsaw)}] You said: ${prompt}`
+    );
   });
 
   it("gives one send and one Write-back when a reset comes after the send was confirmed", async () => {

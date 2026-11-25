@@ -12,7 +12,9 @@ import {
   turnContextBlocks,
   turnModelSteps,
   turnProgress,
+  writeBackMarkers,
 } from "./turn-progress-schema.ts";
+import type { WriteBackMarker } from "./write-back.ts";
 
 const encodeMessage = Schema.encodeSync(ModelMessageJsonSchema);
 const decodeMessage = Schema.decodeUnknownEffect(ModelMessageJsonSchema);
@@ -165,6 +167,29 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
         Effect.orDie
       );
 
+  const keepWriteBackMarker = Effect.fnUntraced(function* keepWriteBackMarker(
+    eventId: string,
+    marker: WriteBackMarker
+  ) {
+    yield* database
+      .insert(writeBackMarkers)
+      .values({
+        eventId,
+        kind: marker.kind,
+        localTime: marker.localTime,
+        recordedAt: DateTime.formatIso(yield* DateTime.now),
+      })
+      .onConflictDoNothing();
+    const [kept] = yield* database
+      .select({
+        kind: writeBackMarkers.kind,
+        localTime: writeBackMarkers.localTime,
+      })
+      .from(writeBackMarkers)
+      .where(eq(writeBackMarkers.eventId, eventId));
+    return kept ?? marker;
+  });
+
   const forgetSettled = (eventIds: readonly string[]) =>
     database
       .delete(turnProgress)
@@ -174,6 +199,11 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
           database
             .delete(turnContextBlocks)
             .where(inArray(turnContextBlocks.eventId, [...eventIds]))
+        ),
+        Effect.andThen(
+          database
+            .delete(writeBackMarkers)
+            .where(inArray(writeBackMarkers.eventId, [...eventIds]))
         )
       );
 
@@ -181,6 +211,7 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
     completedFor,
     recordTurnContext,
     turnContextFor,
+    keepWriteBackMarker,
     forgetSettled,
     markModelStep,
     usedStepCount,

@@ -12,7 +12,6 @@ import {
   conversationRecordedEvents,
 } from "./storage-schema.ts";
 import type { ConversationRowKind } from "./storage-values.ts";
-import { writeBackHoldsSentText } from "./write-back.ts";
 
 const encodeMessage = Schema.encodeSync(ModelMessageJsonSchema);
 const decodeMessage = Schema.decodeUnknownEffect(ModelMessageJsonSchema);
@@ -27,6 +26,7 @@ const chatTextRowKinds: readonly ConversationRowKind[] = [
   "input",
   "reply",
   "write_back",
+  "write_back_stub",
 ];
 
 export interface ConversationEntry {
@@ -120,15 +120,14 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
         .where(
           and(
             eq(conversationMessages.eventId, eventId),
-            eq(conversationMessages.kind, "write_back")
+            inArray(conversationMessages.kind, [
+              "write_back",
+              "write_back_stub",
+            ])
           )
         )
         .pipe(Effect.orDie);
-      const writeBacks = yield* decodedRows(rows);
-      return (
-        writeBacks.length > 0 &&
-        writeBacks.every(({ message }) => writeBackHoldsSentText(message))
-      );
+      return rows.length > 0 && rows.every(({ kind }) => kind === "write_back");
     }
   );
 

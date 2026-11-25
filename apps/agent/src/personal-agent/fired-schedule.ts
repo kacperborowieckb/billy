@@ -23,6 +23,7 @@ import {
 } from "./fired-scheduled-task.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
+import { TurnProgress } from "./turn-progress.ts";
 import { settleFromJournal } from "./turn-recovery.ts";
 import { sideSession } from "./turn-session.ts";
 import type { TurnSession } from "./turn-session.ts";
@@ -140,8 +141,12 @@ export const handleFiredSchedule = Effect.fnUntraced(
     const schedules = yield* Schedules;
     const schedule = yield* schedules.byId(event.scheduleId);
 
+    const progress = yield* TurnProgress;
     const session = sideSession(
-      yield* writeBackMarkerOf(behavior, event, schedule)
+      yield* progress.keepWriteBackMarker(
+        event.eventId,
+        yield* writeBackMarkerOf(behavior, event, schedule)
+      )
     );
 
     yield* recover({ ownerId, behavior, event, schedule });

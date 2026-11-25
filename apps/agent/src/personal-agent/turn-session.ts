@@ -109,22 +109,23 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
   text,
 }: SentRun) {
   const conversation = yield* Conversation;
+  const heldUntrustedContent = holdsUntrustedContent([
+    turnContext,
+    inputs,
+    steps,
+    text,
+  ]);
   yield* conversation.append({
     eventId,
     recordedAs,
     rows: [
       {
-        kind: "write_back",
+        kind: heldUntrustedContent ? "write_back_stub" : "write_back",
         message: writeBackMessageOf({
           marker,
           text,
           steps,
-          heldUntrustedContent: holdsUntrustedContent([
-            turnContext,
-            inputs,
-            steps,
-            text,
-          ]),
+          heldUntrustedContent,
         }),
       },
     ],

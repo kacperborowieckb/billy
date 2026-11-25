@@ -284,7 +284,7 @@ describe(
       ]);
       const writeBack = await rowsOf<{ message: string }>(
         ownerId,
-        "SELECT message FROM conversation_messages WHERE kind = 'write_back'"
+        "SELECT message FROM conversation_messages WHERE kind LIKE 'write_back%'"
       );
       scriptModel([setReminder("Gift for Ana"), { say: "This waits." }]);
 
@@ -292,6 +292,12 @@ describe(
       await waitForSends(4);
 
       expect(writeBack).toHaveLength(1);
+      expect(
+        await rowsOf(
+          ownerId,
+          "SELECT kind FROM conversation_messages WHERE kind = 'write_back_stub'"
+        )
+      ).toHaveLength(1);
       expect(writeBack[0]?.message).toContain(
         "sent to the Owner. Text removed from the history"
       );

@@ -21,13 +21,7 @@ import {
   toolOutputsOf,
 } from "./conversation-stubs.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
-
-export type WriteBackKind =
-  | "Brief"
-  | "Follow-up"
-  | "Scheduled Task"
-  | "Reminder"
-  | "Schedule";
+import type { WriteBackKind } from "./storage-values.ts";
 
 export interface WriteBackMarker {
   readonly kind: WriteBackKind;
@@ -126,6 +120,16 @@ interface SucceededCall {
   readonly output: ToolOutput;
 }
 
+const RepeatedChangeOutput = Schema.Union([
+  Schema.Struct({ alreadySet: Schema.Literal(true) }),
+  Schema.Struct({ alreadyClosed: Schema.Literal(true) }),
+]);
+
+const isRepeatedChangeOutput = Schema.is(RepeatedChangeOutput);
+
+const changedSomething = (output: ToolOutput) =>
+  !(output.type === "json" && isRepeatedChangeOutput(output.value));
+
 const succeededCallsOf = (steps: readonly ModelMessage[]) => {
   const outputs = toolOutputsOf(steps);
   return steps.flatMap((message) =>
@@ -143,7 +147,10 @@ const succeededCallsOf = (steps: readonly ModelMessage[]) => {
 const runLineOf = (steps: readonly ModelMessage[]) => {
   const succeeded = succeededCallsOf(steps);
   const changes = succeeded
-    .filter(({ call }) => !readToolNames.has(call.toolName))
+    .filter(
+      ({ call, output }) =>
+        !readToolNames.has(call.toolName) && changedSomething(output)
+    )
     .map(({ call, output }) => changeTextOf(call.toolName, output));
   const sources = [
     ...new Set(
@@ -180,7 +187,3 @@ export const writeBackMessageOf = ({
     ...runLineOf(steps),
   ].join("\n"),
 });
-
-export const writeBackHoldsSentText = (message: ModelMessage) =>
-  typeof message.content === "string" &&
-  !(message.content.split("\n", 1)[0] ?? "").endsWith(`] ${sentTextRemoved}`);
