@@ -84,6 +84,12 @@ const compactionUsageRows = (ownerId: string) =>
     "SELECT task, event_id FROM model_usage WHERE task = 'compaction'"
   );
 
+const refusedBlockRows = (ownerId: string) =>
+  query<{ last_compacted_sequence: number }>(
+    ownerId,
+    "SELECT last_compacted_sequence FROM refused_compaction_blocks"
+  );
+
 const decodeStoredMessage = Schema.decodeUnknownSync(ModelMessageJsonSchema);
 
 const textOf = (row: StoredRow) => {
@@ -107,6 +113,11 @@ const summary = (text: string, outputTokens = 300): ScriptedModelStep => ({
   say: text,
   outputTokens,
 });
+
+const overLimitSummary = summary(
+  "A very long Summary.",
+  defaultBehaviorConfig.maxSummaryTokens + 1
+);
 
 const fourTurnsOverTheLimit = [
   reply("First answer", 2000),
@@ -204,6 +215,9 @@ describe("Compaction", () => {
       compactionInstructions(defaultBehaviorConfig.maxSummaryTokens)
     );
     expect(compactionCall.tools ?? []).toEqual([]);
+    expect(compactionCall.maxOutputTokens).toBe(
+      defaultBehaviorConfig.maxSummaryTokens
+    );
     const data = compactionDataOf(compactionCall);
     expect(data.earlierSummary).toBeNull();
     expect(JSON.stringify(data.chat)).toContain("first message");
@@ -357,22 +371,73 @@ describe("Compaction", () => {
     await waitForSummaries(ownerId, 1);
   }, 30_000);
 
-  it("refuses a Summary above the size limit", async () => {
+  it("asks again for a shorter Summary when the first one is over the size limit, and writes the second one", async () => {
     const ownerId = await ownerInWarsaw(8806);
     scriptModel([
       ...fourTurnsOverTheLimit,
-      summary(
-        "A very long Summary.",
-        defaultBehaviorConfig.maxSummaryTokens + 1
-      ),
+      overLimitSummary,
+      summary("They talked about A."),
     ]);
     await chatFourTurns(8806);
-    await waitForModelCalls(5);
+    const rows = await waitForSummaries(ownerId, 1);
 
-    await vi.waitFor(async () =>
-      expect(await compactionUsageRows(ownerId)).toHaveLength(1)
+    expect(systemTextOf(call(4).prompt)).toBe(
+      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens)
+    );
+    expect(systemTextOf(call(5).prompt)).toBe(
+      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens / 2)
+    );
+    expect(call(5).maxOutputTokens).toBe(
+      defaultBehaviorConfig.maxSummaryTokens
+    );
+    expect(compactionDataOf(call(5))).toEqual(compactionDataOf(call(4)));
+    const summaryRow = rows.find((row) => row.kind === "summary");
+    expect(summaryRow === undefined ? "" : textOf(summaryRow)).toBe(
+      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
+    );
+    expect(await compactionUsageRows(ownerId)).toEqual([
+      { task: "compaction", event_id: summaryRow?.event_id },
+      { task: "compaction", event_id: summaryRow?.event_id },
+    ]);
+  });
+
+  it("refuses a Summary over the size limit twice, makes no call for the same block again, and compacts when the block changes", async () => {
+    const ownerId = await ownerInWarsaw(8813);
+    scriptModel([
+      reply("First answer", 2000),
+      reply("Second answer", 9000),
+      reply("Third answer", 25_000),
+      reply("Fourth answer", 31_000),
+      overLimitSummary,
+      overLimitSummary,
+      reply("Fifth answer", 32_000),
+      reply("Sixth answer", 40_000),
+      summary("They talked about A and B."),
+    ]);
+    await chatFourTurns(8813);
+    await vi.waitFor(
+      async () =>
+        expect(await refusedBlockRows(ownerId)).toEqual([
+          { last_compacted_sequence: expect.any(Number) },
+        ]),
+      { timeout: 10_000 }
     );
     expect(await compactedOrSummaryRows(ownerId)).toEqual([]);
+
+    await ownerSays(8813, "fifth message", 5);
+    await ownerSays(8813, "sixth message", 6);
+    const rows = await waitForSummaries(ownerId, 1);
+
+    expect(fakeModel.doGenerateCalls).toHaveLength(9);
+    expect(lastUserTextOf(call(6).prompt)).toContain("fifth message");
+    expect(lastUserTextOf(call(7).prompt)).toContain("sixth message");
+    expect(await compactionUsageRows(ownerId)).toHaveLength(3);
+    const data = compactionDataOf(call(8));
+    expect(JSON.stringify(data.chat)).toContain("fifth message");
+    expect(JSON.stringify(data.chat)).not.toContain("sixth message");
+    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
+      `${summaryLabel}\nThey talked about A and B.\n${summaryEndLabel}`,
+    ]);
   });
 
   it("writes nothing after a reset during the call, and runs again at the next check", async () => {

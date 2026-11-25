@@ -97,6 +97,18 @@ export const conversationMessages = sqliteTable(
   ]
 );
 
+export const refusedCompactionBlocks = sqliteTable(
+  "refused_compaction_blocks",
+  {
+    slot: integer("slot").primaryKey(),
+    lastCompactedSequence: integer("last_compacted_sequence").notNull(),
+    refusedAt: text("refused_at").notNull(),
+  },
+  (table) => [
+    check("refused_compaction_blocks_one_row", sql`${table.slot} = 0`),
+  ]
+);
+
 export const conversationRecordedEvents = sqliteTable(
   "conversation_recorded_events",
   { eventId: text("event_id").primaryKey() }

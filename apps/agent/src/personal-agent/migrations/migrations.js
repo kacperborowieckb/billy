@@ -36,6 +36,7 @@ import m0034 from "./20261125062351_prefix_cache_sessions/migration.sql";
 import m0035 from "./20261125063905_prefix_cache_sessions_task_not_null/migration.sql";
 import m0036 from "./20261125072556_trace_request_parts/migration.sql";
 import m0037 from "./20261125072602_trace_retention_trigger/migration.sql";
+import m0038 from "./20261125152925_refused_compaction_blocks/migration.sql";
 
 export default {
   migrations: {
@@ -77,5 +78,6 @@ export default {
     "20261125063905_prefix_cache_sessions_task_not_null": m0035,
     "20261125072556_trace_request_parts": m0036,
     "20261125072602_trace_retention_trigger": m0037,
+    "20261125152925_refused_compaction_blocks": m0038,
   },
 };
