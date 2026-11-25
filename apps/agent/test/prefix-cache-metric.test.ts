@@ -204,6 +204,24 @@ describe("Hit Rate metric of each model step", () => {
   }, 30_000);
 });
 
+describe("Prefix cache sessions table", () => {
+  it("refuses a row with no task", async () => {
+    const ownerId = await addOwner(9306);
+    await ownerSays(9306, "hello", 1);
+
+    const insertWithoutTask = async () =>
+      runInDurableObject(
+        await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
+        (_, state) =>
+          state.storage.sql.exec(
+            "INSERT INTO prefix_cache_sessions (task, last_call_at_millis, system_hash, tools_hash, owner_context_hash) VALUES (NULL, 0, 's', 't', 'o')"
+          )
+      );
+
+    await expect(insertWithoutTask()).rejects.toThrow(/NOT NULL/u);
+  });
+});
+
 describe("Planned miss of step 1", () => {
   const prefix = {
     systemHash: "system-1",

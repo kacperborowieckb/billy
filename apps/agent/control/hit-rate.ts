@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import { turnModelTasks } from "../src/personal-agent/storage-values.ts";
 import {
@@ -66,14 +66,18 @@ const loopbackHosts: ReadonlySet<string> = new Set([
   "[::1]",
 ]);
 
-const tokenMayGoTo = (apiBaseUrl: string) => {
-  const url = URL.parse(apiBaseUrl);
-  return (
-    url !== null &&
-    (url.protocol === "https:" ||
-      (url.protocol === "http:" && loopbackHosts.has(url.hostname)))
-  );
-};
+const TokenSafeApiUrl = Schema.URLFromString.pipe(
+  Schema.check(
+    Schema.makeFilter(
+      (url: URL) =>
+        url.protocol === "https:" ||
+        (url.protocol === "http:" && loopbackHosts.has(url.hostname))
+    )
+  )
+);
+
+const tokenMayGoTo = (apiBaseUrl: string) =>
+  Option.isSome(Schema.decodeUnknownOption(TokenSafeApiUrl)(apiBaseUrl));
 
 const invalid = (reason: string): HitRateSourceResult => ({
   _tag: "Invalid",

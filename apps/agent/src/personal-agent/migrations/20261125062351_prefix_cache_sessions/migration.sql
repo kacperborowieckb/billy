@@ -1,5 +1,5 @@
 CREATE TABLE `prefix_cache_sessions` (
-	`task` text PRIMARY KEY NOT NULL,
+	`task` text PRIMARY KEY,
 	`last_call_at_millis` integer NOT NULL,
 	`system_hash` text NOT NULL,
 	`tools_hash` text NOT NULL,
