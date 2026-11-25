@@ -86,7 +86,10 @@ export const recordSessionSteps = Effect.fnUntraced(
       { discard: true }
     );
     yield* sessions.recordCall(task, prefix, lastStep.calledAtMillis);
-  }
+  },
+  Effect.catchCause(() =>
+    Effect.logWarning("The model step metrics could not be recorded")
+  )
 );
 
 interface TurnSteps<Failure, Requirements> {

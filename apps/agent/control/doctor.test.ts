@@ -213,6 +213,54 @@ describe("doctor Hit Rate check", () => {
     );
   });
 
+  it.each([
+    {
+      name: "an API address with plain http",
+      environment: {
+        CLOUDFLARE_API_BASE_URL: "http://cloudflare.example/client/v4",
+      },
+      dataset: "assistant_operator_metrics",
+      reason: "CLOUDFLARE_API_BASE_URL must use https",
+    },
+    {
+      name: "a binding with no dataset",
+      environment: {},
+      dataset: undefined,
+      reason: "the OPERATOR_METRICS binding in wrangler.jsonc has no dataset",
+    },
+  ])(
+    "fails with no request for $name",
+    async ({ environment, dataset, reason }) => {
+      const requests: Request[] = [];
+      const hitRate = await Effect.runPromise(
+        readHitRate(
+          hitRateSourceOf(
+            {
+              CLOUDFLARE_ACCOUNT_ID: "account-1",
+              CLOUDFLARE_API_TOKEN: "value-of-cloudflare-api-token-5d1e",
+              ...environment,
+            },
+            dataset,
+            (input, init) => {
+              requests.push(new Request(input, init));
+              return Promise.resolve(metricAnswer([]));
+            }
+          )
+        )
+      );
+      const diagnosis = {
+        ...diagnose(instanceWith({ devVars: secretValues })),
+        hitRate,
+      };
+
+      expect(requests).toEqual([]);
+      expect(isHealthy(diagnosis)).toBe(false);
+      expect(renderDiagnosis(diagnosis)).toContain(
+        `problem  The Operator metric could not be read: ${reason}`
+      );
+    }
+  );
+
   it("reads the dataset of the Operator metric from the Wrangler config", () => {
     expect(operatorMetricsDatasetOf(wranglerConfigPath)).toBe(
       "assistant_operator_metrics"

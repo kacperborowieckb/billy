@@ -51,15 +51,40 @@ export interface HitRateFinding {
 
 const defaultApiBaseUrl = "https://api.cloudflare.com/client/v4";
 
-const datasetName = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^[a-z0-9_]+$/u))
+export type HitRateSourceResult =
+  | { readonly _tag: "NotConfigured" }
+  | { readonly _tag: "Invalid"; readonly reason: string }
+  | { readonly _tag: "Ready"; readonly source: HitRateSource };
+
+const isDatasetName = Schema.is(
+  Schema.String.pipe(Schema.check(Schema.isPattern(/^[a-z0-9_]+$/u)))
 );
+
+const loopbackHosts: ReadonlySet<string> = new Set([
+  "127.0.0.1",
+  "localhost",
+  "[::1]",
+]);
+
+const tokenMayGoTo = (apiBaseUrl: string) => {
+  const url = URL.parse(apiBaseUrl);
+  return (
+    url !== null &&
+    (url.protocol === "https:" ||
+      (url.protocol === "http:" && loopbackHosts.has(url.hostname)))
+  );
+};
+
+const invalid = (reason: string): HitRateSourceResult => ({
+  _tag: "Invalid",
+  reason,
+});
 
 export const hitRateSourceOf = (
   environment: Readonly<Record<string, string | undefined>>,
-  dataset: string,
+  dataset: string | undefined,
   fetchImplementation: typeof fetch = fetch
-): HitRateSource | undefined => {
+): HitRateSourceResult => {
   const accountId = environment.CLOUDFLARE_ACCOUNT_ID;
   const apiToken = environment.CLOUDFLARE_API_TOKEN;
   if (
@@ -68,14 +93,28 @@ export const hitRateSourceOf = (
     apiToken === undefined ||
     apiToken === ""
   ) {
-    return undefined;
+    return { _tag: "NotConfigured" };
+  }
+  if (dataset === undefined || !isDatasetName(dataset)) {
+    return invalid(
+      "the OPERATOR_METRICS binding in wrangler.jsonc has no dataset name of lowercase letters, digits, and underscores"
+    );
+  }
+  const apiBaseUrl = environment.CLOUDFLARE_API_BASE_URL ?? defaultApiBaseUrl;
+  if (!tokenMayGoTo(apiBaseUrl)) {
+    return invalid(
+      "CLOUDFLARE_API_BASE_URL must use https (http only for a loopback address)"
+    );
   }
   return {
-    accountId,
-    apiToken,
-    apiBaseUrl: environment.CLOUDFLARE_API_BASE_URL ?? defaultApiBaseUrl,
-    dataset: Schema.decodeUnknownSync(datasetName)(dataset),
-    fetch: fetchImplementation,
+    _tag: "Ready",
+    source: {
+      accountId,
+      apiToken,
+      apiBaseUrl,
+      dataset,
+      fetch: fetchImplementation,
+    },
   };
 };
 
@@ -128,37 +167,47 @@ const measuredOf = (rows: typeof HitRateRowsSchema.Type): HitRateResult => {
   };
 };
 
-export const readHitRate = (source: HitRateSource | undefined) =>
-  source === undefined
-    ? Effect.succeed<HitRateResult>({ _tag: "NotConfigured" })
-    : Effect.tryPromise(async () => {
-        const response = await source.fetch(
-          `${source.apiBaseUrl}/accounts/${source.accountId}/analytics_engine/sql`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${source.apiToken}` },
-            body: hitRateQuery(source.dataset),
-          }
-        );
-        return response.ok
-          ? {
-              status: response.status,
-              body: (await response.json()) as unknown,
-            }
-          : { status: response.status, body: undefined };
-      }).pipe(
-        Effect.flatMap(({ status, body }) =>
-          body === undefined
-            ? Effect.succeed(unreadable(`HTTP ${status}`))
-            : Schema.decodeUnknownEffect(HitRateRowsSchema)(body).pipe(
-                Effect.map(measuredOf),
-                Effect.orElseSucceed(() =>
-                  unreadable("the answer has an unknown shape")
-                )
-              )
-        ),
-        Effect.orElseSucceed(() => unreadable("the request failed"))
-      );
+const queryHitRate = (source: HitRateSource) =>
+  Effect.tryPromise(async () => {
+    const response = await source.fetch(
+      `${source.apiBaseUrl}/accounts/${source.accountId}/analytics_engine/sql`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${source.apiToken}` },
+        body: hitRateQuery(source.dataset),
+      }
+    );
+    return response.ok
+      ? {
+          status: response.status,
+          body: (await response.json()) as unknown,
+        }
+      : { status: response.status, body: undefined };
+  }).pipe(
+    Effect.flatMap(({ status, body }) =>
+      body === undefined
+        ? Effect.succeed(unreadable(`HTTP ${status}`))
+        : Schema.decodeUnknownEffect(HitRateRowsSchema)(body).pipe(
+            Effect.map(measuredOf),
+            Effect.orElseSucceed(() =>
+              unreadable("the answer has an unknown shape")
+            )
+          )
+    ),
+    Effect.orElseSucceed(() => unreadable("the request failed"))
+  );
+
+export const readHitRate = (
+  configured: HitRateSourceResult
+): Effect.Effect<HitRateResult> => {
+  if (configured._tag === "NotConfigured") {
+    return Effect.succeed({ _tag: "NotConfigured" });
+  }
+  if (configured._tag === "Invalid") {
+    return Effect.succeed(unreadable(configured.reason));
+  }
+  return queryHitRate(configured.source);
+};
 
 const percent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
 

@@ -98,9 +98,11 @@ const retryingModelCalls = (
     model,
     middleware: {
       wrapGenerate: async ({ params }) => {
-        onCallStarted();
         const attempt = Effect.tryPromise({
-          try: (abortSignal) => model.doGenerate({ ...params, abortSignal }),
+          try: (abortSignal) => {
+            onCallStarted();
+            return model.doGenerate({ ...params, abortSignal });
+          },
           catch: (cause) => new ModelCallFailed({ cause }),
         }).pipe(
           Effect.timeoutOrElse({

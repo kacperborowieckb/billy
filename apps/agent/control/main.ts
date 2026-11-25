@@ -44,9 +44,7 @@ const doctor = Command.make("doctor", {}, () =>
     const dataset = yield* Effect.sync(() =>
       operatorMetricsDatasetOf(wranglerConfigPath)
     );
-    const hitRate = yield* readHitRate(
-      dataset === undefined ? undefined : hitRateSourceOf(process.env, dataset)
-    );
+    const hitRate = yield* readHitRate(hitRateSourceOf(process.env, dataset));
     const diagnosis = { ...configured, hitRate };
     yield* Console.log(renderDiagnosis(diagnosis));
     yield* exitWithFailureWhen(!isHealthy(diagnosis));

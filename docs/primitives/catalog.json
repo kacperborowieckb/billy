@@ -245,7 +245,8 @@
         "docs/decisions/0001-repository-foundation.md",
         "docs/decisions/0002-agent-authority.md",
         "docs/decisions/0011-eval-runner.md",
-        "docs/decisions/0012-eval-owners-and-judge-evidence.md"
+        "docs/decisions/0012-eval-owners-and-judge-evidence.md",
+        "docs/decisions/0033-prompt-and-conversation-architecture.md"
       ]
     },
     {

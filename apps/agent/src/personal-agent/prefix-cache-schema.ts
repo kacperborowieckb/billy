@@ -7,7 +7,7 @@ import { historyBreaks, sessionTasks } from "./storage-values.ts";
 export const prefixCacheSessions = sqliteTable(
   "prefix_cache_sessions",
   {
-    task: text("task", { enum: sessionTasks }).primaryKey(),
+    task: text("task", { enum: sessionTasks }).notNull().primaryKey(),
     lastCallAtMillis: integer("last_call_at_millis").notNull(),
     systemHash: text("system_hash").notNull(),
     toolsHash: text("tools_hash").notNull(),

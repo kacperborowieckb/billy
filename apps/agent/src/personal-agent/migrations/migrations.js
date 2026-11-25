@@ -32,7 +32,7 @@ import m0030 from "./20261124202916_conversation_layout/migration.sql";
 import m0031 from "./20261124225450_conversation_stubs/migration.sql";
 import m0032 from "./20261125011648_conversation_write_back/migration.sql";
 import m0033 from "./20261125013821_compaction/migration.sql";
-import m0034 from "./20261125043246_prefix_cache_sessions/migration.sql";
+import m0034 from "./20261125062351_prefix_cache_sessions/migration.sql";
 
 export default {
   migrations: {
@@ -70,6 +70,6 @@ export default {
     "20261124225450_conversation_stubs": m0031,
     "20261125011648_conversation_write_back": m0032,
     "20261125013821_compaction": m0033,
-    "20261125043246_prefix_cache_sessions": m0034,
+    "20261125062351_prefix_cache_sessions": m0034,
   },
 };

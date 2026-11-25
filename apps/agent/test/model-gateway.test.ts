@@ -278,6 +278,55 @@ describe("Model Gateway transport", () => {
     );
   });
 
+  it("records the start of the attempt that succeeded after a retry", async () => {
+    const callStarts: number[] = [];
+    const flakyModel = new MockLanguageModelV4({
+      doGenerate: () => {
+        callStarts.push(Date.now());
+        if (callStarts.length === 1) {
+          return Promise.reject(new Error("The model provider is down"));
+        }
+        return Promise.resolve({
+          content: [{ type: "text", text: "Hi there" }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: {
+            inputTokens: {
+              total: 10,
+              noCache: 10,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+            outputTokens: { total: 2, text: 2, reasoning: 0 },
+          },
+          warnings: [],
+        });
+      },
+    });
+
+    const reply = await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Hi" }],
+            trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
+            stepLimit: 1,
+          })
+        ),
+        Effect.provide(gatewayWith(flakyModel))
+      )
+    );
+
+    const [firstAttempt, secondAttempt] = callStarts;
+    expect(callStarts).toHaveLength(2);
+    expect(reply.steps[0]?.calledAtMillis).toBeGreaterThan(firstAttempt ?? 0);
+    expect(reply.steps[0]?.calledAtMillis).toBeLessThanOrEqual(
+      secondAttempt ?? 0
+    );
+  });
+
   it("does not repeat a successful model call when the usage write fails", async () => {
     resetFakes();
     const failingLedger = Layer.succeed(UsageLedger, {
