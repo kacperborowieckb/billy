@@ -120,7 +120,7 @@ Limits of the replay: it has no Compaction, no Stub, and no Profile change, so i
 
 Date: 2026-11-25. Code on `main` at `698c61a`, after all parts of #182. The repository owner approved this run on 2026-11-25 (decision 0002).
 
-Method: the same as Part B. A recording proxy on `127.0.0.1` with the stop at 2,000,000 input tokens, the real Worker in the wrangler test harness (`eval/worker.ts`, temporary local storage, the fake Telegram API), one Owner, and 12 Owner messages of the same kinds and order: time zone, two Captures, two Recalls, two Scheduled Tasks set for some minutes later, small talk, a move of the Brief, "less of this", a second move of the Brief, and a closed task. The driver waited until each Schedule fired, so the run has 2 Scheduled Task Turns and 2 Proactive Turns between the Owner message Turns. The texts are new synthetic texts, so the numbers of tokens are not the same as in Part B. No local values file was present, and the proxy was the only path to the gateway. Every call sent `x-session-affinity` and `cf-aig-skip-cache: true`.
+Method: the same as Part B. A recording proxy on `127.0.0.1` stopped all calls at 2,000,000 input tokens. The real Worker ran in the wrangler test harness (`eval/worker.ts`, temporary local storage, the fake Telegram API). One Owner sent 12 messages of the same kinds and in the same order as Part B. The messages were: time zone, two Captures, two Recalls, and two Scheduled Tasks set for some minutes later. Then small talk, a move of the Brief, "less of this", a second move of the Brief, and a closed task. The driver waited until each Schedule fired, so the run has 2 Scheduled Task Turns and 2 Proactive Turns between the Owner message Turns. The texts are new synthetic texts, so the numbers of tokens are not the same as in Part B. No local values file was present, and the proxy was the only path to the gateway. Every call sent `x-session-affinity` and `cf-aig-skip-cache: true`.
 
 33 model calls in 16 Turns.
 
@@ -150,7 +150,7 @@ Step 1 of the 12 Owner message Turns. The gap is the time from the end of the ea
 
 Turns 2 to 12: 126,325 input tokens, 123,968 cached, **98.1%**. Before the change: 48.9% in the run, and about 24% for Turns more than one minute apart. Predicted by the replay of Part C: 96.2%. The result is above the 90% of decision 0033, so the design stays.
 
-- The Turns 8, 9, 10, and 12 came 1.7 to 2.0 minutes after the earlier call of the main Conversation, with a Side Session between them, and hit 96.4% to 98.4%. Before the change, the same Turns hit 22% to 24%. A Side Session does not change the prefix of the main Conversation.
+- The Turns 8, 9, 10, and 12 came 1.7 to 2.0 minutes after the earlier call of the main Conversation. A Side Session ran between them. They hit 96.4% to 98.4%. Before the change, the same Turns hit 22% to 24%. A Side Session does not change the prefix of the main Conversation.
 - Turn 1 was not cold. A test of the driver at about 08:20 UTC sent the same system text and tool definitions some minutes before (see the cost). The system message and the tool definitions do not depend on the Owner, so the cache of one Owner serves another. A cold call of a new kind reads only the shared 2,432 tokens, as the first Side Session of each kind shows. The method leaves Turn 1 out, so the result does not change.
 - The step 1 Hit Rate of a Side Session is 40% to 91%. The first Side Session of each kind read only the 2,432 tokens that all kinds share. The second of each kind read 91%. Its Run block holds the current time and the recent messages, so the text after the Owner Context Block is new in each Side Session. Its later steps hit 94% to 96%.
 - The run has no Compaction, no Stub, and no Profile change after Turn 1, so it has none of the planned misses.
@@ -160,7 +160,7 @@ Turns 2 to 12: 126,325 input tokens, 123,968 cached, **98.1%**. Before the chang
 
 805,891 input tokens (572,288 cached) and 1,974 output tokens through the proxy: about $0.08 with the 5% fee of Unified Billing. A few diagnostic calls of some tokens each ran outside the proxy.
 
-Part D: 317,122 input tokens (304,960 cached) and 1,693 output tokens through the proxy: about $0.01 with the 5% fee. Outside the proxy: one check of the token (7 input tokens), and a test of the driver at about 08:20 to 08:21 UTC that was meant to use a fake model. A local values file was present and set the real gateway URL and token, so the Worker called the real gateway for 6 Owner messages, with no record and no stop. Estimated cost: less than $0.05. The run of Part D had no local values file.
+Part D: 317,122 input tokens (304,960 cached) and 1,693 output tokens through the proxy: about $0.01 with the 5% fee. Outside the proxy, one check of the token used 7 input tokens. A test of the driver at about 08:20 to 08:21 UTC was meant to use a fake model. But a local values file was present and set the real gateway URL and token. So the Worker called the real gateway for 6 Owner messages, with no record and no stop. Estimated cost: less than $0.05. The run of Part D had no local values file.
 
 ## Notes for later work
 
