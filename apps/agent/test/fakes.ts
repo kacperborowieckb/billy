@@ -2,7 +2,8 @@ import { MockLanguageModelV4 } from "ai/test";
 
 import {
   ownerContextLabel,
-  textAfterTurnContext,
+  runBlockLabel,
+  textAfterContextBlock,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { burstMessageLabel } from "../src/personal-agent/event-message.ts";
@@ -273,7 +274,9 @@ const lastOwnerText = (
   prompt: MockLanguageModelV4["doGenerateCalls"][number]["prompt"]
 ) => {
   const message = prompt.findLast((candidate) => candidate.role === "user");
-  return message === undefined ? "" : textAfterTurnContext(userTextOf(message));
+  return message === undefined
+    ? ""
+    : textAfterContextBlock(userTextOf(message));
 };
 
 export interface ScriptedToolCall {
@@ -313,8 +316,8 @@ export const systemTextOf = (prompt: ModelPrompt) => {
 };
 
 const blockOf = (text: string) =>
-  text.startsWith(turnContextLabel)
-    ? text.slice(0, text.length - textAfterTurnContext(text).length)
+  text.startsWith(turnContextLabel) || text.startsWith(runBlockLabel)
+    ? text.slice(0, text.length - textAfterContextBlock(text).length)
     : text;
 
 export const contextBlockOf = (prompt: ModelPrompt, label: string) =>
@@ -326,13 +329,14 @@ export const ownerTextsOf = (prompt: ModelPrompt) =>
   prompt
     .map(userTextOf)
     .filter((text) => text !== "" && !text.startsWith(ownerContextLabel))
-    .map(textAfterTurnContext);
+    .map(textAfterContextBlock);
 
 export const instructionsAndContextOf = (prompt: ModelPrompt) =>
   [
     systemTextOf(prompt),
     contextBlockOf(prompt, ownerContextLabel),
     contextBlockOf(prompt, turnContextLabel),
+    contextBlockOf(prompt, runBlockLabel),
   ].join("\n");
 
 const lastToolOutput = (prompt: ModelPrompt): Record<string, unknown> => {

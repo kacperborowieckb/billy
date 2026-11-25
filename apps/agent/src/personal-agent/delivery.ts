@@ -12,7 +12,7 @@ import { lastOf, latestPlanOf, textPlanOf } from "./delivery-plans.ts";
 import { sendPlanned } from "./delivery-send.ts";
 import { Inbox } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
-import { replied, storeFinishedTurn } from "./stored-turn.ts";
+import type { TurnSession } from "./turn-session.ts";
 
 export const honestFailureText =
   "Sorry, I could not answer that. Please try again in a moment.";
@@ -165,38 +165,45 @@ export const fail = Effect.fnUntraced(function* fail(
   yield* inbox.markFailed([event]);
 });
 
-export const rememberFailureNotice = (event: InboxEvent, text: string) =>
-  event._tag === "ScheduleFired"
-    ? storeFinishedTurn({
-        eventId: event.eventId,
-        recordedAs: `${event.eventId}:failure-notice`,
-        inputs: [],
-        steps: [],
-        ending: replied(text),
-      })
-    : Effect.void;
+interface FailureNotice {
+  readonly event: InboxEvent;
+  readonly session: TurnSession;
+  readonly text: string;
+  readonly replyTo?: InboxEvent | undefined;
+}
 
-export const sendFailureNotice = Effect.fnUntraced(function* sendFailureNotice(
-  event: InboxEvent,
-  text: string = honestFailureText,
-  replyTo: InboxEvent = event
-) {
+export const sendFailureNotice = Effect.fnUntraced(function* sendFailureNotice({
+  event,
+  session,
+  text,
+  replyTo = event,
+}: FailureNotice) {
   const inbox = yield* Inbox;
 
   const delivery = yield* send(event, text, replyTo);
   if (delivery._tag !== "Failed") {
-    yield* rememberFailureNotice(event, text);
+    yield* session.rememberFailureNotice(event.eventId, text);
   }
   yield* inbox.markFailed([event]);
 });
 
-export const failWithNotice = Effect.fnUntraced(function* failWithNotice(
-  event: InboxEvent,
-  reason: string,
-  replyTo: InboxEvent = event
-) {
+interface NoticedFailure extends Omit<FailureNotice, "text"> {
+  readonly reason: string;
+}
+
+export const failWithNotice = Effect.fnUntraced(function* failWithNotice({
+  event,
+  session,
+  reason,
+  replyTo,
+}: NoticedFailure) {
   yield* recordFailure(event, reason);
-  yield* sendFailureNotice(event, honestFailureText, replyTo);
+  yield* sendFailureNotice({
+    event,
+    session,
+    text: honestFailureText,
+    replyTo,
+  });
 });
 
 export const recordUnconfirmedSend = (event: InboxEvent) =>

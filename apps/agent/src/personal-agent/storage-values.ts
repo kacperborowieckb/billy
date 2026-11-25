@@ -18,6 +18,7 @@ export const conversationRowKinds = [
   "input",
   "step",
   "reply",
+  "write_back",
   "approval_status",
 ] as const;
 

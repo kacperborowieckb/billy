@@ -16,7 +16,7 @@ import {
 } from "../src/notes/capture-note-tool.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
-import { textAfterTurnContext } from "../src/personal-agent/context-labels.ts";
+import { textAfterContextBlock } from "../src/personal-agent/context-labels.ts";
 import { Conversation } from "../src/personal-agent/conversation.ts";
 import { Inbox } from "../src/personal-agent/inbox.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
@@ -210,7 +210,7 @@ describe("A Turn answers a burst of Owner messages", () => {
       typeof message.content === "string" ? message.content : ""
     );
     expect(contents[0]).toMatch(/^\[Turn context\]/u);
-    expect(contents.map(textAfterTurnContext)).toEqual([
+    expect(contents.map(textAfterContextBlock)).toEqual([
       ...burstInputTexts(...burstTexts),
       expect.anything(),
     ]);

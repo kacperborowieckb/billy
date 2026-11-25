@@ -2,7 +2,8 @@ import { Schema } from "effect";
 
 import {
   ownerContextLabel,
-  textAfterTurnContext,
+  runBlockLabel,
+  textAfterContextBlock,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 
@@ -19,7 +20,7 @@ export const lastOwnerText = (
   const content = messages.findLast(
     (message) => message.role === "user"
   )?.content;
-  return typeof content === "string" ? textAfterTurnContext(content) : "";
+  return typeof content === "string" ? textAfterContextBlock(content) : "";
 };
 
 const textContentOf = (content: unknown) =>
@@ -43,6 +44,7 @@ export const instructionsAndContextOf = (
     ),
     latestContextBlock(messages, ownerContextLabel),
     latestContextBlock(messages, turnContextLabel),
+    latestContextBlock(messages, runBlockLabel),
   ].join("\n");
 
 export const toolResultOf = (

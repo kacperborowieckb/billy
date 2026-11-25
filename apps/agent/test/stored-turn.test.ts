@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { untrustedContentOpening } from "../src/notes/note.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
-import { textAfterTurnContext } from "../src/personal-agent/context-labels.ts";
+import { textAfterContextBlock } from "../src/personal-agent/context-labels.ts";
 import { untrustedContentStub } from "../src/personal-agent/conversation-stubs.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import {
@@ -135,8 +135,8 @@ const storedOnBothPaths = async ({
   };
 };
 
-const textAfterTurnContextOf = (row: string | undefined) =>
-  textAfterTurnContext(JSON.parse(row ?? "{}").content);
+const textAfterContextBlockOf = (row: string | undefined) =>
+  textAfterContextBlock(JSON.parse(row ?? "{}").content);
 
 beforeEach(() => {
   resetFakes();
@@ -180,9 +180,9 @@ describe("The stored form of a Turn", { timeout: 30_000 }, () => {
     ]);
     expect(normal.join("\n")).not.toContain(untrustedContentOpening);
     expect(normal.join("\n")).not.toContain("100 zloty");
-    expect(textAfterTurnContextOf(normal[0])).toContain(untrustedContentStub);
-    expect(textAfterTurnContextOf(recovered[0])).toBe(
-      textAfterTurnContextOf(normal[0])
+    expect(textAfterContextBlockOf(normal[0])).toContain(untrustedContentStub);
+    expect(textAfterContextBlockOf(recovered[0])).toBe(
+      textAfterContextBlockOf(normal[0])
     );
     expect(recovered.slice(1)).toEqual(normal.slice(1));
   });

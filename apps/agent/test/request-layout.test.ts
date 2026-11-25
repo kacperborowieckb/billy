@@ -8,7 +8,7 @@ import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
 import {
   ownerContextLabel,
-  textAfterTurnContext,
+  textAfterContextBlock,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
@@ -96,7 +96,7 @@ describe("The request of an Owner message Turn", () => {
     const newOwnerMessage = lastUserTextOf(laterTurn.prompt);
     expect(laterMessages).toHaveLength(earlierMessages.length + 2);
     expect(newOwnerMessage.startsWith(turnContextLabel)).toBe(true);
-    expect(textAfterTurnContext(newOwnerMessage)).toBe("thanks");
+    expect(textAfterContextBlock(newOwnerMessage)).toBe("thanks");
   });
 
   it("stores the Owner message with its Turn Context Block at the start, as it was sent", async () => {

@@ -34,6 +34,7 @@ import {
   resetFakes,
   scriptModel,
   instructionsAndContextOf,
+  ownerTextsOf,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
@@ -227,12 +228,14 @@ describe("the system prompt of a Scheduled Task Turn", () => {
       DateTime.zoneMakeNamedUnsafe("Europe/Warsaw")
     );
     expect(instructionsAndContext).toContain("The Owner is not present.");
-    expect(instructionsAndContext).toContain(`set at ${setAt} (Europe/Warsaw)`);
+    expect(instructionsAndContext).toContain(
+      `set this Schedule at ${setAt} (Europe/Warsaw)`
+    );
   });
 });
 
 describe("the Conversation history of a Scheduled Task", () => {
-  it("gives the next reply Turn the prompt and the result", async () => {
+  it("gives the next reply Turn the result as a Write-back and not the stored prompt", async () => {
     const ownerId = await ownerInWarsaw(9405);
     await seedScheduledTask(ownerId);
     await fireTheAlarm(ownerId);
@@ -244,15 +247,15 @@ describe("the Conversation history of a Scheduled Task", () => {
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
     const messages = JSON.stringify(lastModelCall().prompt);
-    expect(messages).toContain(prompt);
-    expect(messages).toContain(`You said: ${prompt}`);
+    expect(messages).toContain(`] You said: ${prompt}`);
+    expect(ownerTextsOf(lastModelCall().prompt)).not.toContain(prompt);
   });
 });
 
 const jsonTextOf = (text: string) => JSON.stringify(text).slice(1, -1);
 
 describe("the Conversation history of a skipped or failed Scheduled Task", () => {
-  it("gives the next reply Turn the prompt and the skip notice", async () => {
+  it("gives the next reply Turn the skip notice as a Write-back and not the stored prompt", async () => {
     const ownerId = await ownerInWarsaw(9450);
     await recordUsage(ownerId, "scheduled_task", scheduledTaskDailyTokenBudget);
     await seedScheduledTask(ownerId);
@@ -265,8 +268,8 @@ describe("the Conversation history of a skipped or failed Scheduled Task", () =>
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
     const messages = JSON.stringify(lastModelCall().prompt);
-    expect(messages).toContain(prompt);
-    expect(messages).toContain(jsonTextOf(skipMessage));
+    expect(messages).toContain(jsonTextOf(`] ${skipMessage}`));
+    expect(ownerTextsOf(lastModelCall().prompt)).not.toContain(prompt);
   });
 
   it("gives the next reply Turn the failure notice", async () => {
@@ -343,7 +346,7 @@ describe("the Conversation history of a skipped or failed Scheduled Task", () =>
     );
   });
 
-  it("saves no secret from the prompt when the reset comes after the confirmed send of a skip notice", async () => {
+  it("saves no prompt and no secret when the reset comes after the confirmed send of a skip notice", async () => {
     const ownerId = await ownerInWarsaw(9455);
     const schedule = await seedSecretPrompt(ownerId);
     await inAgent(ownerId, storeDueScheduleEvents);
@@ -389,8 +392,8 @@ describe("the Conversation history of a skipped or failed Scheduled Task", () =>
           .map((row) => row.message)
           .join(" ")
       );
-    await vi.waitFor(async () => expect(await saved()).toContain("skipped"));
-    expect(await saved()).toContain(redactedMark);
+    await vi.waitFor(async () => expect(await saved()).toContain("] skipped"));
+    expect(await saved()).not.toContain("check");
     expect(await saved()).not.toContain(env.TELEGRAM_BOT_TOKEN);
   });
 
@@ -424,8 +427,8 @@ describe("the Conversation history of a skipped or failed Scheduled Task", () =>
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3));
     const messages = JSON.stringify(lastModelCall().prompt);
-    expect(messages).toContain(prompt);
-    expect(messages).toContain(jsonTextOf(skipMessage));
+    expect(messages).toContain(jsonTextOf(`] ${skipMessage}`));
+    expect(ownerTextsOf(lastModelCall().prompt)).not.toContain(prompt);
   });
 });
 
@@ -884,9 +887,10 @@ describe("the saved Conversation of a Scheduled Task with a secret in its prompt
     );
   });
 
-  it("saves no secret when the send fails after a tool step and a model reply", async () => {
+  it("saves nothing when the send fails after a tool step and a model reply", async () => {
     const ownerId = await ownerInWarsaw(9462);
     await seedSecretPrompt(ownerId);
+    const before = await savedConversationText(ownerId);
     scriptModel([
       { callTool: searchNotesToolName, input: { query: "tasks" } },
       { say: "Your tasks are done" },
@@ -895,9 +899,10 @@ describe("the saved Conversation of a Scheduled Task with a secret in its prompt
 
     await fireTheAlarm(ownerId);
 
-    expect(await conversationTextOnceRedacted(ownerId)).not.toContain(
-      env.TELEGRAM_BOT_TOKEN
+    await vi.waitFor(async () =>
+      expect(await journalTagsOf(ownerId)).toContain("TurnFailed")
     );
+    expect(await savedConversationText(ownerId)).toBe(before);
   });
 });
 
