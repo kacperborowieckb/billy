@@ -114,10 +114,10 @@ export const runModelTurn = <Failure, Requirements>({
       trustLevelChange: Option.getOrUndefined(trust.change()),
     };
     const recordTrace = (delivered: boolean) =>
-      traces.record(
-        kind.traceOf({ ...traceInput, delivered }),
-        tracedRequest.parts
-      );
+      traces.recordModelTurn({
+        trace: kind.traceOf({ ...traceInput, delivered }),
+        requestParts: tracedRequest.parts,
+      });
     const recordMetric = (
       result: TurnMetricResult,
       outcomeKind?: OutcomeKind,

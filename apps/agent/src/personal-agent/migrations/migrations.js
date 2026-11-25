@@ -32,8 +32,8 @@ import m0030 from "./20261124202916_conversation_layout/migration.sql";
 import m0031 from "./20261124225450_conversation_stubs/migration.sql";
 import m0032 from "./20261125011648_conversation_write_back/migration.sql";
 import m0033 from "./20261125013821_compaction/migration.sql";
-import m0034 from "./20261125040930_trace_request_parts/migration.sql";
-import m0035 from "./20261125040948_trace_retention_trigger/migration.sql";
+import m0034 from "./20261125052323_trace_request_parts/migration.sql";
+import m0035 from "./20261125052329_trace_retention_trigger/migration.sql";
 
 export default {
   migrations: {
@@ -71,7 +71,7 @@ export default {
     "20261124225450_conversation_stubs": m0031,
     "20261125011648_conversation_write_back": m0032,
     "20261125013821_compaction": m0033,
-    "20261125040930_trace_request_parts": m0034,
-    "20261125040948_trace_retention_trigger": m0035,
+    "20261125052323_trace_request_parts": m0034,
+    "20261125052329_trace_retention_trigger": m0035,
   },
 };

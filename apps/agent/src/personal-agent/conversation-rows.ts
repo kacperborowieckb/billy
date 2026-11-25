@@ -1,4 +1,4 @@
-import { and, between, eq, ne, or, sql } from "drizzle-orm";
+import { and, between, eq, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
@@ -39,7 +39,7 @@ export const sentRowsCondition = ({
   summarySequence,
   firstSequence,
   lastSequence,
-}: SentConversationRows): SQL =>
+}: SentConversationRows): SQL | undefined =>
   or(
     summarySequence === null
       ? undefined
@@ -50,4 +50,4 @@ export const sentRowsCondition = ({
           ne(conversationMessages.kind, "summary"),
           between(conversationMessages.sequence, firstSequence, lastSequence)
         )
-  ) ?? sql`0`;
+  );

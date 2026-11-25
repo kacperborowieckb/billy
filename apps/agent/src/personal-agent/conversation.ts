@@ -82,16 +82,20 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     isNull(conversationMessages.compactedAt)
   );
 
-  const sentRows = (sent: SentConversationRows) =>
-    database
-      .select({
-        kind: conversationMessages.kind,
-        message: conversationMessages.message,
-      })
-      .from(conversationMessages)
-      .where(sentRowsCondition(sent))
-      .orderBy(asc(conversationMessages.sequence))
-      .pipe(Effect.map(summaryFirst));
+  const sentRows = (sent: SentConversationRows) => {
+    const condition = sentRowsCondition(sent);
+    return condition === undefined
+      ? Effect.succeed([])
+      : database
+          .select({
+            kind: conversationMessages.kind,
+            message: conversationMessages.message,
+          })
+          .from(conversationMessages)
+          .where(condition)
+          .orderBy(asc(conversationMessages.sequence))
+          .pipe(Effect.map(summaryFirst));
+  };
 
   const summaryEventId = database
     .select({ eventId: conversationMessages.eventId })

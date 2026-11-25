@@ -1,8 +1,8 @@
 {
-  "id": "01989a5a-9d49-433f-a83f-5feba5ed70ca",
-  "prevIds": ["4ceba61d-5aa1-42eb-b165-1c1fe4f681fe"],
   "version": "7",
   "dialect": "sqlite",
+  "id": "b121adc0-6812-47ae-982e-5af2500df9aa",
+  "prevIds": ["3173e2a6-3262-4123-9ab9-51d4bfb9c407"],
   "ddl": [
     {
       "name": "conversation_messages",
@@ -45,14 +45,6 @@
       "entityType": "tables"
     },
     {
-      "name": "trace_request_parts",
-      "entityType": "tables"
-    },
-    {
-      "name": "trace_retention_runs",
-      "entityType": "tables"
-    },
-    {
       "name": "turn_traces",
       "entityType": "tables"
     },
@@ -86,6 +78,18 @@
     },
     {
       "name": "pending_approvals",
+      "entityType": "tables"
+    },
+    {
+      "name": "trace_request_part_uses",
+      "entityType": "tables"
+    },
+    {
+      "name": "trace_request_parts",
+      "entityType": "tables"
+    },
+    {
+      "name": "trace_retention_runs",
       "entityType": "tables"
     },
     {
@@ -929,76 +933,6 @@
       "entityType": "columns"
     },
     {
-      "table": "trace_request_parts",
-      "name": "kind",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "task",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "hash",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "content",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "last_used_at",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "slot",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "ran_at",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
       "table": "turn_traces",
       "name": "sequence",
       "type": "integer",
@@ -1469,6 +1403,116 @@
       "entityType": "columns"
     },
     {
+      "table": "trace_request_part_uses",
+      "name": "trace_sequence",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "task",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "task",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "content",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "last_used_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "slot",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "ran_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "conversation_messages",
       "name": "conversation_messages_event",
       "columns": [
@@ -1721,6 +1765,28 @@
       "entityType": "indexes"
     },
     {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_part",
+      "columns": [
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "task",
+          "isExpression": false
+        },
+        {
+          "value": "hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
       "table": "note_links",
       "name": "fk_note_links_from_note_id_notes_note_id_fk",
       "columns": ["from_note_id"],
@@ -1776,16 +1842,20 @@
       "entityType": "fks"
     },
     {
+      "table": "trace_request_part_uses",
+      "name": "fk_trace_request_part_uses_trace_sequence_turn_traces_sequence_fk",
+      "columns": ["trace_sequence"],
+      "tableTo": "turn_traces",
+      "columnsTo": ["sequence"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
       "table": "note_links",
       "name": "note_links_pk",
       "columns": ["from_note_id", "to_note_id"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "trace_request_parts_pk",
-      "columns": ["kind", "task", "hash"],
       "nameExplicit": false,
       "entityType": "pks"
     },
@@ -1800,6 +1870,20 @@
       "table": "schedule_open_loops",
       "name": "schedule_open_loops_pk",
       "columns": ["schedule_id", "note_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_pk",
+      "columns": ["trace_sequence", "kind"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "trace_request_parts_pk",
+      "columns": ["kind", "task", "hash"],
       "nameExplicit": false,
       "entityType": "pks"
     },
@@ -1867,13 +1951,6 @@
       "entityType": "pks"
     },
     {
-      "table": "trace_retention_runs",
-      "name": "trace_retention_runs_pk",
-      "columns": ["slot"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
       "table": "turn_traces",
       "name": "turn_traces_pk",
       "columns": ["sequence"],
@@ -1919,6 +1996,13 @@
       "table": "pending_approvals",
       "name": "pending_approvals_pk",
       "columns": ["pending_approval_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "trace_retention_runs_pk",
+      "columns": ["slot"],
       "nameExplicit": false,
       "entityType": "pks"
     },
@@ -2063,24 +2147,6 @@
       "entityType": "checks"
     },
     {
-      "table": "trace_request_parts",
-      "name": "trace_request_parts_kind_check",
-      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "trace_request_parts_task_check",
-      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "trace_retention_runs_one_row",
-      "value": "\"slot\" = 0",
-      "entityType": "checks"
-    },
-    {
       "table": "turn_traces",
       "name": "turn_traces_result_check",
       "value": "\"result\" IN ('model_replied', 'model_failed', 'reminder_delivered', 'reminder_delivery_failed', 'scheduled_task_replied', 'scheduled_task_failed', 'scheduled_task_skipped', 'proactive_message_sent', 'proactive_message_failed', 'proactive_message_held', 'proactive_message_folded', 'proactive_message_skipped')",
@@ -2126,6 +2192,36 @@
       "table": "pending_approvals",
       "name": "pending_approvals_draft_check",
       "value": "\"state\" <> 'draft' OR (\"channel_message_id\" IS NULL AND \"result\" IS NULL)",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_kind_check",
+      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "trace_request_parts_kind_check",
+      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "trace_request_parts_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "trace_retention_runs_one_row",
+      "value": "\"slot\" = 0",
       "entityType": "checks"
     }
   ],

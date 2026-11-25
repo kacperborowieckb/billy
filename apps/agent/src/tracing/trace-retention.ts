@@ -1,4 +1,5 @@
-import { and, isNotNull, lte, min, sql } from "drizzle-orm";
+import { and, eq, isNotNull, lt, lte, max, min, notExists } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { DateTime, Effect, Option } from "effect";
 
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
@@ -10,6 +11,7 @@ import { earlierOf } from "../schedule/outcome-alarm-queries.ts";
 import type { TraceRetentionDays } from "./trace-retention-days.ts";
 import {
   traceRequestParts,
+  traceRequestPartUses,
   traceRetentionRuns,
 } from "./trace-storage-schema.ts";
 
@@ -34,20 +36,35 @@ const nextRunNotBefore = (lastRun: Option.Option<DateTime.Utc>) =>
     Option.map((ranAt) => DateTime.add(ranAt, retentionRunInterval))
   );
 
-const isNotTheCurrentVersion = sql`trace_request_parts.last_used_at < (
-  SELECT max(newer.last_used_at) FROM trace_request_parts AS newer
-  WHERE newer.kind = trace_request_parts.kind AND newer.task = trace_request_parts.task
-)`;
+const newerVersion = alias(traceRequestParts, "newer_version");
 
-const noTracePointsToTheVersion = sql`NOT EXISTS (
-  SELECT 1 FROM turn_traces
-  WHERE json_extract(turn_traces.record, '$.task') = trace_request_parts.task
-  AND json_extract(turn_traces.record, CASE trace_request_parts.kind
-    WHEN 'system' THEN '$.request.systemHash'
-    WHEN 'tool_definitions' THEN '$.request.toolDefinitionsHash'
-    WHEN 'owner_context' THEN '$.request.ownerContextHash'
-  END) = trace_request_parts.hash
-)`;
+const isNotTheCurrentVersion = (database: Database) =>
+  lt(
+    traceRequestParts.lastUsedAt,
+    database
+      .select({ lastUsedAt: max(newerVersion.lastUsedAt) })
+      .from(newerVersion)
+      .where(
+        and(
+          eq(newerVersion.kind, traceRequestParts.kind),
+          eq(newerVersion.task, traceRequestParts.task)
+        )
+      )
+  );
+
+const noTraceUsesTheVersion = (database: Database) =>
+  notExists(
+    database
+      .select({ traceSequence: traceRequestPartUses.traceSequence })
+      .from(traceRequestPartUses)
+      .where(
+        and(
+          eq(traceRequestPartUses.kind, traceRequestParts.kind),
+          eq(traceRequestPartUses.task, traceRequestParts.task),
+          eq(traceRequestPartUses.hash, traceRequestParts.hash)
+        )
+      )
+  );
 
 const deleteExpired = Effect.fnUntraced(function* deleteExpired(
   database: Database,
@@ -68,7 +85,9 @@ const deleteExpired = Effect.fnUntraced(function* deleteExpired(
     );
   yield* database
     .delete(traceRequestParts)
-    .where(and(isNotTheCurrentVersion, noTracePointsToTheVersion));
+    .where(
+      and(isNotTheCurrentVersion(database), noTraceUsesTheVersion(database))
+    );
   yield* database
     .insert(traceRetentionRuns)
     .values({ slot: 0, ranAt: DateTime.formatIso(now) })

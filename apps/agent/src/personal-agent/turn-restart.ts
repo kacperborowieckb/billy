@@ -7,9 +7,8 @@ import {
   Journal,
   restartCountOf,
 } from "../journal/journal.ts";
-import type { RequestPart } from "../tracing/traced-request.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
-import type { TurnTrace } from "../tracing/turn-trace.ts";
+import type { ModelTurnRecord } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { burstWaitOf } from "./burst-wait.ts";
 import { turnEventOf } from "./burst.ts";
@@ -88,14 +87,9 @@ export const restartCountForTurn = Effect.fnUntraced(
   }
 );
 
-interface SupersededTrace {
-  readonly trace: TurnTrace;
-  readonly requestParts: readonly RequestPart[];
-}
-
 export const recordSuperseded = Effect.fnUntraced(function* recordSuperseded(
   restart: Restart,
-  { trace, requestParts }: SupersededTrace,
+  supersededTrace: ModelTurnRecord,
   eventId: string
 ) {
   const { database } = yield* AgentStorage;
@@ -114,7 +108,7 @@ export const recordSuperseded = Effect.fnUntraced(function* recordSuperseded(
               newEventIds: restart.newEventIds,
             },
           })
-          .pipe(Effect.andThen(traces.record(trace, requestParts)))
+          .pipe(Effect.andThen(traces.recordModelTurn(supersededTrace)))
       )
     )
   );

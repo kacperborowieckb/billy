@@ -11,7 +11,7 @@ import { replayTurn } from "../src/tracing/trace-replay.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import { addOwner } from "./telegram-requests.ts";
 
-const triggerMigration = "20261125040948_trace_retention_trigger";
+const triggerMigration = "20261125052329_trace_retention_trigger";
 
 const migrationsBeforeTrigger = Object.fromEntries(
   Object.entries(personalAgentMigrations.migrations).filter(
