@@ -26,6 +26,7 @@ import type { ScheduleAction } from "../src/schedule/schedule-action.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import {
   failModel,
+  fakeMetrics,
   fakeModel,
   fakeTelegram,
   holdModel,
@@ -83,6 +84,14 @@ const compactionUsageRows = (ownerId: string) =>
     ownerId,
     "SELECT task, event_id FROM model_usage WHERE task = 'compaction'"
   );
+
+const compactionOutputTokens = async (ownerId: string) => {
+  const rows = await query<{ output_tokens: number | null }>(
+    ownerId,
+    "SELECT output_tokens FROM model_usage WHERE task = 'compaction' ORDER BY sequence"
+  );
+  return rows.map((row) => row.output_tokens);
+};
 
 const refusedBlockRows = (ownerId: string) =>
   query<{ last_compacted_sequence: number }>(
@@ -317,10 +326,11 @@ describe("Compaction", () => {
     expect(current.map(textOf).join("\n")).not.toContain("fourth message");
   });
 
-  it("stops when an Owner Burst becomes due, writes nothing, answers the Turn first, and runs again at the next check", async () => {
+  it("stops when an Owner Burst becomes due, writes nothing, answers the Turn first, records the Usage of the stopped call, and runs again at the next check", async () => {
     const ownerId = await ownerInWarsaw(8804);
     scriptModel([
       ...fourTurnsOverTheLimit,
+      summary("A stopped Summary.", 555),
       reply("Fifth answer", 33_000),
       summary("They talked about A."),
     ]);
@@ -334,16 +344,36 @@ describe("Compaction", () => {
     );
     await waitForModelCalls(6);
     const rowsAfterStop = await conversationRows(ownerId);
+    const usageAfterStop = await compactionUsageRows(ownerId);
     releaseModel();
-    await waitForSummaries(ownerId, 1);
+    const usage = await vi.waitFor(
+      async () => {
+        const rows = await compactionUsageRows(ownerId);
+        expect(rows).toHaveLength(2);
+        return rows;
+      },
+      { timeout: 10_000 }
+    );
+    const rows = await waitForSummaries(ownerId, 1);
 
     expect(rowsAfterStop.filter((row) => row.kind === "summary")).toEqual([]);
     expect(rowsAfterStop.filter((row) => row.compacted_at !== null)).toEqual(
       []
     );
+    expect(usageAfterStop).toEqual([]);
     expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Fifth answer");
     expect(ownerTextsOf(call(5).prompt).at(-1)).toBe("fifth message");
-    expect(await compactionUsageRows(ownerId)).toHaveLength(1);
+    expect(call(4).abortSignal?.aborted).not.toBe(true);
+    expect(await compactionOutputTokens(ownerId)).toEqual([555, 300]);
+    expect(new Set(usage.map((row) => row.event_id)).size).toBe(2);
+    expect(
+      fakeMetrics.modelStepDataPoints.filter(
+        (point) => point.blobs?.[5] === "compaction"
+      )
+    ).toHaveLength(2);
+    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
+      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
+    ]);
   });
 
   it("writes nothing after a failed model call, and runs again at the next check", async () => {
@@ -479,6 +509,7 @@ describe("Compaction", () => {
     scriptModel([
       ...fourTurnsOverTheLimit,
       overLimitSummary,
+      summary("A stopped Summary."),
       reply("Fifth answer", 33_000),
       summary("They talked about A."),
     ]);
