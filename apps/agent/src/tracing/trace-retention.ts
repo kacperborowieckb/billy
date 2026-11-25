@@ -99,17 +99,35 @@ const deleteExpired = Effect.fnUntraced(function* deleteExpired(
     });
 });
 
+export interface TraceRetention {
+  readonly days: TraceRetentionDays;
+  readonly retryNotBefore: Option.Option<DateTime.Utc>;
+}
+
+export const retentionRetryAfterFailure = DateTime.now.pipe(
+  Effect.map((now) => DateTime.add(now, retentionRetryDelay))
+);
+
+const laterOf = (
+  first: Option.Option<DateTime.Utc>,
+  second: Option.Option<DateTime.Utc>
+) =>
+  Option.isSome(first) && Option.isSome(second)
+    ? Option.some(DateTime.max(first.value, second.value))
+    : Option.orElse(first, () => second);
+
 export const runTraceRetentionWhenDue = Effect.fnUntraced(
-  function* runTraceRetentionWhenDue(retentionDays: TraceRetentionDays) {
+  function* runTraceRetentionWhenDue({ days, retryNotBefore }: TraceRetention) {
     const { database } = yield* AgentStorage;
     const now = yield* DateTime.now;
-    const notBefore = nextRunNotBefore(yield* lastRunAt(database));
+    const notBefore = laterOf(
+      nextRunNotBefore(yield* lastRunAt(database)),
+      retryNotBefore
+    );
     if (Option.isSome(notBefore) && DateTime.isLessThan(now, notBefore.value)) {
       return "NotDue" satisfies TraceRetentionRun;
     }
-    yield* database.transaction(() =>
-      deleteExpired(database, now, retentionDays)
-    );
+    yield* database.transaction(() => deleteExpired(database, now, days));
     return "Ran" satisfies TraceRetentionRun;
   }
 );
@@ -126,21 +144,6 @@ const oldestExpiringAt = Effect.fnUntraced(function* oldestExpiringAt(
   return earlierOf(instantOf(trace?.recordedAt), instantOf(row?.compactedAt));
 });
 
-export interface TraceRetention {
-  readonly days: TraceRetentionDays;
-  readonly retryNotBefore: Option.Option<DateTime.Utc>;
-}
-
-export const retentionRetryAfterFailure = DateTime.now.pipe(
-  Effect.map((now) => DateTime.add(now, retentionRetryDelay))
-);
-
-const laterOf = (
-  instant: DateTime.Utc,
-  notBefore: Option.Option<DateTime.Utc>
-) =>
-  Option.isSome(notBefore) ? DateTime.max(instant, notBefore.value) : instant;
-
 export const traceRetentionAlarmAt = Effect.fnUntraced(
   function* traceRetentionAlarmAt(
     database: Database,
@@ -149,9 +152,9 @@ export const traceRetentionAlarmAt = Effect.fnUntraced(
     const oldest = yield* oldestExpiringAt(database);
     const nextRun = nextRunNotBefore(yield* lastRunAt(database));
     return oldest.pipe(
-      Option.map((instant) =>
+      Option.flatMap((instant) =>
         laterOf(
-          laterOf(DateTime.add(instant, { days }), nextRun),
+          laterOf(Option.some(DateTime.add(instant, { days })), nextRun),
           retryNotBefore
         )
       )

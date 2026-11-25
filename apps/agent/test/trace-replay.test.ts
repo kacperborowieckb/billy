@@ -23,6 +23,7 @@ import {
   traceRetentionCeilingDays,
   traceRetentionFloorDays,
 } from "../src/tracing/trace-retention-days.ts";
+import { runTraceRetentionWhenDue } from "../src/tracing/trace-retention.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import type { StoredTurnTrace, TurnTrace } from "../src/tracing/turn-trace.ts";
 import {
@@ -575,6 +576,36 @@ describe("Retention", () => {
         expect(await traceEventIds(ownerId)).not.toContain("expired-trace"),
       { timeout: 10_000 }
     );
+  });
+
+  it("skips retention before the retry instant of a failed run, and runs it after", async () => {
+    const ownerId = await addOwner(7416);
+    await insertOldTrace(ownerId, "expired-trace", 31);
+    const days = TraceRetentionDaysSchema.make(30);
+
+    const beforeRetry = await inAgent(
+      ownerId,
+      runTraceRetentionWhenDue({
+        days,
+        retryNotBefore: Option.some(
+          DateTime.add(DateTime.nowUnsafe(), { minutes: 1 })
+        ),
+      })
+    );
+    expect(beforeRetry).toBe("NotDue");
+    expect(await traceEventIds(ownerId)).toContain("expired-trace");
+
+    const afterRetry = await inAgent(
+      ownerId,
+      runTraceRetentionWhenDue({
+        days,
+        retryNotBefore: Option.some(
+          DateTime.subtract(DateTime.nowUnsafe(), { seconds: 1 })
+        ),
+      })
+    );
+    expect(afterRetry).toBe("Ran");
+    expect(await traceEventIds(ownerId)).not.toContain("expired-trace");
   });
 
   it("arms the next attempt one minute after a failed run, not at the past due instant", async () => {

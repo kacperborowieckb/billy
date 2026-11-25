@@ -141,8 +141,13 @@ export class PersonalAgent extends Agent<Env> {
 
   async fireDueSchedules(): Promise<void> {
     await this.runtime.runPromise(
-      runTraceRetentionWhenDue(this.behavior.traceRetentionDays).pipe(
-        Effect.as(Option.none<DateTime.Utc>()),
+      runTraceRetentionWhenDue({
+        days: this.behavior.traceRetentionDays,
+        retryNotBefore: this.traceRetentionRetryNotBefore,
+      }).pipe(
+        Effect.map((run) =>
+          run === "Ran" ? Option.none() : this.traceRetentionRetryNotBefore
+        ),
         Effect.catchCause((cause) =>
           Effect.logError("The Trace retention step failed", cause).pipe(
             Effect.andThen(retentionRetryAfterFailure),
