@@ -223,7 +223,7 @@ The doctor result was "problems found" only because the local secrets were missi
 
 Date: 2026-11-25, about 21:53 to 21:59 UTC. Issue: [#221](https://github.com/kacperborowieckb/billy/issues/221). Code on `main` at `1de3c21`. This code has the fix of [#216](https://github.com/kacperborowieckb/billy/issues/216): an output limit, one retry with a half target, and a skip of a refused block. It also has the fix of [#217](https://github.com/kacperborowieckb/billy/issues/217): a Usage row for a stopped call. The repository owner approved this run on 2026-11-25 (decision 0002).
 
-Method: the same as the first run of Part E, with the same driver, the same 21 Owner messages, and the same lowered values. The proxy also recorded the finish reason of each call. The free run before the paid run had 41 calls, and all went through the proxy.
+Method: the same as the first run of Part E, with the same driver, the same 21 Owner messages, and the same lowered values. The proxy also recorded the finish reason of each call. The free run before the paid run had 41 calls. All of them went through the proxy.
 
 54 model calls: 35 calls of the main Conversation in 21 Turns, and 19 `compaction` calls. All were HTTP 200. All sent `x-session-affinity` and `cf-aig-skip-cache: true`. Each call has a Usage row: 54 rows, 19 of them `compaction`.
 
@@ -239,13 +239,13 @@ Method: the same as the first run of Part E, with the same driver, the same 21 O
 | 17 to 21 | none | none | No call: the block ends at the refused block |
 
 - Each `compaction` request sent an output limit of 500 tokens. No Summary was over 500 tokens. In the first run, 11 Summaries were 536 to 569 tokens.
-- Code wrote 14 Compactions, from 9 in the first run. Each check made at most two calls. Each written Compaction left exactly one Summary in the next request. No later request had the Owner messages of its block. No block had a running Turn.
+- Code wrote 14 Compactions. The first run wrote 9. Each check made at most two calls. Each written Compaction left exactly one Summary in the next request. No later request had the Owner messages of its block. No block had a running Turn.
 - From Turn 7 on, each Summary was 427 to 500 tokens. The retry with a target of 250 tokens wrote 433 to 500 tokens, so the half target did not make the Summary much shorter. Issue [#223](https://github.com/kacperborowieckb/billy/issues/223).
 - After Turn 16 code refused both attempts. Code recorded the refused block. The next blocks ended at the same Turn, so Turns 17 to 21 made no `compaction` call. The request grew from 8 to 28 messages (10,496 to 12,029 input tokens). The history after the refused block was about 1,500 tokens at the end of the run, less than the kept 2,000 tokens. So the run does not show the next attempt. In the first run, each Turn from Turn 14 on made one refused call. There, the request grew from 15 to 45 messages.
 - No Owner message stopped a `compaction` call in the paid run. The driver sent messages 19 and 21 to stop a running call, but no call ran after Turn 16. So the paid run does not test the Usage row of a stopped call. The free run tests it. There, Owner messages stopped the calls after Turns 18 and 20. Each of its 41 calls has a Usage row. The free run of the first Part E run had 39 rows for 41 calls.
 - The Operator metric named 7 of the 19 `compaction` calls `deploy`: each retry, and each first attempt after a retry. The system text contains the Summary target, so it changes between these calls. No deploy occurred. Issue [#222](https://github.com/kacperborowieckb/billy/issues/222).
 
-All replies used the early facts. The agent lost no fact. As in the first run, the agent got the facts from Notes (`search_notes`), the Profile, and the time zone setting. The last written Summary (after Turn 15) named all the early facts, also the Wi-Fi password.
+All replies used the early facts. The replies kept all tested facts. As in the first run, the agent got the facts from Notes (`search_notes`), the Profile, and the time zone setting. The last written Summary (after Turn 15) named all the early facts, also the Wi-Fi password.
 
 | Call group | Count | Input | Cached | Hit Rate | Hit Rate, first run |
 | --- | --- | --- | --- | --- | --- |
