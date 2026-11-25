@@ -1,8 +1,8 @@
-# Prefix cache: provider facts and hit rate before the change
+# Prefix cache: provider facts and hit rate before and after the change
 
 Date: 2026-11-23
 
-Issue: [#179](https://github.com/kacperborowieckb/billy/issues/179). Decision: [0033](../decisions/0033-prompt-and-conversation-architecture.md). Code on `main` at `a1287c5`.
+Issue: [#179](https://github.com/kacperborowieckb/billy/issues/179). Decision: [0033](../decisions/0033-prompt-and-conversation-architecture.md). Code on `main` at `a1287c5`. [Part D](#part-d-results-after-the-change) measures the code of [#182](https://github.com/kacperborowieckb/billy/issues/182) on 2026-11-25 ([#202](https://github.com/kacperborowieckb/billy/issues/202)).
 
 The repository owner approved the real model calls (decision [0002](../decisions/0002-agent-authority.md)). All content was synthetic. This record has no tokens, account ids, or URLs.
 
@@ -116,11 +116,53 @@ Turns 2 to 12: 129,152 input tokens, 124,224 cached, **96.2%**. All 12 Turns, wi
 
 Limits of the replay: it has no Compaction, no Stub, and no Profile change, so it has none of the planned misses. Decision 0033 stores an `untrusted` Turn as Stubs, which adds one planned miss on the tail of that Turn. The calls were seconds apart.
 
+## Part D results: after the change
+
+Date: 2026-11-25. Code on `main` at `698c61a`, after all parts of #182. The repository owner approved this run on 2026-11-25 (decision 0002).
+
+Method: the same as Part B. A recording proxy on `127.0.0.1` with the stop at 2,000,000 input tokens, the real Worker in the wrangler test harness (`eval/worker.ts`, temporary local storage, the fake Telegram API), one Owner, and 12 Owner messages of the same kinds and order: time zone, two Captures, two Recalls, two Scheduled Tasks set for some minutes later, small talk, a move of the Brief, "less of this", a second move of the Brief, and a closed task. The driver waited until each Schedule fired, so the run has 2 Scheduled Task Turns and 2 Proactive Turns between the Owner message Turns. The texts are new synthetic texts, so the numbers of tokens are not the same as in Part B. No local values file was present, and the proxy was the only path to the gateway. Every call sent `x-session-affinity` and `cf-aig-skip-cache: true`.
+
+33 model calls in 16 Turns.
+
+| Turn kind | Calls | Step 1 input | Step 1 cached | Step 1 hit rate | Later steps hit rate | All calls hit rate | Share of input tokens |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `reply` | 24 | 136,040 | 133,568 | 98.2% | 98.0% | 98.1% | 86.7% |
+| `scheduled_task` | 6 | 7,407 | 5,824 | 78.6% | 94.2% | 89.4% | 7.5% |
+| `proactive` | 3 | 12,106 | 7,936 | 65.6% | 95.9% | 75.9% | 5.8% |
+| all | 33 |  |  |  |  | 96.2% | 100% |
+
+Step 1 of the 12 Owner message Turns. The gap is the time from the end of the earlier call of the main Conversation.
+
+| Turn | Condition | Messages | Input | Cached | Hit rate | Gap |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | First call, warm (see below) | 3 | 9,715 | 9,600 | 98.8% | - |
+| 2 | The time zone was set in Turn 1 | 7 | 9,860 | 9,664 | 98.0% | 0.1 min |
+| 3 |  | 12 | 10,096 | 9,920 | 98.3% | 0.1 min |
+| 4 |  | 17 | 10,374 | 10,240 | 98.7% | 0.1 min |
+| 5 |  | 21 | 10,631 | 10,560 | 99.3% | 0.1 min |
+| 6 |  | 25 | 10,955 | 10,816 | 98.7% | 0.1 min |
+| 7 |  | 29 | 11,341 | 11,200 | 98.8% | 0.1 min |
+| 8 | After a Scheduled Task Turn | 34 | 11,755 | 11,520 | 98.0% | 1.7 min |
+| 9 | After a Scheduled Task Turn | 37 | 11,901 | 11,712 | 98.4% | 1.9 min |
+| 10 | After a Proactive Turn | 44 | 12,752 | 12,288 | 96.4% | 2.0 min |
+| 11 |  | 48 | 12,985 | 12,864 | 99.1% | 0.1 min |
+| 12 | After a Proactive Turn | 53 | 13,675 | 13,184 | 96.4% | 1.7 min |
+
+Turns 2 to 12: 126,325 input tokens, 123,968 cached, **98.1%**. Before the change: 48.9% in the run, and about 24% for Turns more than one minute apart. Predicted by the replay of Part C: 96.2%. The result is above the 90% of decision 0033, so the design stays.
+
+- The Turns 8, 9, 10, and 12 came 1.7 to 2.0 minutes after the earlier call of the main Conversation, with a Side Session between them, and hit 96.4% to 98.4%. Before the change, the same Turns hit 22% to 24%. A Side Session does not change the prefix of the main Conversation.
+- Turn 1 was not cold. A test of the driver at about 08:20 UTC sent the same system text and tool definitions some minutes before (see the cost). The system message and the tool definitions do not depend on the Owner, so the cache of one Owner serves another. A cold call of a new kind reads only the shared 2,432 tokens, as the first Side Session of each kind shows. The method leaves Turn 1 out, so the result does not change.
+- The step 1 hit rate of a Side Session is 40% to 91%. The first Side Session of each kind read only the 2,432 tokens that all kinds share. The second of each kind read 91%. Its run block holds the current time and the recent messages, so the text after the Owner Context Block is new in each Side Session. Its later steps hit 94% to 96%.
+- The run has no Compaction, no Stub, and no Profile change after Turn 1, so it has none of the planned misses.
+- The calls were seconds to 2 minutes apart. The run does not measure gaps longer than the cache lifetime.
+
 ## Cost of the measurement
 
 805,891 input tokens (572,288 cached) and 1,974 output tokens through the proxy: about $0.08 with the 5% fee of Unified Billing. A few diagnostic calls of some tokens each ran outside the proxy.
 
+Part D: 317,122 input tokens (304,960 cached) and 1,693 output tokens through the proxy: about $0.01 with the 5% fee. Outside the proxy: one check of the token (7 input tokens), and a test of the driver at about 08:20 to 08:21 UTC that was meant to use a fake model. A local values file was present and set the real gateway URL and token, so the Worker called the real gateway for 6 Owner messages, with no record and no stop. Estimated cost: less than $0.05. The run of Part D had no local values file.
+
 ## Notes for later work
 
-- The local values file of `apps/agent` overrides the `vars` that `startLocalWorker` passes. An Eval run reads the same values from it, so it works, but a run that needs another gateway URL must turn the loading off.
+- The local values file of `apps/agent` overrides the `vars` that `startLocalWorker` passes. An Eval run reads the same values from it, so it works, but a run that needs another gateway URL must turn the loading off. On 2026-11-25 `CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false` did not stop the loading in the wrangler test harness (wrangler 4.168). Put the values in the environment of the command, and make sure that no local values file exists.
 - The gateway analytics of Cloudflare show the cost and the cached tokens for each request, with the Owner Id as metadata. They are a second source for [#27](https://github.com/kacperborowieckb/billy/issues/27). The Usage rows stay the source of truth (decision [0005](../decisions/0005-model-transport-and-billing.md)).
