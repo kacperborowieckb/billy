@@ -1,6 +1,6 @@
 import { isStepCount, ToolLoopAgent, wrapLanguageModel } from "ai";
 import type { ModelMessage, StepResult, ToolSet } from "ai";
-import { Context, Effect, Layer, Schedule } from "effect";
+import { Clock, Context, Effect, Layer, Schedule } from "effect";
 
 import type { TurnTrust } from "../approval/turn-trust.ts";
 import { noTools, runToolEffect } from "./agent-tool.ts";
@@ -158,7 +158,16 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       const runTool = runToolEffect(runPromise);
       const agent = toolLoopAgentOf(route, request, runTool);
+      const clock = yield* Clock.Clock;
       const finishedSteps: StepResult<ToolSet>[] = [];
+      const finishedAt: number[] = [];
+      const modelStepsOf = (results: readonly StepResult<ToolSet>[]) =>
+        results.map((step, index) =>
+          modelStepOf(
+            step,
+            finishedAt[index] ?? clock.currentTimeMillisUnsafe()
+          )
+        );
 
       const result = yield* Effect.tryPromise({
         try: (abortSignal) =>
@@ -167,6 +176,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             abortSignal,
             onStepFinish: (step) => {
               finishedSteps.push(step);
+              finishedAt.push(clock.currentTimeMillisUnsafe());
               request.trust.readToolResults(step.toolResults);
             },
           }),
@@ -175,13 +185,13 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             modelId,
             reasoningEffort,
             cause,
-            steps: finishedSteps.map(modelStepOf),
+            steps: modelStepsOf(finishedSteps),
           }),
       }).pipe(
         Effect.tapError((error) => recordUsage(request, modelId, error.steps))
       );
 
-      const steps = result.steps.map(modelStepOf);
+      const steps = modelStepsOf(result.steps);
       yield* recordUsage(request, modelId, steps);
 
       const lastStep = result.steps.at(-1);

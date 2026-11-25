@@ -7,6 +7,7 @@ import {
   ModelMessageSchema,
 } from "../model-gateway/model-message-schema.ts";
 import { AgentStorage } from "./agent-storage.ts";
+import { breakMainConversationPrefix } from "./prefix-cache.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
@@ -51,6 +52,7 @@ export interface ConversationEntry {
   readonly eventId: string;
   readonly rows: readonly ConversationRow[];
   readonly recordedAs?: string | undefined;
+  readonly storedWithStub?: boolean;
 }
 
 const decodedRows = (
@@ -124,7 +126,12 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     }
   });
 
-  const append = ({ eventId, rows, recordedAs }: ConversationEntry) =>
+  const append = ({
+    eventId,
+    rows,
+    recordedAs,
+    storedWithStub = false,
+  }: ConversationEntry) =>
     database.transaction(() =>
       Effect.gen(function* appendEffect() {
         const [recorded] = yield* database
@@ -134,6 +141,9 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
           .returning();
         if (recorded !== undefined) {
           yield* writeRows(eventId, rows);
+          if (storedWithStub) {
+            yield* breakMainConversationPrefix(database, "stub_in_turn_before");
+          }
         }
       })
     );
@@ -165,6 +175,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
             )
           );
         yield* writeRows(compactionId, [{ kind: "summary", message }]);
+        yield* breakMainConversationPrefix(database, "compaction");
       })
     );
 

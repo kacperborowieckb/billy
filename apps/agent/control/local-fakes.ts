@@ -172,6 +172,8 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
       gatewayId: headerValue(request, "cf-aig-gateway-id"),
       metadata: headerValue(request, "cf-aig-metadata"),
       collectLogPayload: headerValue(request, "cf-aig-collect-log-payload"),
+      skipCache: headerValue(request, "cf-aig-skip-cache"),
+      sessionAffinity: headerValue(request, "x-session-affinity"),
       lastUserMessage: lastOwnerText(completion.messages),
       toolCalls: toolCallNamesOf(message),
     });

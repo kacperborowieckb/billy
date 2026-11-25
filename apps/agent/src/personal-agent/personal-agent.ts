@@ -34,6 +34,7 @@ import { expireDueApprovals } from "./expire-due-approvals.ts";
 import { Inbox } from "./inbox.ts";
 import { recordOutcomesDueAtAlarm } from "./outcome-records.ts";
 import { OwnerChannelConversation } from "./owner-channel-conversation.ts";
+import { PrefixCacheSessions } from "./prefix-cache.ts";
 import { receiveEvent } from "./receive-event.ts";
 import { TurnProgress } from "./turn-progress.ts";
 import { liveTurnServices } from "./turn-services.ts";
@@ -64,6 +65,7 @@ const personalAgentLayer = (
     ProactiveMessages.layer.pipe(Layer.provide(journal)),
     PendingApprovals.layer.pipe(Layer.provide(journal)),
     Conversation.layer,
+    PrefixCacheSessions.layer,
     StoredFormLimits.layer(storedFormLimits),
     OwnerChannelConversation.layer,
     TurnProgress.layer,

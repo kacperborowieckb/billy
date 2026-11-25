@@ -6,12 +6,16 @@ import {
   renderChatActions,
 } from "./answer-without-text.ts";
 import { checkBurstSend } from "./burst-split.ts";
+import type { FakeModelCall } from "./fake-model-call.ts";
 import { startLocalFakes } from "./local-fakes.ts";
 import type { FakeTelegramMessage } from "./local-fakes.ts";
 import { startLocalWorker, temporarySecrets } from "./local-worker.ts";
 import { addOwner, renderAddedOwner } from "./operator.ts";
 import { selectReplyTo } from "./reply-selection.ts";
 import { sendTelegramUpdate } from "./telegram-update.ts";
+
+const aiGatewayCallLine = (call: FakeModelCall) =>
+  `AI Gateway call: gateway ${call.gatewayId ?? "missing"}, metadata ${call.metadata ?? "missing"}, collect log payload ${call.collectLogPayload ?? "missing"}, skip cache ${call.skipCache ?? "missing"}, session affinity ${call.sessionAffinity ?? "missing"}`;
 
 const sampleTelegramUserId = 424_242;
 const sampleMessageId = 7;
@@ -171,9 +175,7 @@ export const requestReply = ({
     }
     if (contains === undefined) {
       for (const call of fakes.modelCalls()) {
-        lines.push(
-          `AI Gateway call: gateway ${call.gatewayId ?? "missing"}, metadata ${call.metadata ?? "missing"}, collect log payload ${call.collectLogPayload ?? "missing"}`
-        );
+        lines.push(aiGatewayCallLine(call));
       }
       lines.push(
         `Telegram sendMessage calls in total: ${fakes.sentTelegramMessages().length}`,
@@ -201,9 +203,7 @@ export const requestReply = ({
       }
     }
     for (const call of fakes.modelCalls()) {
-      lines.push(
-        `AI Gateway call: gateway ${call.gatewayId ?? "missing"}, metadata ${call.metadata ?? "missing"}, collect log payload ${call.collectLogPayload ?? "missing"}`
-      );
+      lines.push(aiGatewayCallLine(call));
     }
     if (!replyPartsContain(replyParts, contains)) {
       return yield* new ReplyMissing({ contains, reply: replyParts.join("") });
