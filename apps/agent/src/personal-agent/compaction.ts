@@ -64,19 +64,19 @@ interface SummaryRequest extends CompactionRequest {
   readonly summaryTarget: number;
 }
 
-const logWhenStoppedCallFails = (
-  generation: Fiber.Fiber<CompactionCall, unknown>
-) =>
-  Fiber.await(generation).pipe(
-    Effect.flatMap((exit) =>
-      Exit.isFailure(exit)
-        ? Effect.logError(
-            "A stopped Compaction call did not record its Usage",
-            exit.cause
-          )
-        : Effect.void
-    )
-  );
+const logWhenStoppedCallFails = Effect.fnUntraced(
+  function* logWhenStoppedCallFails(
+    generation: Fiber.Fiber<CompactionCall, unknown>
+  ) {
+    const exit = yield* Fiber.await(generation);
+    if (Exit.isFailure(exit)) {
+      yield* Effect.logError(
+        "A stopped Compaction call did not record its Usage",
+        exit.cause
+      );
+    }
+  }
+);
 
 const compactionCall = Effect.fnUntraced(function* compactionCall({
   ownerId,

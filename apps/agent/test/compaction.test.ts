@@ -326,7 +326,7 @@ describe("Compaction", () => {
     expect(current.map(textOf).join("\n")).not.toContain("fourth message");
   });
 
-  it("stops when an Owner Burst becomes due, writes nothing, answers the Turn first, and runs again at the next check", async () => {
+  it("stops when an Owner Burst becomes due, writes nothing, answers the Turn first, records the Usage of the stopped call, and runs again at the next check", async () => {
     const ownerId = await ownerInWarsaw(8804);
     scriptModel([
       ...fourTurnsOverTheLimit,
@@ -344,38 +344,6 @@ describe("Compaction", () => {
     );
     await waitForModelCalls(6);
     const rowsAfterStop = await conversationRows(ownerId);
-    releaseModel();
-    await waitForSummaries(ownerId, 1);
-
-    expect(rowsAfterStop.filter((row) => row.kind === "summary")).toEqual([]);
-    expect(rowsAfterStop.filter((row) => row.compacted_at !== null)).toEqual(
-      []
-    );
-    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Fifth answer");
-    expect(ownerTextsOf(call(5).prompt).at(-1)).toBe("fifth message");
-    const rows = await conversationRows(ownerId);
-    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
-    ]);
-  });
-
-  it("records the Usage and the model_step point of a call that an Owner Burst stops, after the Turn goes first", async () => {
-    const ownerId = await ownerInWarsaw(8820);
-    scriptModel([
-      ...fourTurnsOverTheLimit,
-      summary("A stopped Summary.", 555),
-      reply("Fifth answer", 33_000),
-      summary("They talked about A."),
-    ]);
-    await chatThreeTurns(8820);
-    const releaseModel = holdModel(4);
-    await ownerSays(8820, "fourth message", 4);
-    await waitForModelCalls(5);
-
-    await telegramWebhook(
-      textUpdate({ fromUserId: 8820, text: "fifth message" })
-    );
-    await waitForModelCalls(6);
     const usageAfterStop = await compactionUsageRows(ownerId);
     releaseModel();
     const usage = await vi.waitFor(
@@ -386,11 +354,16 @@ describe("Compaction", () => {
       },
       { timeout: 10_000 }
     );
-    await waitForSummaries(ownerId, 1);
+    const rows = await waitForSummaries(ownerId, 1);
 
+    expect(rowsAfterStop.filter((row) => row.kind === "summary")).toEqual([]);
+    expect(rowsAfterStop.filter((row) => row.compacted_at !== null)).toEqual(
+      []
+    );
     expect(usageAfterStop).toEqual([]);
-    expect(call(4).abortSignal?.aborted).not.toBe(true);
     expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Fifth answer");
+    expect(ownerTextsOf(call(5).prompt).at(-1)).toBe("fifth message");
+    expect(call(4).abortSignal?.aborted).not.toBe(true);
     expect(await compactionOutputTokens(ownerId)).toEqual([555, 300]);
     expect(new Set(usage.map((row) => row.event_id)).size).toBe(2);
     expect(
@@ -398,6 +371,9 @@ describe("Compaction", () => {
         (point) => point.blobs?.[5] === "compaction"
       )
     ).toHaveLength(2);
+    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
+      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
+    ]);
   });
 
   it("writes nothing after a failed model call, and runs again at the next check", async () => {
