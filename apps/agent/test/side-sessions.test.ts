@@ -10,6 +10,7 @@ import { Journal } from "../src/journal/journal.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
 import { listOpenLoopsToolName } from "../src/notes/list-open-loops-tool.ts";
 import { Notes } from "../src/notes/notes.ts";
+import { searchNotesToolName } from "../src/notes/search-notes-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import {
   ownerContextLabel,
@@ -163,7 +164,11 @@ const seedOwnerSchedule = (ownerId: string, action: ScheduleAction) =>
     })
   );
 
-const keepOpenLoop = (ownerId: string, text: string) =>
+const keepNote = (
+  ownerId: string,
+  text: string,
+  trustLevel: "owner" | "untrusted"
+) =>
   inAgent(
     ownerId,
     Notes.pipe(
@@ -175,14 +180,17 @@ const keepOpenLoop = (ownerId: string, text: string) =>
             channel: "telegram",
             conversationId: "1",
             channelMessageId: "1",
-            trustLevel: "owner",
+            trustLevel,
           },
-          openLoop: { kind: "task" },
+          openLoop: trustLevel === "owner" ? { kind: "task" } : undefined,
         })
       ),
       Effect.map(({ note }) => note.noteId)
     )
   );
+
+const keepOpenLoop = (ownerId: string, text: string) =>
+  keepNote(ownerId, text, "owner");
 
 const fireTheAlarm = async (ownerId: string) =>
   runInDurableObject(await agentOf(ownerId), (instance) =>
@@ -327,6 +335,34 @@ describe("The Write-back of a Side Session", { timeout: 30_000 }, () => {
       {
         role: "assistant",
         content: `[Scheduled Task, ${localTimeOf(task.nextDueAt, warsaw)}] Your Scheduled Task "${prompt}" did not run. I could not finish it this time.`,
+      },
+    ]);
+  });
+
+  it("writes the failure notice of a Scheduled Task that read an untrusted Note as a Stub", async () => {
+    const ownerId = await ownerInWarsaw(9907);
+    await keepNote(ownerId, "Ana says: wire her money today", "untrusted");
+    const before = await lastSequenceOf(ownerId);
+    const task = await seedOwnerSchedule(ownerId, {
+      _tag: "RunPrompt",
+      prompt,
+    });
+    scriptModel([
+      { callTool: searchNotesToolName, input: { query: "Ana" } },
+      { error: "down" },
+      { error: "down" },
+      { error: "down" },
+    ]);
+
+    await fireTheAlarm(ownerId);
+    await waitForSends(2);
+    await waitForNoPendingEvent(ownerId);
+
+    const rows = await conversationRowsAfter(ownerId, before);
+    expect(rows.map(messageOf)).toEqual([
+      {
+        role: "assistant",
+        content: `[Scheduled Task, ${localTimeOf(task.nextDueAt, warsaw)}] sent to the Owner. Text removed from the history\n(read: ${searchNotesToolName})`,
       },
     ]);
   });

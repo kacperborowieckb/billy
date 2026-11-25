@@ -89,28 +89,41 @@ const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
   }
 );
 
-const writeBackOf = Effect.fnUntraced(function* writeBackOf(
-  marker: WriteBackMarker,
-  { eventId, turnContext, inputs, steps, ending }: FinishedTurn
-) {
-  if (ending._tag !== "Replied") {
-    return;
-  }
+interface SentRun {
+  readonly marker: WriteBackMarker;
+  readonly eventId: string;
+  readonly recordedAs?: string | undefined;
+  readonly turnContext: string | undefined;
+  readonly inputs: readonly ModelMessage[];
+  readonly steps: readonly ModelMessage[];
+  readonly text: string;
+}
+
+const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
+  marker,
+  eventId,
+  recordedAs,
+  turnContext,
+  inputs,
+  steps,
+  text,
+}: SentRun) {
   const conversation = yield* Conversation;
   yield* conversation.append({
     eventId,
+    recordedAs,
     rows: [
       {
         kind: "write_back",
         message: writeBackMessageOf({
           marker,
-          text: ending.text,
+          text,
           steps,
           heldUntrustedContent: holdsUntrustedContent([
             turnContext,
             inputs,
             steps,
-            ending.text,
+            text,
           ]),
         }),
       },
@@ -118,28 +131,36 @@ const writeBackOf = Effect.fnUntraced(function* writeBackOf(
   });
 });
 
+const writeBackOf = (
+  marker: WriteBackMarker,
+  { eventId, turnContext, inputs, steps, ending }: FinishedTurn
+) =>
+  ending._tag === "Replied"
+    ? appendWriteBack({
+        marker,
+        eventId,
+        turnContext,
+        inputs,
+        steps,
+        text: ending.text,
+      })
+    : Effect.void;
+
 const failureNoticeWriteBackOf = Effect.fnUntraced(
   function* failureNoticeWriteBackOf(
     marker: WriteBackMarker,
     eventId: string,
     text: string
   ) {
-    const conversation = yield* Conversation;
     const progress = yield* TurnProgress;
-    yield* conversation.append({
+    yield* appendWriteBack({
+      marker,
       eventId,
       recordedAs: `${eventId}:failure-notice`,
-      rows: [
-        {
-          kind: "write_back",
-          message: writeBackMessageOf({
-            marker,
-            text,
-            steps: yield* progress.completedFor(eventId),
-            heldUntrustedContent: holdsUntrustedContent(text),
-          }),
-        },
-      ],
+      turnContext: yield* progress.turnContextFor(eventId),
+      inputs: [],
+      steps: yield* progress.completedFor(eventId),
+      text,
     });
   }
 );
