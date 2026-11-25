@@ -62,6 +62,34 @@ const conversationRequest = Effect.fnUntraced(function* conversationRequest({
   };
 });
 
+const newRunBlock = Effect.fnUntraced(function* newRunBlock(
+  behavior: BehaviorConfig,
+  situation: readonly string[]
+) {
+  const conversation = yield* Conversation;
+  const recentChat = yield* conversation.recentTextRows(
+    behavior.sideSessionRecentChatMessages
+  );
+  return runBlock(yield* ownerCurrentTimeText(behavior), [
+    recentChatSection(recentChat),
+    ...situation,
+  ]);
+});
+
+const recordedRunBlockOr = Effect.fnUntraced(function* recordedRunBlockOr<
+  Failure,
+  Requirements,
+>(eventId: string, build: Effect.Effect<string, Failure, Requirements>) {
+  const progress = yield* TurnProgress;
+  const recorded = yield* progress.turnContextFor(eventId);
+  if (recorded !== undefined) {
+    return recorded;
+  }
+  const block = yield* build;
+  yield* progress.recordTurnContext(eventId, block);
+  return block;
+});
+
 const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
   function* sideSessionRequest({
     eventId,
@@ -71,16 +99,11 @@ const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
     inputs,
     earlier,
   }: SessionRequestInput) {
-    const conversation = yield* Conversation;
-    const recentChat = yield* conversation.recentTextRows(
-      behavior.sideSessionRecentChatMessages
-    );
     const ownerContext = yield* ownerContextOf(behavior);
-    const block = runBlock(yield* ownerCurrentTimeText(behavior), [
-      recentChatSection(recentChat),
-      ...situation,
-    ]);
-    yield* (yield* TurnProgress).recordTurnContext(eventId, block);
+    const block = yield* recordedRunBlockOr(
+      eventId,
+      newRunBlock(behavior, situation)
+    );
     return {
       system: systemPrompt({ behavior, instructions }),
       turnContext: block,

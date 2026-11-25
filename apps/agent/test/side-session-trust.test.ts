@@ -8,11 +8,15 @@ import { markUntrustedContent } from "../src/notes/note.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { searchNotesToolName } from "../src/notes/search-notes-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { storeDueScheduleEvents } from "../src/personal-agent/due-schedule-events.ts";
+import type { Inbox } from "../src/personal-agent/inbox.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
+import { TurnProgress } from "../src/personal-agent/turn-progress.ts";
 import { OwnerPreferences } from "../src/preferences/owner-preferences.ts";
 import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { briefPrompt } from "../src/schedule/brief-prompt.ts";
 import { fixedFollowUpPrompt } from "../src/schedule/fixed-follow-up-prompt.ts";
+import type { Schedules } from "../src/schedule/schedules.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import {
@@ -38,7 +42,11 @@ const agentOf = (ownerId: string) =>
 
 const inAgent = async <A, E>(
   ownerId: string,
-  effect: Effect.Effect<A, E, Notes | OwnerPreferences | TurnTraces>
+  effect: Effect.Effect<
+    A,
+    E,
+    Inbox | Notes | OwnerPreferences | Schedules | TurnProgress | TurnTraces
+  >
 ) =>
   runInDurableObject(await agentOf(ownerId), (instance) =>
     instance.runtime.runPromise(effect)
@@ -346,5 +354,75 @@ describe("a Brief with only owner Open Loops", multiTurnTimeout, () => {
       await openLoopIdsAmong(ownerId, [gift.noteId, passport.noteId])
     ).toEqual([gift.noteId]);
     expect(await lastTraceOf(ownerId)).not.toHaveProperty("trustLevelChange");
+  });
+});
+
+describe("a Brief that resumes after a reset", multiTurnTimeout, () => {
+  it("reuses the Run block that it recorded, so an untrusted start stays untrusted after the Open Loop closed, and writes a Stub", async () => {
+    const ownerId = await ownerInWarsaw(9806);
+    const gift = await keepNote(ownerId, {
+      text: "Buy a gift for Ana",
+      trustLevel: "owner",
+      withOpenLoop: true,
+    });
+    await runInDurableObject(await agentOf(ownerId), (_, state) => {
+      state.storage.sql.exec(
+        "UPDATE schedules SET next_due_at = ? WHERE text = ?",
+        DateTime.formatIso(
+          DateTime.subtract(DateTime.nowUnsafe(), { seconds: 5 })
+        ),
+        briefPrompt
+      );
+    });
+    await inAgent(ownerId, storeDueScheduleEvents);
+    const [fired] = await runInDurableObject(
+      await agentOf(ownerId),
+      (_, state) =>
+        state.storage.sql
+          .exec<{ event_id: string }>(
+            "SELECT event_id FROM inbox_events WHERE schedule_id IS NOT NULL"
+          )
+          .toArray()
+    );
+    const recordedRunBlock = `[Run block]\nThe Open Loops in reach:\n${markUntrustedContent(`Ana says: ${forwardedInstruction}`)}\n[End of run block]`;
+    await inAgent(
+      ownerId,
+      TurnProgress.pipe(
+        Effect.flatMap((progress) =>
+          progress.recordTurnContext(fired?.event_id ?? "", recordedRunBlock)
+        )
+      )
+    );
+    scriptModel([
+      followUpCall(forwardedInstruction, [gift.noteId]),
+      closeCall(gift.noteId),
+      { say: "Good morning" },
+    ]);
+
+    await runInDurableObject(await agentOf(ownerId), (instance) =>
+      instance.fireDueSchedules()
+    );
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
+
+    expect(
+      JSON.stringify(fakeModel.doGenerateCalls.at(-1)?.prompt ?? [])
+    ).toContain(JSON.stringify(recordedRunBlock).slice(1, -1));
+    expect(await followUpSchedulesOf(ownerId)).toEqual([
+      { text: fixedFollowUpPrompt([gift.noteId]), set_by: "agent" },
+    ]);
+    expect(toolResultOfLastCall(closeOpenLoopToolName)).toEqual({
+      type: "execution-denied",
+      reason: untrustedChangeWithoutOwnerReason,
+    });
+    const writeBacks = await runInDurableObject(
+      await agentOf(ownerId),
+      (_, state) =>
+        state.storage.sql
+          .exec<{ kind: string }>(
+            "SELECT kind FROM conversation_messages WHERE kind LIKE 'write_back%'"
+          )
+          .toArray()
+    );
+    expect(writeBacks).toEqual([{ kind: "write_back_stub" }]);
   });
 });
