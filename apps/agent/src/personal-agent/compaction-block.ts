@@ -34,35 +34,29 @@ const storedTurnsOf = (rows: readonly StoredConversationRow[]) => {
   return turns satisfies readonly StoredTurn[];
 };
 
-interface TurnTokens {
-  readonly atStart: number;
-  readonly atEnd: number;
-}
-
-const tokensByEvent = (steps: readonly ReportedStep[]) => {
-  const byEvent = new Map<string, TurnTokens>();
-  for (const { eventId, inputTokens, outputTokens } of steps) {
-    if (inputTokens !== null) {
-      byEvent.set(eventId, {
-        atStart: byEvent.get(eventId)?.atStart ?? inputTokens,
-        atEnd: inputTokens + (outputTokens ?? 0),
-      });
+const firstInputTokensByEvent = (steps: readonly ReportedStep[]) => {
+  const firstInput = new Map<string, number>();
+  for (const { eventId, inputTokens } of steps) {
+    if (inputTokens !== null && !firstInput.has(eventId)) {
+      firstInput.set(eventId, inputTokens);
     }
   }
-  return byEvent;
+  return firstInput;
 };
 
 const turnStartsOf = (
   turns: readonly StoredTurn[],
   steps: readonly ReportedStep[]
 ) => {
-  const reported = tokensByEvent(steps);
-  let previousEnd: number | undefined;
+  const firstInput = firstInputTokensByEvent(steps);
+  let previousFirstInput: number | undefined;
   return turns.map((turn) => {
-    const tokens = reported.get(turn.eventId);
+    const ownFirstInput = firstInput.get(turn.eventId);
     const start =
-      tokens === undefined ? undefined : (previousEnd ?? tokens.atStart);
-    previousEnd = tokens?.atEnd ?? previousEnd;
+      ownFirstInput === undefined
+        ? undefined
+        : (previousFirstInput ?? ownFirstInput);
+    previousFirstInput = ownFirstInput ?? previousFirstInput;
     return start;
   });
 };

@@ -13,6 +13,7 @@ import {
   ModelMessageJsonSchema,
   ModelMessageSchema,
 } from "../src/model-gateway/model-message-schema.ts";
+import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
 import { compactionInstructions } from "../src/personal-agent/compaction-prompt.ts";
@@ -408,6 +409,24 @@ describe("Compaction", () => {
       summary("They talked about A."),
     ]);
     await chatFourTurns(8809);
+    const rows = await waitForSummaries(ownerId, 1);
+
+    const compacted = rows.filter((row) => row.compacted_at !== null);
+    expect(compacted.map(textOf).join("\n")).toContain("third message");
+    expect(compacted.map(textOf).join("\n")).not.toContain("fourth message");
+  });
+
+  it("measures the kept part on the stored history, not on the tool results that a Turn saw in full", async () => {
+    const ownerId = await ownerInWarsaw(8811);
+    scriptModel([
+      reply("First answer", 2000),
+      { callTool: captureNoteToolName, input: { text: "Buy milk" } },
+      reply("Kept.", 25_000),
+      reply("Third answer", 4000),
+      reply("Fourth answer", 31_000),
+      summary("They talked about A."),
+    ]);
+    await chatFourTurns(8811);
     const rows = await waitForSummaries(ownerId, 1);
 
     const compacted = rows.filter((row) => row.compacted_at !== null);
