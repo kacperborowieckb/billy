@@ -23,10 +23,12 @@ const localMinutesNow = (timeZone: string) => {
   return hour * 60 + minute;
 };
 
-interface MinutesFromNow {
+export interface MinutesFromNow {
   readonly startMinutes: number;
   readonly endMinutes: number;
 }
+
+const laterToday: MinutesFromNow = { startMinutes: 120, endMinutes: 180 };
 
 const quietHoursFromNow = (
   timeZone: string,
@@ -43,7 +45,7 @@ export const quietHoursLaterToday = (timeZone: string) =>
   OwnerPreferences.pipe(
     Effect.flatMap((preferences) =>
       preferences.setQuietHours(
-        quietHoursFromNow(timeZone, { startMinutes: 120, endMinutes: 180 }),
+        quietHoursFromNow(timeZone, laterToday),
         defaultBehaviorConfig.quietHours,
         "test-setup"
       )
@@ -69,4 +71,4 @@ export const quietHoursAndBriefFromNow = Effect.fnUntraced(
 );
 
 export const quietHoursAndBriefLaterToday = (timeZone: string) =>
-  quietHoursAndBriefFromNow(timeZone, { startMinutes: 120, endMinutes: 180 });
+  quietHoursAndBriefFromNow(timeZone, laterToday);

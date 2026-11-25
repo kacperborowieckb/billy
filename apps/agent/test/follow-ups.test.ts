@@ -21,6 +21,7 @@ import {
   scriptModel,
   instructionsAndContextOf,
 } from "./fakes.ts";
+import type { MinutesFromNow } from "./quiet-hours-setup.ts";
 import {
   quietHoursAndBriefFromNow,
   quietHoursAndBriefLaterToday,
@@ -52,6 +53,11 @@ const localClock = (instant: DateTime.Utc) => {
 };
 
 const followUpPrompt = "Check on the gift for Ana";
+
+const endingInsideMergeWindow: MinutesFromNow = {
+  startMinutes: -10 * 60,
+  endMinutes: 15,
+};
 
 const agentOf = (ownerId: string) =>
   personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId));
@@ -475,10 +481,7 @@ describe("a follow-up that fires", () => {
     const ownerId = await ownerWithWarsawTimeZone(9716);
     await inAgent(
       ownerId,
-      quietHoursAndBriefFromNow("Europe/Warsaw", {
-        startMinutes: -600,
-        endMinutes: 15,
-      })
+      quietHoursAndBriefFromNow("Europe/Warsaw", endingInsideMergeWindow)
     );
     await inAgent(ownerId, quietHoursAndBriefLaterToday("Europe/Warsaw"));
     const note = await keepOpenLoop(ownerId, "Buy a gift for Ana");
