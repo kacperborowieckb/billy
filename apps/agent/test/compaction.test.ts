@@ -376,6 +376,23 @@ describe("Compaction", () => {
     ]);
   });
 
+  it("counts the first message of a Turn in the newest part that it keeps", async () => {
+    const ownerId = await ownerInWarsaw(8809);
+    scriptModel([
+      reply("First answer", 2000),
+      reply("Second answer", 4000),
+      reply("Third answer", 25_000),
+      reply("Fourth answer", 31_000),
+      summary("They talked about A."),
+    ]);
+    await chatFourTurns(8809);
+    const rows = await waitForSummaries(ownerId, 1);
+
+    const compacted = rows.filter((row) => row.compacted_at !== null);
+    expect(compacted.map(textOf).join("\n")).toContain("third message");
+    expect(compacted.map(textOf).join("\n")).not.toContain("fourth message");
+  });
+
   it("never puts a running Turn in a block", async () => {
     const ownerId = await ownerInWarsaw(8808);
     scriptModel([...fourTurnsOverTheLimit, summary("They talked about A.")]);

@@ -34,14 +34,37 @@ const storedTurnsOf = (rows: readonly StoredConversationRow[]) => {
   return turns satisfies readonly StoredTurn[];
 };
 
-const firstInputTokensByEvent = (steps: readonly ReportedStep[]) => {
-  const firstInput = new Map<string, number>();
-  for (const { eventId, inputTokens } of steps) {
-    if (inputTokens !== null && !firstInput.has(eventId)) {
-      firstInput.set(eventId, inputTokens);
+interface TurnTokens {
+  readonly atStart: number;
+  readonly atEnd: number;
+}
+
+const tokensByEvent = (steps: readonly ReportedStep[]) => {
+  const byEvent = new Map<string, TurnTokens>();
+  for (const { eventId, inputTokens, outputTokens } of steps) {
+    if (inputTokens !== null) {
+      byEvent.set(eventId, {
+        atStart: byEvent.get(eventId)?.atStart ?? inputTokens,
+        atEnd: inputTokens + (outputTokens ?? 0),
+      });
     }
   }
-  return firstInput;
+  return byEvent;
+};
+
+const turnStartsOf = (
+  turns: readonly StoredTurn[],
+  steps: readonly ReportedStep[]
+) => {
+  const reported = tokensByEvent(steps);
+  let previousEnd: number | undefined;
+  return turns.map((turn) => {
+    const tokens = reported.get(turn.eventId);
+    const start =
+      tokens === undefined ? undefined : (previousEnd ?? tokens.atStart);
+    previousEnd = tokens?.atEnd ?? previousEnd;
+    return start;
+  });
 };
 
 interface CutPoint {
@@ -75,14 +98,13 @@ export const compactionBlockOf = (
   { rows, stepsSinceSummary, historyTokens }: CompactionInputs,
   limits: CompactionLimits
 ): Option.Option<CompactionBlock> => {
-  const firstInput = firstInputTokensByEvent(stepsSinceSummary);
   const turns = storedTurnsOf(rows.filter((row) => row.kind !== "summary"));
-  const cutPoints = turns.flatMap((turn, index): CutPoint[] => {
-    const startTokens = firstInput.get(turn.eventId);
-    return index === 0 || startTokens === undefined
+  const starts = turnStartsOf(turns, stepsSinceSummary);
+  const cutPoints = starts.flatMap((startTokens, index): CutPoint[] =>
+    index === 0 || startTokens === undefined
       ? []
-      : [{ index, tokensFromHere: historyTokens - startTokens }];
-  });
+      : [{ index, tokensFromHere: historyTokens - startTokens }]
+  );
   return cutIndexOf(cutPoints, limits.compactionKeptTokens).pipe(
     Option.flatMap((cut) => {
       const blockRows = turns.slice(0, cut).flatMap((turn) => turn.rows);

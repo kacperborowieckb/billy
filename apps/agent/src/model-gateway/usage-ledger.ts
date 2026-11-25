@@ -49,6 +49,7 @@ export interface UsageSource {
 export interface ReportedStep {
   readonly eventId: string;
   readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
 }
 
 const toUsageRecord = (row: typeof modelUsage.$inferSelect): UsageRecord => ({
@@ -120,6 +121,7 @@ const makeUsageLedger = (ownerId: OwnerId) =>
         .select({
           eventId: modelUsage.eventId,
           inputTokens: modelUsage.inputTokens,
+          outputTokens: modelUsage.outputTokens,
         })
         .from(modelUsage)
         .where(
@@ -130,8 +132,8 @@ const makeUsageLedger = (ownerId: OwnerId) =>
           )
         )
         .orderBy(asc(modelUsage.sequence));
-      return rows.flatMap(({ eventId, inputTokens }): ReportedStep[] =>
-        eventId === null ? [] : [{ eventId, inputTokens }]
+      return rows.flatMap(({ eventId, ...tokens }): ReportedStep[] =>
+        eventId === null ? [] : [{ eventId, ...tokens }]
       );
     });
 

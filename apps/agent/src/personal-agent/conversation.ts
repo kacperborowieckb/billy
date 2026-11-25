@@ -68,9 +68,8 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
               }))
             )
           )
-        )
-      ),
-      Effect.orDie
+        ).pipe(Effect.orDie)
+      )
     );
 
   const summaryEventId = database
@@ -82,13 +81,11 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
         eq(conversationMessages.kind, "summary")
       )
     )
-    .pipe(
-      Effect.map(([row]) => row?.eventId),
-      Effect.orDie
-    );
+    .pipe(Effect.map(([row]) => row?.eventId));
 
   const history = uncompactedRows.pipe(
-    Effect.map((rows) => rows.map((row) => row.message))
+    Effect.map((rows) => rows.map((row) => row.message)),
+    Effect.orDie
   );
 
   const writeRows = Effect.fnUntraced(function* writeRows(
