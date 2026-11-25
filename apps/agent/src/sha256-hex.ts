@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-export const contentHashOf = (text: string) =>
+export const sha256Hex = (text: string) =>
   Effect.promise(async () => {
     const digest = await crypto.subtle.digest(
       "SHA-256",

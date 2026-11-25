@@ -10,10 +10,12 @@ import { TurnTraces } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { staySilent } from "./delivery.ts";
 import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
+import { recordModelSteps } from "./model-step-metrics.ts";
 import type { ModelTurn } from "./model-turn-kind.ts";
 import { sent, silentResult, superseded } from "./model-turn-result.ts";
 import type { ModelTurnResult } from "./model-turn-result.ts";
 import { generateWithOutcomeTools } from "./outcome-tools.ts";
+import { failAtStepLimit } from "./step-limit-failure.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import { reacted, replied, silent, unanswered } from "./stored-turn.ts";
 import type { TurnEnding } from "./stored-turn.ts";
@@ -24,7 +26,6 @@ import { TurnProgress } from "./turn-progress.ts";
 import {
   modelFailureReason,
   responseMessagesOf,
-  stepLimitReason,
   stepMessagesOfReply,
 } from "./turn-record.ts";
 import { recordSuperseded, restartCountForTurn } from "./turn-restart.ts";
@@ -52,17 +53,7 @@ export const runModelTurn = <Failure, Requirements>({
     const earlier = yield* progress.completedFor(eventId);
     const stepsLeft = behavior.maxToolSteps - stepsUsed;
     if (stepsLeft <= 0) {
-      yield* session.commit({
-        eventId,
-        turnContext: yield* progress.turnContextFor(eventId),
-        inputs: kind.inputs,
-        steps: earlier,
-        ending: unanswered,
-      });
-      return {
-        _tag: "Failed",
-        reason: stepLimitReason(behavior.maxToolSteps),
-      } satisfies ModelTurnResult;
+      return yield* failAtStepLimit({ session, kind, earlier, behavior });
     }
     const sessionRequest = yield* session.request({
       eventId,
@@ -77,7 +68,7 @@ export const runModelTurn = <Failure, Requirements>({
       inputs: kind.inputs,
       earlier,
     });
-    const { system, turnContext, messages } = sessionRequest;
+    const { system, ownerContext, turnContext, messages } = sessionRequest;
     const tracedRequest = yield* tracedRequestOf(
       { ...sessionRequest, task: kind.task, tools: kind.tools },
       redactor
@@ -102,6 +93,14 @@ export const runModelTurn = <Failure, Requirements>({
       approvalAsking: approvalAskingOf(behavior, kind.asksOwnerForApproval),
     });
     const { outcome } = decided;
+    yield* recordModelSteps({
+      ownerId,
+      kind,
+      stepsUsed,
+      system,
+      ownerContext,
+      outcome,
+    });
     const modelLatencyMillis = (yield* Clock.currentTimeMillis) - startedAt;
     const traceInput = {
       request: tracedRequest.pointer,

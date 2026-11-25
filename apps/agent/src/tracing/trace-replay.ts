@@ -11,7 +11,7 @@ import type {
   ModelTurnTask,
   RequestPartKind,
 } from "../personal-agent/storage-values.ts";
-import { contentHashOf } from "./content-hash.ts";
+import { sha256Hex } from "../sha256-hex.ts";
 import { traceRequestParts } from "./trace-storage-schema.ts";
 import { messagesHashOf } from "./traced-request.ts";
 import type {
@@ -84,7 +84,7 @@ const checkedPart = Effect.fnUntraced(function* checkedPart<Value>(
     return problemWith<Value>(part.kind, "missing");
   }
   const decoded = decode(row.content);
-  if ((yield* contentHashOf(row.content)) !== hash || Option.isNone(decoded)) {
+  if ((yield* sha256Hex(row.content)) !== hash || Option.isNone(decoded)) {
     return problemWith<Value>(part.kind, "changed");
   }
   return found(decoded.value);

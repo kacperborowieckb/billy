@@ -10,7 +10,7 @@ Closes issues #20 and #21. The Owner chose Drizzle ORM on issue #20.
 
 Use Drizzle ORM with its native Effect drivers for both stores of `apps/agent`: the Directory in D1 (`drizzle-orm/effect-d1` over `@effect/sql-d1`) and each Personal Agent SQLite (`drizzle-orm/effect-sqlite-do` over `@effect/sql-sqlite-do`). Use Drizzle Kit to generate the migrations. Both come from the `rc` tag (1.0.0 release candidate), which is the only version with Effect v4 drivers.
 
-- One table schema file for each store is the single source of truth: `src/directory/directory-schema.ts` and `src/personal-agent/storage-schema.ts`. Queries use these tables, so a wrong column name fails `pnpm typecheck`.
+- The table schema files of each store are the single source of truth: `src/directory/directory-schema.ts` for the Directory, and `src/personal-agent/storage-schema.ts` with the schema files of the modules that `drizzle.personal-agent.config.ts` lists for each Personal Agent SQLite. Each table has exactly one schema file. Queries use these tables, so a wrong column name fails `pnpm typecheck`.
 - A query is an Effect. A database failure is a typed error (`EffectDrizzleQueryError` or `SqlError`) in the Effect error channel, not a thrown defect.
 - Module interfaces do not change, except that their Effects can now fail with these errors. No module outside `directory` runs queries against the Directory ([0006](0006-directory-store.md)).
 - No SQL string stays in a storage module. SQL lives only in migration files. The one exception is the `CHECK` constraints in the table schema files. They build their SQL from the same value lists as the column types (`src/check-values.ts`), so the lists exist once.

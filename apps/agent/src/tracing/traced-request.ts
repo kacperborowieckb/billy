@@ -15,7 +15,7 @@ import type {
   ModelTurnTask,
   RequestPartKind,
 } from "../personal-agent/storage-values.ts";
-import { contentHashOf } from "./content-hash.ts";
+import { sha256Hex } from "../sha256-hex.ts";
 import type { Redactor } from "./redactor.ts";
 
 export const SentConversationRowsSchema = Schema.Struct({
@@ -90,7 +90,7 @@ export const encodeToolDefinitions = Schema.encodeSync(
 export const encodeOwnerContext = encodeMessage;
 
 export const messagesHashOf = (messages: readonly ModelMessage[]) =>
-  contentHashOf(encodeMessages(messages));
+  sha256Hex(encodeMessages(messages));
 
 const sentConversationRowsOf = Effect.fnUntraced(
   function* sentConversationRowsOf(rows: readonly SentRow[]) {
@@ -113,9 +113,9 @@ export const tracedRequestOf = Effect.fnUntraced(function* tracedRequestOf(
     yield* toolDefinitionsOf(sent.tools)
   );
   const ownerContext = encodeOwnerContext(sent.ownerContext);
-  const systemHash = yield* contentHashOf(sent.system);
-  const toolDefinitionsHash = yield* contentHashOf(toolDefinitions);
-  const ownerContextHash = yield* contentHashOf(ownerContext);
+  const systemHash = yield* sha256Hex(sent.system);
+  const toolDefinitionsHash = yield* sha256Hex(toolDefinitions);
+  const ownerContextHash = yield* sha256Hex(ownerContext);
   return {
     pointer: {
       kind: "pointer",

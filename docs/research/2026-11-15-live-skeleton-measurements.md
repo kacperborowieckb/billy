@@ -10,7 +10,7 @@ The Instance ran on a real Cloudflare account with a real Telegram bot. Seven re
 
 ## Deploy steps that worked
 
-1. Create the gateway `assistant` in the dashboard, turn on Authenticated Gateway, and create a gateway token. The `wrangler` OAuth login has no AI Gateway scope, so this step is manual.
+1. Create the gateway `assistant` in the dashboard, turn on Authenticated Gateway, and create a gateway token. The `wrangler` OAuth login has no AI Gateway scope, so this step is manual. Keep the response cache (Caching) of the gateway off. The Model Gateway also sends `cf-aig-skip-cache: true` on every call (decision [0033](../decisions/0033-prompt-and-conversation-architecture.md)). A `MISS` in the gateway logs is the response cache, not the prefix cache of the model.
 2. Add credits for Unified Billing in the dashboard.
 3. Put the four required secrets in a private file (`NAME=value` lines). Make a random value for `TELEGRAM_WEBHOOK_SECRET` and for `OPERATOR_TOKEN`.
 4. In `apps/agent`, run `wrangler deploy --secrets-file <file> --var AI_GATEWAY_URL:https://gateway.ai.cloudflare.com/v1/<account id>/assistant/compat`. The first deploy creates the D1 database. A new Worker cannot receive secrets before its first deploy, so the file is required.

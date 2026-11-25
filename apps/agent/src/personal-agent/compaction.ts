@@ -5,6 +5,7 @@ import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { ModelGateway } from "../model-gateway/model-gateway.ts";
 import type { ModelReply } from "../model-gateway/model-gateway.ts";
 import { UsageLedger } from "../model-gateway/usage-ledger.ts";
+import type { OwnerId } from "../owner-id.ts";
 import { burstWaitOf } from "./burst-wait.ts";
 import {
   compactionBlockOf,
@@ -18,6 +19,7 @@ import {
 } from "./compaction-prompt.ts";
 import { Conversation } from "./conversation.ts";
 import { Inbox } from "./inbox.ts";
+import { recordCompactionSteps } from "./model-step-metrics.ts";
 
 export type CompactionResult =
   | "NotNeeded"
@@ -39,36 +41,50 @@ const summaryIsAccepted = (reply: ModelReply, maxSummaryTokens: number) =>
   reply.usage.outputTokens !== undefined &&
   reply.usage.outputTokens <= maxSummaryTokens;
 
-const compactionCall = Effect.fnUntraced(function* compactionCall(
-  behavior: BehaviorConfig,
-  compactionId: string,
-  block: CompactionBlock
-) {
+interface CompactionRequest {
+  readonly ownerId: OwnerId;
+  readonly behavior: BehaviorConfig;
+  readonly compactionId: string;
+  readonly block: CompactionBlock;
+}
+
+const compactionCall = Effect.fnUntraced(function* compactionCall({
+  ownerId,
+  behavior,
+  compactionId,
+  block,
+}: CompactionRequest) {
   const gateway = yield* ModelGateway;
   const inbox = yield* Inbox;
+  const system = compactionInstructions(behavior.maxSummaryTokens);
+  const recordSteps = (
+    reply: Parameters<typeof recordCompactionSteps>[0]["reply"]
+  ) => recordCompactionSteps({ ownerId, compactionId, system, reply });
   const generated = gateway
     .generate({
       task: "compaction",
       eventId: compactionId,
-      system: compactionInstructions(behavior.maxSummaryTokens),
+      system,
       messages: [compactionInput(block)],
       trust: fixedTurnTrust("owner"),
       asksOwnerForApproval: false,
       stepLimit: 1,
     })
     .pipe(
+      Effect.tap(recordSteps),
       Effect.map((reply): CompactionCall => ({ _tag: "Generated", reply })),
       Effect.catchTags({
         ModelUnavailable: (error) =>
-          Effect.succeed<CompactionCall>({
-            _tag: "ModelFailed",
-            cause: error.cause,
-          }),
+          recordSteps(error).pipe(
+            Effect.as<CompactionCall>({
+              _tag: "ModelFailed",
+              cause: error.cause,
+            })
+          ),
         StepLimitReached: (error) =>
-          Effect.succeed<CompactionCall>({
-            _tag: "ModelFailed",
-            cause: error,
-          }),
+          recordSteps(error).pipe(
+            Effect.as<CompactionCall>({ _tag: "ModelFailed", cause: error })
+          ),
       })
     );
   const burstBecameDue = inbox.burstIsDue(burstWaitOf(behavior)).pipe(
@@ -82,7 +98,7 @@ const compactionCall = Effect.fnUntraced(function* compactionCall(
 });
 
 export const compactWhenOverLimit = Effect.fnUntraced(
-  function* compactWhenOverLimit(behavior: BehaviorConfig) {
+  function* compactWhenOverLimit(ownerId: OwnerId, behavior: BehaviorConfig) {
     const conversation = yield* Conversation;
     const ledger = yield* UsageLedger;
     const inbox = yield* Inbox;
@@ -106,7 +122,12 @@ export const compactWhenOverLimit = Effect.fnUntraced(
       return "NotNeeded" satisfies CompactionResult;
     }
     const compactionId = `compaction-${crypto.randomUUID()}`;
-    const call = yield* compactionCall(behavior, compactionId, block.value);
+    const call = yield* compactionCall({
+      ownerId,
+      behavior,
+      compactionId,
+      block: block.value,
+    });
     if (call._tag === "StoppedByBurst") {
       return "StoppedByBurst" satisfies CompactionResult;
     }

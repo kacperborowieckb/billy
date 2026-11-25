@@ -120,44 +120,64 @@ const rowsOfKind = (
   messages: readonly ModelMessage[]
 ): readonly ConversationRow[] => messages.map((message) => ({ kind, message }));
 
-export const storedFormOf = (
+interface StoredForm {
+  readonly rows: readonly ConversationRow[];
+  readonly withStub: boolean;
+}
+
+const storedFormWithStubsOf = (
   { turnContext, inputs, steps, ending }: FinishedTurn,
   redactor: Redactor["Service"],
   limits: StoredFormLimitValues
-): readonly ConversationRow[] => {
+): StoredForm => {
   if (ending._tag === "Unanswered" && steps.length === 0) {
-    return [];
+    return { rows: [], withStub: false };
   }
   const sentInputs = withTurnContext(turnContext, inputs).map((input) =>
     redactor.redactMessage(input)
   );
   const heldUntrustedContent = holdsUntrustedContent([sentInputs, steps]);
-  return [
-    ...rowsOfKind(
-      "input",
-      heldUntrustedContent ? sentInputs.map(inputStubbed) : sentInputs
-    ),
-    ...rowsOfKind(
-      "step",
-      heldUntrustedContent
-        ? untrustedStepsStubbed(steps)
-        : trustedStepsLimited(steps, limits)
-    ),
-    ...endingRowsOf(ending, heldUntrustedContent),
-  ];
+  const storedSteps = heldUntrustedContent
+    ? untrustedStepsStubbed(steps)
+    : trustedStepsLimited(steps, limits);
+  return {
+    rows: [
+      ...rowsOfKind(
+        "input",
+        heldUntrustedContent ? sentInputs.map(inputStubbed) : sentInputs
+      ),
+      ...rowsOfKind("step", storedSteps),
+      ...endingRowsOf(ending, heldUntrustedContent),
+    ],
+    withStub:
+      heldUntrustedContent ||
+      JSON.stringify(storedSteps) !== JSON.stringify(steps),
+  };
 };
+
+export const storedFormOf = (
+  turn: FinishedTurn,
+  redactor: Redactor["Service"],
+  limits: StoredFormLimitValues
+): readonly ConversationRow[] =>
+  storedFormWithStubsOf(turn, redactor, limits).rows;
 
 export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
   turn: FinishedTurn
 ) {
   const conversation = yield* Conversation;
   const redactor = yield* Redactor;
-  const rows = storedFormOf(turn, redactor, yield* StoredFormLimits);
+  const { rows, withStub } = storedFormWithStubsOf(
+    turn,
+    redactor,
+    yield* StoredFormLimits
+  );
   if (rows.length > 0) {
     yield* conversation.append({
       eventId: turn.eventId,
       recordedAs: turn.recordedAs,
       rows,
+      storedWithStub: withStub,
     });
   }
 });

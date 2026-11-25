@@ -1,8 +1,8 @@
 {
-  "id": "6f02b5d2-f8e8-422b-bdfb-c729be27b540",
-  "prevIds": ["b121adc0-6812-47ae-982e-5af2500df9aa"],
   "version": "7",
   "dialect": "sqlite",
+  "id": "26de056d-f027-4ab9-acb9-b31a3b84ed4c",
+  "prevIds": ["3173e2a6-3262-4123-9ab9-51d4bfb9c407"],
   "ddl": [
     {
       "name": "conversation_messages",
@@ -65,6 +65,10 @@
       "entityType": "tables"
     },
     {
+      "name": "prefix_cache_sessions",
+      "entityType": "tables"
+    },
+    {
       "name": "owner_preferences",
       "entityType": "tables"
     },
@@ -78,18 +82,6 @@
     },
     {
       "name": "pending_approvals",
-      "entityType": "tables"
-    },
-    {
-      "name": "trace_request_part_uses",
-      "entityType": "tables"
-    },
-    {
-      "name": "trace_request_parts",
-      "entityType": "tables"
-    },
-    {
-      "name": "trace_retention_runs",
       "entityType": "tables"
     },
     {
@@ -1123,6 +1115,66 @@
       "entityType": "columns"
     },
     {
+      "table": "prefix_cache_sessions",
+      "name": "task",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "last_call_at_millis",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "system_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "tools_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "owner_context_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "history_break",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "owner_preferences",
       "name": "key",
       "type": "text",
@@ -1403,116 +1455,6 @@
       "entityType": "columns"
     },
     {
-      "table": "trace_request_part_uses",
-      "name": "trace_sequence",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_part_uses",
-      "name": "kind",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_part_uses",
-      "name": "task",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_part_uses",
-      "name": "hash",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "kind",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "task",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "hash",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "content",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "last_used_at",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "slot",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "ran_at",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
       "table": "conversation_messages",
       "name": "conversation_messages_event",
       "columns": [
@@ -1765,28 +1707,6 @@
       "entityType": "indexes"
     },
     {
-      "table": "trace_request_part_uses",
-      "name": "trace_request_part_uses_part",
-      "columns": [
-        {
-          "value": "kind",
-          "isExpression": false
-        },
-        {
-          "value": "task",
-          "isExpression": false
-        },
-        {
-          "value": "hash",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
       "table": "note_links",
       "name": "fk_note_links_from_note_id_notes_note_id_fk",
       "columns": ["from_note_id"],
@@ -1842,17 +1762,6 @@
       "entityType": "fks"
     },
     {
-      "table": "trace_request_part_uses",
-      "name": "fk_trace_request_part_uses_trace_sequence_turn_traces_sequence_fk",
-      "columns": ["trace_sequence"],
-      "tableTo": "turn_traces",
-      "columnsTo": ["sequence"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
       "table": "note_links",
       "name": "note_links_pk",
       "columns": ["from_note_id", "to_note_id"],
@@ -1870,20 +1779,6 @@
       "table": "schedule_open_loops",
       "name": "schedule_open_loops_pk",
       "columns": ["schedule_id", "note_id"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "table": "trace_request_part_uses",
-      "name": "trace_request_part_uses_pk",
-      "columns": ["trace_sequence", "kind"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "trace_request_parts_pk",
-      "columns": ["kind", "task", "hash"],
       "nameExplicit": false,
       "entityType": "pks"
     },
@@ -1979,6 +1874,13 @@
       "entityType": "pks"
     },
     {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_pk",
+      "columns": ["task"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
       "table": "owner_preferences",
       "name": "owner_preferences_pk",
       "columns": ["key"],
@@ -1996,13 +1898,6 @@
       "table": "pending_approvals",
       "name": "pending_approvals_pk",
       "columns": ["pending_approval_id"],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "trace_retention_runs_pk",
-      "columns": ["slot"],
       "nameExplicit": false,
       "entityType": "pks"
     },
@@ -2159,6 +2054,18 @@
       "entityType": "checks"
     },
     {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive', 'compaction')",
+      "entityType": "checks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_history_break_check",
+      "value": "\"history_break\" IS NULL OR \"history_break\" IN ('compaction', 'stub_in_turn_before')",
+      "entityType": "checks"
+    },
+    {
       "table": "owner_preferences",
       "name": "owner_preferences_key_check",
       "value": "\"key\" IN ('time_zone', 'quiet_hours', 'muted_proactive_messages', 'proactive_message_budget')",
@@ -2192,36 +2099,6 @@
       "table": "pending_approvals",
       "name": "pending_approvals_draft_check",
       "value": "\"state\" <> 'draft' OR (\"channel_message_id\" IS NULL AND \"result\" IS NULL)",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_request_part_uses",
-      "name": "trace_request_part_uses_kind_check",
-      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_request_part_uses",
-      "name": "trace_request_part_uses_task_check",
-      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "trace_request_parts_kind_check",
-      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_request_parts",
-      "name": "trace_request_parts_task_check",
-      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
-      "entityType": "checks"
-    },
-    {
-      "table": "trace_retention_runs",
-      "name": "trace_retention_runs_one_row",
-      "value": "\"slot\" = 0",
       "entityType": "checks"
     }
   ],

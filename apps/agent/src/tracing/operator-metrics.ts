@@ -3,7 +3,12 @@ import { Context, Effect, Layer } from "effect";
 import type { Usage } from "../model-gateway/usage-ledger.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { proactiveOutcomes } from "../personal-agent/storage-values.ts";
-import type { OutcomeKind } from "../personal-agent/storage-values.ts";
+import type {
+  OutcomeKind,
+  PlannedMiss,
+  SessionTask,
+} from "../personal-agent/storage-values.ts";
+import { noEarlierCallMinutes, noPlannedMiss } from "./hit-rate-values.ts";
 
 export const turnMetricResults = [
   "replied",
@@ -30,7 +35,20 @@ export const refusalReasons = [
   "owner_not_active",
 ] as const;
 
+export interface ModelStepMetric {
+  readonly kind: "model_step";
+  readonly ownerId: OwnerId;
+  readonly eventId: string;
+  readonly task: SessionTask;
+  readonly modelId: string;
+  readonly stepNumber: number;
+  readonly usage: Usage;
+  readonly minutesSinceEarlierCall: number | undefined;
+  readonly plannedMiss: PlannedMiss | undefined;
+}
+
 export type OperatorMetric =
+  | ModelStepMetric
   | {
       readonly kind: "turn";
       readonly ownerId: OwnerId;
@@ -88,7 +106,35 @@ const costBlob = (usage: Usage | undefined) => {
   return usage.costUsd === undefined ? "cost_unknown" : "cost_known";
 };
 
+const modelStepDataPointOf = (
+  metric: ModelStepMetric
+): AnalyticsEngineDataPoint => ({
+  indexes: [metric.ownerId],
+  blobs: [
+    metric.kind,
+    metric.plannedMiss ?? noPlannedMiss,
+    metric.modelId,
+    costBlob(metric.usage),
+    metric.eventId,
+    metric.task,
+  ],
+  doubles: [
+    0,
+    metric.usage.inputTokens ?? 0,
+    metric.usage.outputTokens ?? 0,
+    metric.usage.costUsd ?? 0,
+    metric.usage.cachedInputTokens ?? 0,
+    metric.stepNumber,
+    0,
+    0,
+    metric.minutesSinceEarlierCall ?? noEarlierCallMinutes,
+  ],
+});
+
 const dataPointOf = (metric: OperatorMetric): AnalyticsEngineDataPoint => {
+  if (metric.kind === "model_step") {
+    return modelStepDataPointOf(metric);
+  }
   const usage = metric.kind === "turn" ? metric.usage : undefined;
   return {
     indexes: [metric.ownerId ?? noOwnerIndex],

@@ -3,6 +3,8 @@ export interface FakeModelCall {
   readonly gatewayId: string | undefined;
   readonly metadata: string | undefined;
   readonly collectLogPayload: string | undefined;
+  readonly skipCache: string | undefined;
+  readonly sessionAffinity: string | undefined;
   readonly lastUserMessage: string;
   readonly toolCalls: readonly string[];
 }

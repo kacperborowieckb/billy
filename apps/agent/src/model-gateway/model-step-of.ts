@@ -133,8 +133,12 @@ export const pendingToolCallsOf = (
   );
 };
 
-export const modelStepOf = (step: StepResult<ToolSet>): ModelStep => ({
+export const modelStepOf = (
+  step: StepResult<ToolSet>,
+  calledAtMillis: number
+): ModelStep => ({
   usage: usageOf(step.usage),
+  calledAtMillis,
   toolCalls: toolCallsOf(step),
   responseMessages: step.response.messages.map(withoutApprovalParts),
 });

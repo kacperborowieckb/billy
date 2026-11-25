@@ -88,6 +88,28 @@ export const modelTasks = [
   "compaction",
 ] as const;
 
+export const turnModelTasks = ["reply", "scheduled_task", "proactive"] as const;
+
+export type TurnModelTask = (typeof turnModelTasks)[number];
+
+export const sessionTasks = [...turnModelTasks, "compaction"] as const;
+
+export type SessionTask = (typeof sessionTasks)[number];
+
+export const historyBreaks = ["compaction", "stub_in_turn_before"] as const;
+
+export type HistoryBreak = (typeof historyBreaks)[number];
+
+export const plannedMisses = [
+  "no_earlier_call",
+  "cache_lifetime",
+  "deploy",
+  "owner_context_changed",
+  ...historyBreaks,
+] as const;
+
+export type PlannedMiss = (typeof plannedMisses)[number];
+
 export const proactiveOutcomes = [
   "acted",
   "replied",

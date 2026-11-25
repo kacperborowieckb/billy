@@ -105,6 +105,10 @@ describe("Model Gateway transport", () => {
     );
     expect(request?.headers.get("cf-aig-collect-log-payload")).toBe("false");
     expect(request?.headers.has("cf-aig-no-wholesale")).toBe(false);
+    for (const sent of requests) {
+      expect(sent.headers.get("cf-aig-skip-cache")).toBe("true");
+      expect(sent.headers.has("x-session-affinity")).toBe(true);
+    }
     expect(await request?.json()).toMatchObject({
       model: "anthropic/claude-sonnet-5-5",
       reasoning_effort: "none",
@@ -113,6 +117,58 @@ describe("Model Gateway transport", () => {
       model: "anthropic/claude-opus-5-5",
       reasoning_effort: "low",
     });
+  });
+
+  it("sends one opaque session affinity id for each Owner, for the main Conversation and the Side Sessions", async () => {
+    const requests: Request[] = [];
+    const recordingFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(new Request(input, init));
+      return Promise.resolve(Response.json(chatCompletion));
+    };
+    const turnOf = (ownerId: string, task: "reply" | "scheduled_task") =>
+      ModelProvider.pipe(
+        Effect.flatMap((models) =>
+          Effect.promise(() =>
+            generateText({ model: models.route(task).model, prompt: "Hi" })
+          )
+        ),
+        Effect.provide(
+          aiGatewayModelProvider(
+            {
+              url: "https://gateway.example/compat",
+              gatewayId: "assistant",
+              routes: env.MODEL_ROUTES,
+              fetch: recordingFetch,
+            },
+            { token: "gateway-token", billing: "unified-billing" },
+            OwnerIdSchema.make(ownerId)
+          )
+        )
+      );
+
+    await Effect.runPromise(
+      Effect.all([
+        turnOf("owner-7", "reply"),
+        turnOf("owner-7", "reply"),
+        turnOf("owner-7", "scheduled_task"),
+        turnOf("owner-8", "reply"),
+      ])
+    );
+
+    const affinities = requests.map((request) =>
+      request.headers.get("x-session-affinity")
+    );
+    const [firstTurn, secondTurn, sideSession, otherOwner] = affinities;
+    expect(affinities).toHaveLength(4);
+    expect(firstTurn).toMatch(/^[0-9a-f]{64}$/u);
+    expect(secondTurn).toBe(firstTurn);
+    expect(sideSession).toBe(firstTurn);
+    expect(otherOwner).not.toBe(firstTurn);
+    expect(firstTurn).not.toContain("owner-7");
+    expect(otherOwner).not.toContain("owner-8");
+    for (const request of requests) {
+      expect(request.headers.get("cf-aig-skip-cache")).toBe("true");
+    }
   });
 
   it("gives each Model Task the route it had before the route table", () => {
@@ -154,7 +210,10 @@ describe("Model Gateway transport", () => {
     const headers = aiGatewayHeaders(
       "assistant",
       { token: "gateway-token", billing: "byok" },
-      OwnerIdSchema.make("owner-7")
+      {
+        ownerId: OwnerIdSchema.make("owner-7"),
+        sessionAffinity: "session-affinity-of-owner-7",
+      }
     );
 
     expect(headers["cf-aig-no-wholesale"]).toBe("true");
@@ -168,6 +227,104 @@ describe("Model Gateway transport", () => {
     expect(failure).toContain("AI_GATEWAY_URL");
     expect(failure).not.toContain(env.AI_GATEWAY_TOKEN);
     expect(failure).not.toContain(env.TELEGRAM_BOT_TOKEN);
+  });
+
+  it("records the start of each model call, not its end, as the time of the step", async () => {
+    const callDelayMillis = 300;
+    const callStarts: number[] = [];
+    const slowModel = new MockLanguageModelV4({
+      doGenerate: async () => {
+        callStarts.push(Date.now());
+        await Effect.runPromise(Effect.sleep(callDelayMillis));
+        return {
+          content: [{ type: "text", text: "Hi there" }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: {
+            inputTokens: {
+              total: 10,
+              noCache: 10,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+            outputTokens: { total: 2, text: 2, reasoning: 0 },
+          },
+          warnings: [],
+        };
+      },
+    });
+
+    const reply = await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Hi" }],
+            trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
+            stepLimit: 1,
+          })
+        ),
+        Effect.provide(gatewayWith(slowModel))
+      )
+    );
+    const finishedAt = Date.now();
+
+    const [callStart] = callStarts;
+    const [step] = reply.steps;
+    expect(step?.calledAtMillis).toBeLessThanOrEqual(callStart ?? 0);
+    expect(step?.calledAtMillis).toBeLessThanOrEqual(
+      finishedAt - callDelayMillis
+    );
+  });
+
+  it("records the start of the attempt that succeeded after a retry", async () => {
+    const callStarts: number[] = [];
+    const flakyModel = new MockLanguageModelV4({
+      doGenerate: () => {
+        callStarts.push(Date.now());
+        if (callStarts.length === 1) {
+          return Promise.reject(new Error("The model provider is down"));
+        }
+        return Promise.resolve({
+          content: [{ type: "text", text: "Hi there" }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: {
+            inputTokens: {
+              total: 10,
+              noCache: 10,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+            outputTokens: { total: 2, text: 2, reasoning: 0 },
+          },
+          warnings: [],
+        });
+      },
+    });
+
+    const reply = await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Hi" }],
+            trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
+            stepLimit: 1,
+          })
+        ),
+        Effect.provide(gatewayWith(flakyModel))
+      )
+    );
+
+    const [firstAttempt, secondAttempt] = callStarts;
+    expect(callStarts).toHaveLength(2);
+    expect(reply.steps[0]?.calledAtMillis).toBeGreaterThan(firstAttempt ?? 0);
+    expect(reply.steps[0]?.calledAtMillis).toBeLessThanOrEqual(
+      secondAttempt ?? 0
+    );
   });
 
   it("does not repeat a successful model call when the usage write fails", async () => {

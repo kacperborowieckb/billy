@@ -9,13 +9,19 @@ import {
   withinSizeLimit,
 } from "./bundle.ts";
 import { runLocalWorker } from "./dev.ts";
-import { diagnose, isHealthy, renderDiagnosis } from "./doctor.ts";
+import {
+  diagnose,
+  isHealthy,
+  operatorMetricsDatasetOf,
+  renderDiagnosis,
+} from "./doctor.ts";
 import { runEvalCommand } from "./eval/eval-command.ts";
 import {
   featureMapIsCurrent,
   featureMapPath,
   writeFeatureMap,
 } from "./feature-map.ts";
+import { hitRateSourceOf, readHitRate } from "./hit-rate.ts";
 import {
   addOwner,
   localWorkerUrl,
@@ -34,13 +40,18 @@ const exitWithFailureWhen = (failed: boolean) =>
 
 const doctor = Command.make("doctor", {}, () =>
   Effect.gen(function* doctorCommand() {
-    const diagnosis = yield* Effect.sync(() => diagnose(wranglerConfigPath));
+    const configured = yield* Effect.sync(() => diagnose(wranglerConfigPath));
+    const dataset = yield* Effect.sync(() =>
+      operatorMetricsDatasetOf(wranglerConfigPath)
+    );
+    const hitRate = yield* readHitRate(hitRateSourceOf(process.env, dataset));
+    const diagnosis = { ...configured, hitRate };
     yield* Console.log(renderDiagnosis(diagnosis));
     yield* exitWithFailureWhen(!isHealthy(diagnosis));
   })
 ).pipe(
   Command.withDescription(
-    "Check the Worker configuration and name the required secrets that are missing for local dev. Never prints secret values."
+    "Check the Worker configuration, name the required secrets that are missing for local dev, and, with CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN set, fail when the prefix cache Hit Rate of the last 24 hours is below its limit. Never prints secret values."
   )
 );
 

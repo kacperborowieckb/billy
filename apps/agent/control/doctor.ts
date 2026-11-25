@@ -4,6 +4,9 @@ import nodePath from "node:path";
 import { Schema } from "effect";
 import { unstable_getVarsForDev, unstable_readConfig } from "wrangler";
 
+import { hitRateFindings } from "./hit-rate.ts";
+import type { HitRateResult } from "./hit-rate.ts";
+
 export interface Finding {
   readonly ok: boolean;
   readonly label: string;
@@ -12,11 +15,13 @@ export interface Finding {
 export interface Diagnosis {
   readonly configuration: readonly Finding[];
   readonly secrets: readonly Finding[];
+  readonly hitRate?: HitRateResult;
 }
 
 const personalAgentBinding = "PERSONAL_AGENT";
 const personalAgentClass = "PersonalAgent";
 const directoryBinding = "DIRECTORY";
+const operatorMetricsBinding = "OPERATOR_METRICS";
 
 const WranglerConfigSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
@@ -37,6 +42,14 @@ const WranglerConfigSchema = Schema.Struct({
       binding: Schema.String,
       database_name: Schema.optional(Schema.String),
     })
+  ),
+  analytics_engine_datasets: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        binding: Schema.String,
+        dataset: Schema.optional(Schema.String),
+      })
+    )
   ),
   secrets: Schema.optional(
     Schema.Struct({ required: Schema.optional(Schema.Array(Schema.String)) })
@@ -87,6 +100,11 @@ const checkDirectory = (config: WranglerConfig) => {
   );
 };
 
+export const operatorMetricsDatasetOf = (configPath: string) =>
+  readWranglerConfig(configPath).analytics_engine_datasets?.find(
+    (candidate) => candidate.binding === operatorMetricsBinding
+  )?.dataset;
+
 const checkSecrets = (config: WranglerConfig, configPath: string) => {
   const required = config.secrets?.required ?? [];
   const available = new Set(
@@ -124,13 +142,33 @@ export const diagnose = (configPath: string): Diagnosis => {
   };
 };
 
+const hitRateFindingsOf = (diagnosis: Diagnosis) =>
+  diagnosis.hitRate === undefined ? [] : hitRateFindings(diagnosis.hitRate);
+
 export const isHealthy = (diagnosis: Diagnosis) =>
-  [...diagnosis.configuration, ...diagnosis.secrets].every(
-    (candidate) => candidate.ok
-  );
+  [
+    ...diagnosis.configuration,
+    ...diagnosis.secrets,
+    ...hitRateFindingsOf(diagnosis),
+  ].every((candidate) => candidate.ok);
 
 const renderFinding = (candidate: Finding) =>
   `  ${candidate.ok ? "ok     " : "problem"}  ${candidate.label}`;
+
+const hitRateNotCheckedLine =
+  "  skipped  Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (Account Analytics Read) to read the Operator metric";
+
+const renderHitRate = (diagnosis: Diagnosis) => {
+  if (diagnosis.hitRate === undefined) {
+    return [];
+  }
+  return [
+    "Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned miss)",
+    ...(diagnosis.hitRate._tag === "NotConfigured"
+      ? [hitRateNotCheckedLine]
+      : hitRateFindingsOf(diagnosis).map(renderFinding)),
+  ];
+};
 
 export const renderDiagnosis = (diagnosis: Diagnosis) =>
   [
@@ -138,5 +176,6 @@ export const renderDiagnosis = (diagnosis: Diagnosis) =>
     ...diagnosis.configuration.map(renderFinding),
     "Required secrets for local dev (.dev.vars, or .env and the shell environment)",
     ...diagnosis.secrets.map(renderFinding),
+    ...renderHitRate(diagnosis),
     isHealthy(diagnosis) ? "Result: healthy" : "Result: problems found",
   ].join("\n");

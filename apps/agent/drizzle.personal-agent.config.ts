@@ -6,6 +6,7 @@ export default defineConfig({
   schema: [
     "./src/personal-agent/storage-schema.ts",
     "./src/personal-agent/turn-progress-schema.ts",
+    "./src/personal-agent/prefix-cache-schema.ts",
     "./src/preferences/preferences-schema.ts",
     "./src/proactive/proactive-schema.ts",
     "./src/schedule/schedule-open-loops-schema.ts",
