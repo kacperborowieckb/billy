@@ -12,9 +12,9 @@ import { setTimeZoneToolName } from "../src/preferences/set-time-zone-tool.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
+import { quietHoursAndBriefLaterToday } from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
 
-const zone = DateTime.zoneMakeNamedUnsafe("Europe/Warsaw");
 const followUpPrompt = "Check on the gift for Ana";
 
 interface ScheduleRow extends Record<string, SqlStorageValue> {
@@ -70,28 +70,8 @@ const tracesOf = async (ownerId: string) => {
   return stored.map(({ trace }) => trace);
 };
 
-const localClock = (instant: DateTime.Utc) => {
-  const { hour, minute } = DateTime.toParts(DateTime.setZone(instant, zone));
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-};
-
 const ownerOutsideQuietHours = async (ownerId: string) => {
-  const now = DateTime.nowUnsafe();
-  await inAgent(
-    ownerId,
-    OwnerPreferences.pipe(
-      Effect.flatMap((preferences) =>
-        preferences.setQuietHours(
-          {
-            start: localClock(DateTime.add(now, { hours: 2 })),
-            end: localClock(DateTime.add(now, { hours: 3 })),
-          },
-          { start: "22:00", end: "08:00" },
-          "test-setup"
-        )
-      )
-    )
-  );
+  await inAgent(ownerId, quietHoursAndBriefLaterToday("Europe/Warsaw"));
 };
 
 const ownerWithBrief = async (telegramUserId: number) => {

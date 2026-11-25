@@ -19,14 +19,8 @@ import {
   scriptModel,
   instructionsAndContextOf,
 } from "./fakes.ts";
+import { quietHoursAndBriefLaterToday } from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
-
-const warsaw = DateTime.zoneMakeNamedUnsafe("Europe/Warsaw");
-
-const localClock = (instant: DateTime.Utc) => {
-  const { hour, minute } = DateTime.toParts(DateTime.setZone(instant, warsaw));
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-};
 
 const followUpPrompt = "Check on the gift for Ana";
 
@@ -90,22 +84,7 @@ const ownerInWarsaw = async (telegramUserId: number) => {
     textUpdate({ fromUserId: telegramUserId, text: "I live in Warsaw" })
   );
   await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
-  const now = DateTime.nowUnsafe();
-  await inAgent(
-    ownerId,
-    OwnerPreferences.pipe(
-      Effect.flatMap((preferences) =>
-        preferences.setQuietHours(
-          {
-            start: localClock(DateTime.add(now, { hours: 2 })),
-            end: localClock(DateTime.add(now, { hours: 3 })),
-          },
-          { start: "22:00", end: "08:00" },
-          "test-setup"
-        )
-      )
-    )
-  );
+  await inAgent(ownerId, quietHoursAndBriefLaterToday("Europe/Warsaw"));
   return ownerId;
 };
 
