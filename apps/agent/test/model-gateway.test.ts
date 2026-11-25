@@ -229,6 +229,55 @@ describe("Model Gateway transport", () => {
     expect(failure).not.toContain(env.TELEGRAM_BOT_TOKEN);
   });
 
+  it("records the start of each model call, not its end, as the time of the step", async () => {
+    const callDelayMillis = 300;
+    const callStarts: number[] = [];
+    const slowModel = new MockLanguageModelV4({
+      doGenerate: async () => {
+        callStarts.push(Date.now());
+        await Effect.runPromise(Effect.sleep(callDelayMillis));
+        return {
+          content: [{ type: "text", text: "Hi there" }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: {
+            inputTokens: {
+              total: 10,
+              noCache: 10,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+            outputTokens: { total: 2, text: 2, reasoning: 0 },
+          },
+          warnings: [],
+        };
+      },
+    });
+
+    const reply = await Effect.runPromise(
+      ModelGateway.pipe(
+        Effect.flatMap((models) =>
+          models.generate({
+            task: "reply",
+            system: "Be brief.",
+            messages: [{ role: "user", content: "Hi" }],
+            trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
+            stepLimit: 1,
+          })
+        ),
+        Effect.provide(gatewayWith(slowModel))
+      )
+    );
+    const finishedAt = Date.now();
+
+    const [callStart] = callStarts;
+    const [step] = reply.steps;
+    expect(step?.calledAtMillis).toBeLessThanOrEqual(callStart ?? 0);
+    expect(step?.calledAtMillis).toBeLessThanOrEqual(
+      finishedAt - callDelayMillis
+    );
+  });
+
   it("does not repeat a successful model call when the usage write fails", async () => {
     resetFakes();
     const failingLedger = Layer.succeed(UsageLedger, {

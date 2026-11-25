@@ -1,5 +1,5 @@
 import { isStepCount, ToolLoopAgent, wrapLanguageModel } from "ai";
-import type { ModelMessage, StepResult, ToolSet } from "ai";
+import type { ModelMessage } from "ai";
 import { Clock, Context, Effect, Layer, Schedule } from "effect";
 
 import type { TurnTrust } from "../approval/turn-trust.ts";
@@ -165,18 +165,14 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       const runTool = runToolEffect(runPromise);
       const clock = yield* Clock.Clock;
-      const calledAt: number[] = [];
+      let callStartedAt = clock.currentTimeMillisUnsafe();
       const agent = toolLoopAgentOf(route, request, {
         runTool,
         onCallStarted: () => {
-          calledAt.push(clock.currentTimeMillisUnsafe());
+          callStartedAt = clock.currentTimeMillisUnsafe();
         },
       });
-      const finishedSteps: StepResult<ToolSet>[] = [];
-      const modelStepsOf = (results: readonly StepResult<ToolSet>[]) =>
-        results.map((step, index) =>
-          modelStepOf(step, calledAt[index] ?? clock.currentTimeMillisUnsafe())
-        );
+      const finishedSteps: ModelStep[] = [];
 
       const result = yield* Effect.tryPromise({
         try: (abortSignal) =>
@@ -184,7 +180,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             messages: [...request.messages],
             abortSignal,
             onStepFinish: (step) => {
-              finishedSteps.push(step);
+              finishedSteps.push(modelStepOf(step, callStartedAt));
               request.trust.readToolResults(step.toolResults);
             },
           }),
@@ -193,13 +189,13 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
             modelId,
             reasoningEffort,
             cause,
-            steps: modelStepsOf(finishedSteps),
+            steps: [...finishedSteps],
           }),
       }).pipe(
         Effect.tapError((error) => recordUsage(request, modelId, error.steps))
       );
 
-      const steps = modelStepsOf(result.steps);
+      const steps: readonly ModelStep[] = [...finishedSteps];
       yield* recordUsage(request, modelId, steps);
 
       const lastStep = result.steps.at(-1);
