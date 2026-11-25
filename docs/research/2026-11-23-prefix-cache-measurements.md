@@ -1,4 +1,4 @@
-# Prefix cache: provider facts and hit rate before and after the change
+# Prefix cache: provider facts and Hit Rate before and after the change
 
 Date: 2026-11-23
 
@@ -133,7 +133,7 @@ Method: the same as Part B. A recording proxy on `127.0.0.1` with the stop at 2,
 
 Step 1 of the 12 Owner message Turns. The gap is the time from the end of the earlier call of the main Conversation.
 
-| Turn | Condition | Messages | Input | Cached | Hit rate | Gap |
+| Turn | Condition | Messages | Input | Cached | Hit Rate | Gap |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | First call, warm (see below) | 3 | 9,715 | 9,600 | 98.8% | - |
 | 2 | The time zone was set in Turn 1 | 7 | 9,860 | 9,664 | 98.0% | 0.1 min |
