@@ -5,10 +5,14 @@ import {
   runInDurableObject,
 } from "cloudflare:test";
 import { sql } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
+import {
+  ModelMessageJsonSchema,
+  ModelMessageSchema,
+} from "../src/model-gateway/model-message-schema.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
 import { compactionInstructions } from "../src/personal-agent/compaction-prompt.ts";
@@ -76,8 +80,10 @@ const compactionUsageRows = (ownerId: string) =>
     "SELECT task, event_id FROM model_usage WHERE task = 'compaction'"
   );
 
+const decodeStoredMessage = Schema.decodeUnknownSync(ModelMessageJsonSchema);
+
 const textOf = (row: StoredRow) => {
-  const { content } = JSON.parse(row.message) as { content: unknown };
+  const { content } = decodeStoredMessage(row.message);
   return typeof content === "string" ? content : JSON.stringify(content);
 };
 
@@ -105,10 +111,14 @@ const fourTurnsOverTheLimit = [
   reply("Fourth answer", 31_000),
 ];
 
-const chatFourTurns = async (userId: number) => {
+const chatThreeTurns = async (userId: number) => {
   await ownerSays(userId, "first message", 1);
   await ownerSays(userId, "second message", 2);
   await ownerSays(userId, "third message", 3);
+};
+
+const chatFourTurns = async (userId: number) => {
+  await chatThreeTurns(userId);
   await ownerSays(userId, "fourth message", 4);
 };
 
@@ -130,11 +140,17 @@ const call = (index: number): ModelCall => {
   return found;
 };
 
+const decodeCompactionData = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      earlierSummary: Schema.NullOr(Schema.String),
+      chat: Schema.Array(ModelMessageSchema),
+    })
+  )
+);
+
 const compactionDataOf = (compactionCall: ModelCall) =>
-  JSON.parse(ownerTextsOf(compactionCall.prompt).join("")) as {
-    earlierSummary: string | null;
-    chat: readonly { role: string; content: unknown }[];
-  };
+  decodeCompactionData(ownerTextsOf(compactionCall.prompt).join(""));
 
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
@@ -271,9 +287,7 @@ describe("Compaction", () => {
       reply("Fifth answer", 33_000),
       summary("They talked about A."),
     ]);
-    await ownerSays(8804, "first message", 1);
-    await ownerSays(8804, "second message", 2);
-    await ownerSays(8804, "third message", 3);
+    await chatThreeTurns(8804);
     const releaseModel = holdModel(4);
     await ownerSays(8804, "fourth message", 4);
     await waitForModelCalls(5);
@@ -302,9 +316,7 @@ describe("Compaction", () => {
       reply("Fifth answer", 33_000),
       summary("They talked about A."),
     ]);
-    await ownerSays(8805, "first message", 1);
-    await ownerSays(8805, "second message", 2);
-    await ownerSays(8805, "third message", 3);
+    await chatThreeTurns(8805);
     const releaseModel = holdModel(4);
     await ownerSays(8805, "fourth message", 4);
     await waitForModelCalls(5);
@@ -343,9 +355,7 @@ describe("Compaction", () => {
   it("writes nothing after a reset during the call, and runs again at the next check", async () => {
     const ownerId = await ownerInWarsaw(8807);
     scriptModel([...fourTurnsOverTheLimit, summary("They talked about A.")]);
-    await ownerSays(8807, "first message", 1);
-    await ownerSays(8807, "second message", 2);
-    await ownerSays(8807, "third message", 3);
+    await chatThreeTurns(8807);
     const releaseModel = holdModel(4);
     await ownerSays(8807, "fourth message", 4);
     await waitForModelCalls(5);
