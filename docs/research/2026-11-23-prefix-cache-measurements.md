@@ -118,7 +118,7 @@ Limits of the replay: it has no Compaction, no Stub, and no Profile change, so i
 
 ## Part D results: after the change
 
-Date: 2026-11-25. Code on `main` at `698c61a`, after all parts of #182. The repository owner approved this run on 2026-11-25 (decision 0002).
+Date: 2026-11-25. Code on `main` at `698c61a`. That commit has all parts of #182 except the pointer Traces of #200 (`46390e1`). #200 sends the same Conversation rows in the same order, with the same system text and tool definitions, so the request does not change. The repository owner approved this run on 2026-11-25 (decision 0002).
 
 Method: the same as Part B. A recording proxy on `127.0.0.1` stopped all calls at 2,000,000 input tokens. The real Worker ran in the wrangler test harness (`eval/worker.ts`, temporary local storage, the fake Telegram API). One Owner sent 12 messages of the same kinds and in the same order as Part B. The messages were: time zone, two Captures, two Recalls, and two Scheduled Tasks set for some minutes later. Then small talk, a move of the Brief, "less of this", a second move of the Brief, and a closed task. The driver waited until each Schedule fired, so the run has 2 Scheduled Task Turns and 2 Proactive Turns between the Owner message Turns. The texts are new synthetic texts, so the numbers of tokens are not the same as in Part B. No local values file was present, and the proxy was the only path to the gateway. Every call sent `x-session-affinity` and `cf-aig-skip-cache: true`.
 
