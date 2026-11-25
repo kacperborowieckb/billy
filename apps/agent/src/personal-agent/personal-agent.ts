@@ -21,6 +21,11 @@ import { Schedules } from "../schedule/schedules.ts";
 import type { AlarmClock } from "../schedule/schedules.ts";
 import type { OperatorMetrics } from "../tracing/operator-metrics.ts";
 import type { Redactor } from "../tracing/redactor.ts";
+import {
+  retentionRetryAfterFailure,
+  runTraceRetentionWhenDue,
+} from "../tracing/trace-retention.ts";
+import type { TraceRetention } from "../tracing/trace-retention.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
 import { showTypingOnce } from "./acknowledge.ts";
 import { AgentStorage } from "./agent-storage.ts";
@@ -43,18 +48,20 @@ import { takeTurn } from "./turn.ts";
 interface AgentSettings {
   readonly clock: AlarmClock;
   readonly burstWait: () => BurstWait;
+  readonly traceRetention: () => TraceRetention;
   readonly storedFormLimits: () => StoredFormLimitValues;
 }
 
 const personalAgentLayer = (
   storage: DurableObjectStorage,
   ownerId: OwnerId,
-  { clock, burstWait, storedFormLimits }: AgentSettings
+  { clock, burstWait, traceRetention, storedFormLimits }: AgentSettings
 ) => {
   const journal = Journal.layer(ownerId);
-  const schedules = Schedules.layer(ownerId, clock, burstWait).pipe(
-    Layer.provide(journal)
-  );
+  const schedules = Schedules.layer(ownerId, clock, {
+    burstWait,
+    traceRetention,
+  }).pipe(Layer.provide(journal));
   return Layer.mergeAll(
     schedules,
     Inbox.layer.pipe(Layer.provide(Layer.merge(journal, TurnProgress.layer))),
@@ -94,6 +101,9 @@ export class PersonalAgent extends Agent<Env> {
 
   protected readonly behavior: BehaviorConfig = defaultBehaviorConfig;
 
+  private traceRetentionRetryNotBefore: Option.Option<DateTime.Utc> =
+    Option.none();
+
   protected readonly alarmClock: AlarmClock = {
     setAt: (dueAt) => this.setAlarmAt(dueAt),
   };
@@ -102,6 +112,10 @@ export class PersonalAgent extends Agent<Env> {
     personalAgentLayer(this.ctx.storage, this.ownerId, {
       clock: this.alarmClock,
       burstWait: () => burstWaitOf(this.behavior),
+      traceRetention: () => ({
+        days: this.behavior.traceRetentionDays,
+        retryNotBefore: this.traceRetentionRetryNotBefore,
+      }),
       storedFormLimits: () => this.behavior,
     })
   );
@@ -128,6 +142,27 @@ export class PersonalAgent extends Agent<Env> {
   }
 
   async fireDueSchedules(): Promise<void> {
+    await this.runtime.runPromise(
+      runTraceRetentionWhenDue({
+        days: this.behavior.traceRetentionDays,
+        retryNotBefore: this.traceRetentionRetryNotBefore,
+      }).pipe(
+        Effect.map((run) =>
+          run === "Ran" ? Option.none() : this.traceRetentionRetryNotBefore
+        ),
+        Effect.catchCause((cause) =>
+          Effect.logError("The Trace retention step failed", cause).pipe(
+            Effect.andThen(retentionRetryAfterFailure),
+            Effect.map(Option.some)
+          )
+        ),
+        Effect.flatMap((retryNotBefore) =>
+          Effect.sync(() => {
+            this.traceRetentionRetryNotBefore = retryNotBefore;
+          })
+        )
+      )
+    );
     await this.runtime.runPromise(
       expireDueApprovals.pipe(
         Effect.provide(this.turnServices(this.env, this.ownerId)),

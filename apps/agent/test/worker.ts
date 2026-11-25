@@ -20,6 +20,7 @@ import {
   fakeTelegramApiUrl,
   fakeTool,
   fakeToolApprovalExpiryMillis,
+  fakeTraceRetention,
   testTypingRepeatMillis,
 } from "./fakes.ts";
 
@@ -47,9 +48,9 @@ const fakeTurnServices: TurnServices = Layer.mergeAll(
   )
 );
 
-const fakeTools: AgentTools = {
-  [fakeTool.name]: agentTool({
-    description: "Keep a word",
+const keepWordTool = (description: string) =>
+  agentTool({
+    description,
     inputSchema: z.object({ word: z.string() }),
     riskClass: "change",
     approvalSummary: {
@@ -65,7 +66,12 @@ const fakeTools: AgentTools = {
             return { kept: word };
           })
         : Effect.fail(new ToolFailed({ message: fakeTool.failWith })),
-  }),
+  });
+
+const fakeTools: AgentTools = {
+  get [fakeTool.name]() {
+    return keepWordTool(fakeTool.description);
+  },
 };
 
 const useFakeTurnServices = () => fakeTurnServices;
@@ -85,6 +91,9 @@ export class PersonalAgent extends LivePersonalAgent {
     },
     get burstMaxRestarts() {
       return fakeBurstWait.maxRestarts;
+    },
+    get traceRetentionDays() {
+      return fakeTraceRetention.days;
     },
   };
 }

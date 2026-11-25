@@ -11,6 +11,7 @@ import type { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import type { Usage } from "../model-gateway/usage-ledger.ts";
 import type { Redactor } from "../tracing/redactor.ts";
+import type { PointedRequest } from "../tracing/traced-request.ts";
 import type {
   ProactiveTurnTrace,
   ReplyTurnTrace,
@@ -85,8 +86,7 @@ const traceStepsOf = (
   }));
 
 export interface ModelTraceInput {
-  readonly system: string;
-  readonly messages: readonly ModelMessage[];
+  readonly request: PointedRequest;
   readonly outcome: ModelOutcome;
   readonly modelLatencyMillis: number;
   readonly redactor: Redactor["Service"];
@@ -119,8 +119,7 @@ const traceOutcomeOf = (
 };
 
 const modelTraceOf = ({
-  system,
-  messages,
+  request,
   outcome,
   modelLatencyMillis,
   redactor,
@@ -140,8 +139,7 @@ const modelTraceOf = ({
       attemptTimeoutMillis,
       reasoningEffort,
     },
-    system: redactor.redact(system),
-    messages: messages.map((message) => redactor.redactMessage(message)),
+    request,
     steps: traceStepsOf(outcome, redactor),
     modelLatencyMillis,
     outcome: traceOutcomeOf(outcomeKind, reaction, redactor),

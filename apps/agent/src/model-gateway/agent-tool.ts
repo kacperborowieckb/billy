@@ -28,7 +28,11 @@ export type RunToolEffect = <Output>(
 
 export type ToolInputGate = (input: unknown) => GateDecision;
 
+export type InputJsonSchema = () => JSONSchema7 | PromiseLike<JSONSchema7>;
+
 export interface AgentTool extends GatedTool {
+  readonly description: string;
+  readonly inputJsonSchema: InputJsonSchema;
   readonly approvalSummaryOf: ApprovalSummaryOf;
   readonly approvalExpiryMillis?: number;
   readonly executeApproved: (
@@ -162,6 +166,8 @@ export const agentTool = <Input, Output>(
     definition.riskClassOfInput
   );
   return {
+    description: definition.description,
+    inputJsonSchema: () => asSchema(definition.inputSchema).jsonSchema,
     executeApproved: executeApprovedOf(definition, classified),
     ...classified,
     marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
@@ -226,6 +232,8 @@ interface OutcomeToolDefinition<Input> {
 export const outcomeTool = <Input>(
   definition: OutcomeToolDefinition<Input>
 ): AgentTool => ({
+  description: definition.description,
+  inputJsonSchema: () => asSchema(definition.inputSchema).jsonSchema,
   ...riskClassified("read"),
   marksItsWorkUntrusted: () => false,
   hasCodeWrittenInput: false,

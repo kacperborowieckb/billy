@@ -10,6 +10,8 @@ import {
 } from "../personal-agent/burst-wait.ts";
 import type { BurstWait } from "../personal-agent/burst-wait.ts";
 import { nextOccurrence } from "../time/next-occurrence.ts";
+import { traceRetentionAlarmAt } from "../tracing/trace-retention.ts";
+import type { TraceRetention } from "../tracing/trace-retention.ts";
 import { earlierOf } from "./outcome-alarm-queries.ts";
 import { columnsOfAction } from "./schedule-action.ts";
 import { makeScheduleMoves } from "./schedule-moves.ts";
@@ -36,12 +38,23 @@ export interface AlarmClock {
   readonly setAt: (dueAt: Option.Option<DateTime.Utc>) => Promise<void>;
 }
 
-const defaultBurstWait = () => burstWaitOf(defaultBehaviorConfig);
+export interface AlarmLimits {
+  readonly burstWait: () => BurstWait;
+  readonly traceRetention: () => TraceRetention;
+}
+
+const defaultAlarmLimits: AlarmLimits = {
+  burstWait: () => burstWaitOf(defaultBehaviorConfig),
+  traceRetention: () => ({
+    days: defaultBehaviorConfig.traceRetentionDays,
+    retryNotBefore: Option.none(),
+  }),
+};
 
 const makeSchedules = Effect.fnUntraced(function* makeSchedules(
   ownerId: OwnerId,
   clock: AlarmClock,
-  burstWait: () => BurstWait
+  { burstWait, traceRetention }: AlarmLimits
 ) {
   const { database } = yield* AgentStorage;
   const journal = yield* Journal;
@@ -54,8 +67,11 @@ const makeSchedules = Effect.fnUntraced(function* makeSchedules(
   const rearm = Effect.all([
     queries.earliestAlarmAt,
     Effect.suspend(() => burstAlarmAt(burstWait())),
+    Effect.suspend(() => traceRetentionAlarmAt(database, traceRetention())),
   ]).pipe(
-    Effect.map(([scheduleAt, burstAt]) => earlierOf(scheduleAt, burstAt)),
+    Effect.map(([scheduleAt, burstAt, retentionAt]) =>
+      earlierOf(earlierOf(scheduleAt, burstAt), retentionAt)
+    ),
     Effect.flatMap((dueAt) => Effect.promise(() => clock.setAt(dueAt)))
   );
 
@@ -232,6 +248,6 @@ export class Schedules extends Context.Service<
   static readonly layer = (
     ownerId: OwnerId,
     clock: AlarmClock,
-    burstWait: () => BurstWait = defaultBurstWait
-  ) => Layer.effect(Schedules, makeSchedules(ownerId, clock, burstWait));
+    alarmLimits: AlarmLimits = defaultAlarmLimits
+  ) => Layer.effect(Schedules, makeSchedules(ownerId, clock, alarmLimits));
 }

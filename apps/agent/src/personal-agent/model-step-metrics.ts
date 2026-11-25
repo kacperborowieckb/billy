@@ -6,7 +6,7 @@ import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ModelStep } from "../model-gateway/model-step.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { OperatorMetrics } from "../tracing/operator-metrics.ts";
-import type { ModelTurnKind } from "./model-turn.ts";
+import type { ModelTurnKind } from "./model-turn-kind.ts";
 import {
   minutesBetween,
   plannedMissOf,

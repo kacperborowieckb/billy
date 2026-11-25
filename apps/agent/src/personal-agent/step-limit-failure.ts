@@ -2,8 +2,8 @@ import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
+import type { ModelTurnKind } from "./model-turn-kind.ts";
 import type { ModelTurnResult } from "./model-turn-result.ts";
-import type { ModelTurnKind } from "./model-turn.ts";
 import { unanswered } from "./stored-turn.ts";
 import { TurnProgress } from "./turn-progress.ts";
 import { stepLimitReason } from "./turn-record.ts";

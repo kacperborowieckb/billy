@@ -34,6 +34,7 @@ import {
   scriptModel,
 } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
+import { onlyTheRetentionAlarm } from "./trace-retention-alarm.ts";
 
 type ReminderServices =
   | Inbox
@@ -258,7 +259,9 @@ describe("set_schedule", () => {
 
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
     expect(await schedulesOf(ownerId)).toEqual([]);
-    expect(await alarmsOf(ownerId)).toEqual([]);
+    expect(await alarmsOf(ownerId)).toEqual(
+      await onlyTheRetentionAlarm(ownerId)
+    );
     const [call] = await toolCallsOf(ownerId);
     expect(call).toMatchObject({
       failed: true,
@@ -621,7 +624,9 @@ describe("Reminder delivery", () => {
       result: "reminder_delivered",
       text: "Buy the gift for Ana",
     });
-    expect(await alarmsOf(ownerId)).toEqual([]);
+    expect(await alarmsOf(ownerId)).toEqual(
+      await onlyTheRetentionAlarm(ownerId)
+    );
     const reminderEventId = traces.at(-1)?.trace.eventId;
     expect(reminderEventId).not.toBe("");
     expect(
@@ -742,7 +747,9 @@ describe("Reminder delivery", () => {
     );
     expect(sentTexts()).toEqual(["You said: hello"]);
     expect(await firstScheduleState(ownerId)).toBe("done");
-    expect(await alarmsOf(ownerId)).toEqual([]);
+    expect(await alarmsOf(ownerId)).toEqual(
+      await onlyTheRetentionAlarm(ownerId)
+    );
     const traces = await inAgent(
       ownerId,
       TurnTraces.pipe(Effect.flatMap((stored) => stored.read))
@@ -811,7 +818,9 @@ describe("Reminder delivery", () => {
       expect(await journalTagsOf(ownerId)).toContain("ReplyFailed")
     );
     expect(await firstScheduleState(ownerId)).toBe("done");
-    expect(await alarmsOf(ownerId)).toEqual([]);
+    expect(await alarmsOf(ownerId)).toEqual(
+      await onlyTheRetentionAlarm(ownerId)
+    );
     const traces = await inAgent(
       ownerId,
       TurnTraces.pipe(Effect.flatMap((stored) => stored.read))

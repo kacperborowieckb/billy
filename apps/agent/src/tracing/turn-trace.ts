@@ -1,75 +1,18 @@
 import { asc, eq } from "drizzle-orm";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
-import { RestartRecordSchema } from "../journal/journal.ts";
-import { ModelMessageSchema } from "../model-gateway/model-message-schema.ts";
-import { ReasoningEffortSchema } from "../model-gateway/model-provider.ts";
 import { OwnerIdSchema } from "../owner-id.ts";
 import type { OwnerId } from "../owner-id.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { turnTraces } from "../personal-agent/storage-schema.ts";
 import {
-  outcomeKinds,
   proactiveFoldReasons,
   proactiveHoldReasons,
   turnResults,
 } from "../personal-agent/storage-values.ts";
-
-const TraceUsageSchema = Schema.Struct({
-  inputTokens: Schema.NullOr(Schema.Number),
-  outputTokens: Schema.NullOr(Schema.Number),
-  cachedInputTokens: Schema.NullOr(Schema.Number),
-  costUsd: Schema.NullOr(Schema.Number),
-});
-
-const ToolCallSchema = Schema.Struct({
-  callId: Schema.String,
-  name: Schema.String,
-  input: Schema.String,
-  output: Schema.String,
-  failed: Schema.Boolean,
-});
-
-const TraceStepSchema = Schema.Struct({
-  toolCalls: Schema.Array(ToolCallSchema),
-  usage: TraceUsageSchema,
-});
-
-const modelTraceFields = {
-  modelId: Schema.String,
-  modelSettings: Schema.Struct({
-    attempts: Schema.Number,
-    attemptTimeoutMillis: Schema.Number,
-    reasoningEffort: Schema.optionalKey(ReasoningEffortSchema),
-  }),
-  system: Schema.String,
-  messages: Schema.Array(ModelMessageSchema),
-  steps: Schema.Array(TraceStepSchema).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed([]))
-  ),
-  reply: Schema.NullOr(Schema.String),
-  error: Schema.NullOr(Schema.String),
-  usage: TraceUsageSchema,
-  modelLatencyMillis: Schema.Number,
-  outcome: Schema.NullOr(
-    Schema.Struct({
-      kind: Schema.Literals(outcomeKinds),
-      emoji: Schema.optionalKey(Schema.String),
-      requestedEmoji: Schema.optionalKey(Schema.String),
-    })
-  ).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
-  refusedOutcomeTools: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed([]))
-  ),
-  restart: Schema.optionalKey(RestartRecordSchema),
-  trustLevelChange: Schema.optionalKey(
-    Schema.Struct({
-      trustLevel: Schema.Literal("untrusted"),
-      toolCallId: Schema.String,
-      toolName: Schema.String,
-    })
-  ),
-};
+import { modelTraceFields } from "./model-trace-fields.ts";
+import { storeRequestParts } from "./trace-request-parts.ts";
+import type { RequestPart } from "./traced-request.ts";
 
 const ReplyTraceBodySchema = Schema.Struct({
   task: Schema.Literal("reply"),
@@ -205,6 +148,13 @@ export type ReminderDeliveryTurnTrace =
 
 export type TurnTrace = typeof TurnTraceSchema.Type;
 
+export type ModelTurnTrace =
+  | ReplyTurnTrace
+  | ScheduledTaskTurnTrace
+  | ProactiveTurnTrace;
+
+export type EventTurnTrace = Exclude<TurnTrace, ModelTurnTrace>;
+
 export interface StoredTurnTrace<Trace extends TurnTrace = TurnTrace> {
   readonly sequence: number;
   readonly ownerId: OwnerId;
@@ -232,21 +182,51 @@ const toStoredTrace = (
   },
 });
 
+export interface ModelTurnRecord {
+  readonly trace: ModelTurnTrace;
+  readonly requestParts: readonly RequestPart[];
+}
+
 const makeTurnTraces = (ownerId: OwnerId) =>
   Effect.gen(function* makeTurnTracesEffect() {
     const { database } = yield* AgentStorage;
 
-    const record = ({ eventId, result, ...body }: TurnTrace) =>
-      database
+    const insertTrace = Effect.fnUntraced(function* insertTrace({
+      eventId,
+      result,
+      ...body
+    }: TurnTrace) {
+      const recordedAt = DateTime.formatIso(yield* DateTime.now);
+      const [inserted] = yield* database
         .insert(turnTraces)
         .values({
           ownerId,
-          recordedAt: new Date().toISOString(),
+          recordedAt,
           eventId,
           result,
           record: encodeBody(body),
         })
-        .pipe(Effect.asVoid);
+        .returning({ sequence: turnTraces.sequence });
+      return { sequence: inserted?.sequence, recordedAt };
+    });
+
+    const record = (trace: EventTurnTrace) =>
+      insertTrace(trace).pipe(Effect.asVoid);
+
+    const recordModelTurn = ({ trace, requestParts }: ModelTurnRecord) =>
+      database.transaction(() =>
+        insertTrace(trace).pipe(
+          Effect.flatMap(({ sequence, recordedAt }) =>
+            sequence === undefined
+              ? Effect.die("The Trace insert returned no sequence")
+              : storeRequestParts(database, {
+                  parts: requestParts,
+                  traceSequence: sequence,
+                  usedAt: recordedAt,
+                })
+          )
+        )
+      );
 
     const read = database
       .select()
@@ -270,7 +250,7 @@ const makeTurnTraces = (ownerId: OwnerId) =>
       )
     );
 
-    return { record, read, readForEvent, readReplies };
+    return { record, recordModelTurn, read, readForEvent, readReplies };
   });
 
 export class TurnTraces extends Context.Service<

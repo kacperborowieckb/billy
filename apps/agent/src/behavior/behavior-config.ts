@@ -1,3 +1,6 @@
+import { TraceRetentionDaysSchema } from "../tracing/trace-retention-days.ts";
+import type { TraceRetentionDays } from "../tracing/trace-retention-days.ts";
+
 export interface BehaviorConfig {
   readonly textingStyle: string;
   readonly maxToolSteps: number;
@@ -21,6 +24,7 @@ export interface BehaviorConfig {
   readonly compactionHistoryTokenLimit: number;
   readonly compactionKeptTokens: number;
   readonly maxSummaryTokens: number;
+  readonly traceRetentionDays: TraceRetentionDays;
   readonly quietHours: { readonly start: string; readonly end: string };
   readonly defaultTimeZone?: string | undefined;
 }
@@ -49,5 +53,6 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   compactionHistoryTokenLimit: 30_000,
   compactionKeptTokens: 8000,
   maxSummaryTokens: 1500,
+  traceRetentionDays: TraceRetentionDaysSchema.make(30),
   quietHours: { start: "22:00", end: "08:00" },
 };
