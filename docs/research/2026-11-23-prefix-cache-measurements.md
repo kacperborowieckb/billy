@@ -124,7 +124,7 @@ Method: the same as Part B. A recording proxy on `127.0.0.1` with the stop at 2,
 
 33 model calls in 16 Turns.
 
-| Turn kind | Calls | Step 1 input | Step 1 cached | Step 1 hit rate | Later steps hit rate | All calls hit rate | Share of input tokens |
+| Turn kind | Calls | Step 1 input | Step 1 cached | Step 1 Hit Rate | Later steps Hit Rate | All calls Hit Rate | Share of input tokens |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `reply` | 24 | 136,040 | 133,568 | 98.2% | 98.0% | 98.1% | 86.7% |
 | `scheduled_task` | 6 | 7,407 | 5,824 | 78.6% | 94.2% | 89.4% | 7.5% |
@@ -152,7 +152,7 @@ Turns 2 to 12: 126,325 input tokens, 123,968 cached, **98.1%**. Before the chang
 
 - The Turns 8, 9, 10, and 12 came 1.7 to 2.0 minutes after the earlier call of the main Conversation, with a Side Session between them, and hit 96.4% to 98.4%. Before the change, the same Turns hit 22% to 24%. A Side Session does not change the prefix of the main Conversation.
 - Turn 1 was not cold. A test of the driver at about 08:20 UTC sent the same system text and tool definitions some minutes before (see the cost). The system message and the tool definitions do not depend on the Owner, so the cache of one Owner serves another. A cold call of a new kind reads only the shared 2,432 tokens, as the first Side Session of each kind shows. The method leaves Turn 1 out, so the result does not change.
-- The step 1 hit rate of a Side Session is 40% to 91%. The first Side Session of each kind read only the 2,432 tokens that all kinds share. The second of each kind read 91%. Its run block holds the current time and the recent messages, so the text after the Owner Context Block is new in each Side Session. Its later steps hit 94% to 96%.
+- The step 1 Hit Rate of a Side Session is 40% to 91%. The first Side Session of each kind read only the 2,432 tokens that all kinds share. The second of each kind read 91%. Its Run block holds the current time and the recent messages, so the text after the Owner Context Block is new in each Side Session. Its later steps hit 94% to 96%.
 - The run has no Compaction, no Stub, and no Profile change after Turn 1, so it has none of the planned misses.
 - The calls were seconds to 2 minutes apart. The run does not measure gaps longer than the cache lifetime.
 
