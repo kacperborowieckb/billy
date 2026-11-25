@@ -1,4 +1,4 @@
-import { Effect, Option, Schedule } from "effect";
+import { Effect, Exit, Fiber, Option, Schedule } from "effect";
 
 import { fixedTurnTrust } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
@@ -64,6 +64,20 @@ interface SummaryRequest extends CompactionRequest {
   readonly summaryTarget: number;
 }
 
+const logWhenStoppedCallFails = (
+  generation: Fiber.Fiber<CompactionCall, unknown>
+) =>
+  Fiber.await(generation).pipe(
+    Effect.flatMap((exit) =>
+      Exit.isFailure(exit)
+        ? Effect.logError(
+            "A stopped Compaction call did not record its Usage",
+            exit.cause
+          )
+        : Effect.void
+    )
+  );
+
 const compactionCall = Effect.fnUntraced(function* compactionCall({
   ownerId,
   behavior,
@@ -105,14 +119,16 @@ const compactionCall = Effect.fnUntraced(function* compactionCall({
           ),
       })
     );
+  const generation = yield* Effect.forkDetach(generated);
   const burstBecameDue = inbox.burstIsDue(burstWaitOf(behavior)).pipe(
     Effect.repeat({
       schedule: Schedule.spaced(burstPollInterval),
       until: (due) => due,
     }),
+    Effect.andThen(Effect.forkDetach(logWhenStoppedCallFails(generation))),
     Effect.as<CompactionCall>({ _tag: "StoppedByBurst" })
   );
-  return yield* Effect.raceFirst(generated, burstBecameDue);
+  return yield* Effect.raceFirst(Fiber.join(generation), burstBecameDue);
 });
 
 const summaryAttempts = Effect.fnUntraced(function* summaryAttempts(
