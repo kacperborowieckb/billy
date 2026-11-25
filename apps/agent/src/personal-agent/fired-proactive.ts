@@ -19,12 +19,15 @@ import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
 import { proactiveReach } from "./proactive-reach.ts";
-import { proactiveSection } from "./proactive-section.ts";
+import {
+  proactiveInstructions,
+  proactiveSection,
+} from "./proactive-section.ts";
 import { proactiveTools } from "./proactive-tools.ts";
 import { tokensSpentToday } from "./scheduled-task-budget.ts";
 import type { TurnPreparation } from "./turn-preparation.ts";
 import { proactiveTraceOf } from "./turn-record.ts";
-import { sideSession } from "./turn-session.ts";
+import type { TurnSession } from "./turn-session.ts";
 
 const uniqueNotes = <Item extends { readonly noteId: string }>(
   items: readonly Item[]
@@ -174,6 +177,7 @@ interface ProactiveRun {
   readonly event: ScheduleFiredEvent;
   readonly action: RunPrompt;
   readonly schedule: Schedule;
+  readonly session: TurnSession;
 }
 
 export const runProactiveMessage = Effect.fnUntraced(
@@ -183,6 +187,7 @@ export const runProactiveMessage = Effect.fnUntraced(
     event,
     action,
     schedule,
+    session,
   }: ProactiveRun) {
     const toolServices = yield* agentToolServices;
     const inbox = yield* Inbox;
@@ -193,13 +198,14 @@ export const runProactiveMessage = Effect.fnUntraced(
     const result = yield* runModelTurn({
       ownerId,
       behavior,
-      session: sideSession,
+      session,
       kind: {
         task: "proactive",
         event,
         inputs: [
           scheduledTaskInputMessage(mergedPromptOf(action.prompt, merged)),
         ],
+        instructions: [proactiveInstructions],
         tools: proactiveTools(event.eventId, { ...toolServices, behavior }),
         trustLevel: "owner",
         prepare: proactivePreparation(behavior, event, merged),

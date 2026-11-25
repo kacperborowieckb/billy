@@ -1,12 +1,20 @@
 import type { ModelMessage, UserContent } from "ai";
 
-import { turnContextEndLabel, turnContextLabel } from "./context-labels.ts";
+import {
+  runBlockEndLabel,
+  runBlockLabel,
+  turnContextEndLabel,
+  turnContextLabel,
+} from "./context-labels.ts";
 
 export const turnContextBlock = (
   currentTime: string,
   situation: readonly string[]
 ) =>
   [turnContextLabel, currentTime, ...situation, turnContextEndLabel].join("\n");
+
+export const runBlock = (currentTime: string, situation: readonly string[]) =>
+  [runBlockLabel, currentTime, ...situation, runBlockEndLabel].join("\n");
 
 const startingWith = (turnContext: string, content: UserContent): UserContent =>
   typeof content === "string"

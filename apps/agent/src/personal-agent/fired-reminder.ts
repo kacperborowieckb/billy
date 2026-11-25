@@ -14,11 +14,11 @@ import {
   unconfirmedSendReason,
 } from "./delivery.ts";
 import type { DeliveryState } from "./delivery.ts";
-import { eventMessage } from "./event-message.ts";
 import { lateNoticeFor } from "./fired-schedule-lateness.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
-import { replied, storeFinishedTurn } from "./stored-turn.ts";
+import { replied } from "./stored-turn.ts";
+import type { TurnSession } from "./turn-session.ts";
 
 interface ReminderRecord {
   readonly ownerId: OwnerId;
@@ -129,6 +129,7 @@ interface ReminderDelivery {
   readonly behavior: BehaviorConfig;
   readonly event: ScheduleFiredEvent;
   readonly action: SendText;
+  readonly session: TurnSession;
 }
 
 export const deliverReminder = Effect.fnUntraced(function* deliverReminder({
@@ -136,6 +137,7 @@ export const deliverReminder = Effect.fnUntraced(function* deliverReminder({
   behavior,
   event,
   action,
+  session,
 }: ReminderDelivery) {
   const inbox = yield* Inbox;
   const schedules = yield* Schedules;
@@ -166,9 +168,9 @@ export const deliverReminder = Effect.fnUntraced(function* deliverReminder({
     _tag: "Delivered",
     channelMessageId: delivery.channelMessageId,
   });
-  yield* storeFinishedTurn({
+  yield* session.commit({
     eventId: event.eventId,
-    inputs: [eventMessage(event)],
+    inputs: [],
     steps: [],
     ending: replied(text),
   });

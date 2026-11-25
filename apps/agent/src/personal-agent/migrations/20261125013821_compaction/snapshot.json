@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "03d3b8e3-7e01-44fd-91ec-431c3165e6b2",
-  "prevIds": ["0aa600ba-a52d-4de0-a423-aa00277f554f"],
+  "id": "3173e2a6-3262-4123-9ab9-51d4bfb9c407",
+  "prevIds": ["82402ffa-da0d-4424-91e9-bfe1c61aa1b3"],
   "ddl": [
     {
       "name": "conversation_messages",
@@ -58,6 +58,10 @@
     },
     {
       "name": "turn_progress",
+      "entityType": "tables"
+    },
+    {
+      "name": "write_back_markers",
       "entityType": "tables"
     },
     {
@@ -1067,6 +1071,46 @@
       "entityType": "columns"
     },
     {
+      "table": "write_back_markers",
+      "name": "event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "local_time",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "owner_preferences",
       "name": "key",
       "type": "text",
@@ -1759,6 +1803,13 @@
       "entityType": "pks"
     },
     {
+      "table": "write_back_markers",
+      "name": "write_back_markers_pk",
+      "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
       "table": "owner_preferences",
       "name": "owner_preferences_pk",
       "columns": ["key"],
@@ -1838,7 +1889,7 @@
     {
       "table": "conversation_messages",
       "name": "conversation_messages_kind_check",
-      "value": "\"kind\" IN ('input', 'step', 'reply', 'approval_status', 'summary')",
+      "value": "\"kind\" IN ('input', 'step', 'reply', 'write_back', 'write_back_stub', 'approval_status', 'summary')",
       "entityType": "checks"
     },
     {
@@ -1923,6 +1974,12 @@
       "table": "turn_traces",
       "name": "turn_traces_result_check",
       "value": "\"result\" IN ('model_replied', 'model_failed', 'reminder_delivered', 'reminder_delivery_failed', 'scheduled_task_replied', 'scheduled_task_failed', 'scheduled_task_skipped', 'proactive_message_sent', 'proactive_message_failed', 'proactive_message_held', 'proactive_message_folded', 'proactive_message_skipped')",
+      "entityType": "checks"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "write_back_markers_kind_check",
+      "value": "\"kind\" IN ('Brief', 'Follow-up', 'Scheduled Task', 'Reminder', 'Schedule')",
       "entityType": "checks"
     },
     {

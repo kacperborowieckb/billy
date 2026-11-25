@@ -73,7 +73,7 @@ const failedOutputTypes: ReadonlySet<ToolOutput["type"]> = new Set([
   "execution-denied",
 ]);
 
-const statusOf = (output: ToolOutput | undefined) => {
+export const toolCallStatusOf = (output: ToolOutput | undefined) => {
   if (output === undefined) {
     return "no result";
   }
@@ -100,14 +100,14 @@ const isToolName = Schema.is(
   )
 );
 
-const storedToolNameOf = (toolName: string) =>
+export const storedToolNameOf = (toolName: string) =>
   isToolName(toolName) ? toolName : "unknown_tool";
 
 export const untrustedToolCallStub = (
   toolName: string,
   output: ToolOutput | undefined
 ) =>
-  `[${storedToolNameOf(toolName)}: ${statusOf(output)}.${noteIdsText(output)} Input and result removed from the history]`;
+  `[${storedToolNameOf(toolName)}: ${toolCallStatusOf(output)}.${noteIdsText(output)} Input and result removed from the history]`;
 
 export const withUntrustedContentStubbed = (text: string): string => {
   const start = text.indexOf(untrustedContentOpening);
@@ -134,7 +134,7 @@ export const inputStubbed = (message: ModelMessage): ModelMessage =>
     ? { ...message, content: userContentStubbed(message.content) }
     : message;
 
-const toolOutputsOf = (steps: readonly ModelMessage[]) => {
+export const toolOutputsOf = (steps: readonly ModelMessage[]) => {
   const outputs = new Map<string, ToolOutput>();
   for (const message of steps) {
     if (message.role === "tool") {
@@ -150,7 +150,9 @@ const toolOutputsOf = (steps: readonly ModelMessage[]) => {
 
 type AssistantPart = Exclude<AssistantContent, string>[number];
 
-const assistantPartsOf = (message: ModelMessage): readonly AssistantPart[] => {
+export const assistantPartsOf = (
+  message: ModelMessage
+): readonly AssistantPart[] => {
   if (message.role !== "assistant") {
     return [];
   }
@@ -159,7 +161,7 @@ const assistantPartsOf = (message: ModelMessage): readonly AssistantPart[] => {
     : message.content;
 };
 
-const isToolCall = (part: AssistantPart): part is ToolCallPart =>
+export const isToolCall = (part: AssistantPart): part is ToolCallPart =>
   part.type === "tool-call";
 
 const holdsModelText = (parts: readonly AssistantPart[]) =>

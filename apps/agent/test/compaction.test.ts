@@ -5,7 +5,7 @@ import {
   runInDurableObject,
 } from "cloudflare:test";
 import { sql } from "drizzle-orm";
-import { Effect, Schema } from "effect";
+import { DateTime, Effect, Schema } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
@@ -21,11 +21,14 @@ import {
   summaryLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
+import type { ScheduleAction } from "../src/schedule/schedule-action.ts";
+import { Schedules } from "../src/schedule/schedules.ts";
 import {
   failModel,
   fakeModel,
   fakeTelegram,
   holdModel,
+  lastUserTextOf,
   ownerTextsOf,
   resetFakes,
   scriptModel,
@@ -151,6 +154,25 @@ const decodeCompactionData = Schema.decodeUnknownSync(
 
 const compactionDataOf = (compactionCall: ModelCall) =>
   decodeCompactionData(ownerTextsOf(compactionCall.prompt).join(""));
+
+const fireOwnerSchedule = async (ownerId: string, action: ScheduleAction) => {
+  const agent = await agentOf(ownerId);
+  await runInDurableObject(agent, (instance) =>
+    instance.runtime.runPromise(
+      Effect.gen(function* seedEffect() {
+        const schedules = yield* Schedules;
+        const now = yield* DateTime.now;
+        yield* schedules.set({
+          action,
+          setBy: "owner",
+          dueAt: DateTime.subtract(now, { seconds: 5 }),
+          sourceEventId: `seed-${action._tag}`,
+        });
+      })
+    )
+  );
+  await runInDurableObject(agent, (instance) => instance.fireDueSchedules());
+};
 
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
@@ -391,6 +413,43 @@ describe("Compaction", () => {
     const compacted = rows.filter((row) => row.compacted_at !== null);
     expect(compacted.map(textOf).join("\n")).toContain("third message");
     expect(compacted.map(textOf).join("\n")).not.toContain("fourth message");
+  });
+
+  it("compacts a Write-back before the cut with its block, and a later Side Session reads no compacted text", async () => {
+    const ownerId = await ownerInWarsaw(8810);
+    scriptModel([...fourTurnsOverTheLimit, summary("They talked about A.")]);
+    await ownerSays(8810, "first message", 1);
+    await ownerSays(8810, "second message", 2);
+    await fireOwnerSchedule(ownerId, {
+      _tag: "SendText",
+      text: "Water the plants",
+    });
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(3), {
+      timeout: 10_000,
+    });
+    await ownerSays(8810, "third message", 4);
+    await ownerSays(8810, "fourth message", 5);
+    const rows = await waitForSummaries(ownerId, 1);
+
+    const writeBack = rows.find((row) => row.kind === "write_back");
+    expect(writeBack === undefined ? "" : textOf(writeBack)).toContain(
+      "Water the plants"
+    );
+    expect(writeBack?.compacted_at).not.toBeNull();
+
+    await fireOwnerSchedule(ownerId, {
+      _tag: "RunPrompt",
+      prompt: "List my open tasks",
+    });
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(6), {
+      timeout: 10_000,
+    });
+    const runBlock = lastUserTextOf(
+      call(fakeModel.doGenerateCalls.length - 1).prompt
+    );
+    expect(runBlock).toContain("fourth message");
+    expect(runBlock).not.toContain("first message");
+    expect(runBlock).not.toContain("Water the plants");
   });
 
   it("never puts a running Turn in a block", async () => {

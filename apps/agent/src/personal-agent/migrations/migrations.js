@@ -30,7 +30,8 @@ import m0028 from "./20261122212333_pending_approval_trust_level/migration.sql";
 import m0029 from "./20261122215135_pending_approval_position/migration.sql";
 import m0030 from "./20261124202916_conversation_layout/migration.sql";
 import m0031 from "./20261124225450_conversation_stubs/migration.sql";
-import m0032 from "./20261124232053_compaction/migration.sql";
+import m0032 from "./20261125011648_conversation_write_back/migration.sql";
+import m0033 from "./20261125013821_compaction/migration.sql";
 
 export default {
   migrations: {
@@ -66,6 +67,7 @@ export default {
     "20261122215135_pending_approval_position": m0029,
     "20261124202916_conversation_layout": m0030,
     "20261124225450_conversation_stubs": m0031,
-    "20261124232053_compaction": m0032,
+    "20261125011648_conversation_write_back": m0032,
+    "20261125013821_compaction": m0033,
   },
 };

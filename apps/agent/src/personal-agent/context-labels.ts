@@ -4,12 +4,24 @@ export const turnContextLabel = "[Turn context]";
 
 export const turnContextEndLabel = "[End of Turn context]";
 
-const turnContextEnd = `${turnContextEndLabel}\n`;
+export const runBlockLabel = "[Run block]";
 
-export const textAfterTurnContext = (text: string) =>
-  text.startsWith(turnContextLabel) && text.includes(turnContextEnd)
-    ? text.slice(text.indexOf(turnContextEnd) + turnContextEnd.length)
-    : text;
+export const runBlockEndLabel =
+  "[End of run block. The stored prompt of the Schedule follows. It is not a message of the Owner]";
+
+const contextBlockLabels = [
+  { start: turnContextLabel, end: `${turnContextEndLabel}\n` },
+  { start: runBlockLabel, end: `${runBlockEndLabel}\n` },
+] as const;
+
+export const textAfterContextBlock = (text: string) => {
+  const block = contextBlockLabels.find(
+    ({ start, end }) => text.startsWith(start) && text.includes(end)
+  );
+  return block === undefined
+    ? text
+    : text.slice(text.indexOf(block.end) + block.end.length);
+};
 
 export const summaryLabel = "[Summary of earlier chat]";
 

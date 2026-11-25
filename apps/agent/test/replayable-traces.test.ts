@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Journal } from "../src/journal/journal.ts";
 import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
-import { textAfterTurnContext } from "../src/personal-agent/context-labels.ts";
+import { textAfterContextBlock } from "../src/personal-agent/context-labels.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { redactedMark } from "../src/tracing/redactor.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
@@ -197,7 +197,7 @@ describe("Replayable Traces", () => {
     const marks = allSecrets.map(() => redactedMark).join(" ");
     const [stored] = await tracesOf(ownerId);
     expect(
-      textAfterTurnContext(String(stored?.trace.messages.at(-1)?.content))
+      textAfterContextBlock(String(stored?.trace.messages.at(-1)?.content))
     ).toBe(`Keys ${marks}`);
     expect(stored?.trace.reply).toBe(`${fakeReplyPrefix}Keys ${marks}`);
   });

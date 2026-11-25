@@ -40,7 +40,7 @@ export const connectedProactivePreparation = Effect.fnUntraced(
     const delivery = yield* deliveryStateOf(connected.eventId);
     const sentText = delivery._tag === "Sent" ? delivery.text : undefined;
     const sentTextIsTrusted =
-      yield* (yield* Conversation).turnReplyIsStoredInFull(connected.eventId);
+      yield* (yield* Conversation).sentTextIsStoredInFull(connected.eventId);
     const timeZone = yield* ownerTimeZone(behavior);
     const openLoops = yield* notes.byIds(connected.openLoopIds);
     return {
