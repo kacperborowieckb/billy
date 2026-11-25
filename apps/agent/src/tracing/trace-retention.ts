@@ -19,6 +19,8 @@ export type TraceRetentionRun = "Ran" | "NotDue";
 
 const retentionRunInterval = { days: 1 } as const;
 
+const retentionRetryDelay = { hours: 1 } as const;
+
 const instantOf = (iso: string | null | undefined) =>
   Option.fromNullishOr(iso).pipe(Option.flatMap(DateTime.make));
 
@@ -131,12 +133,16 @@ export const traceRetentionAlarmAt = Effect.fnUntraced(
   ) {
     const oldest = yield* oldestExpiringAt(database);
     const notBefore = nextRunNotBefore(yield* lastRunAt(database));
+    const retryAt = DateTime.add(yield* DateTime.now, retentionRetryDelay);
     return oldest.pipe(
       Option.map((instant) => {
-        const expiresAt = DateTime.add(instant, { days: retentionDays });
+        const dueAt = DateTime.max(
+          DateTime.add(instant, { days: retentionDays }),
+          retryAt
+        );
         return Option.isSome(notBefore)
-          ? DateTime.max(expiresAt, notBefore.value)
-          : expiresAt;
+          ? DateTime.max(dueAt, notBefore.value)
+          : dueAt;
       })
     );
   }

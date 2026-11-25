@@ -16,6 +16,7 @@ import type {
 } from "../src/tracing/trace-replay.ts";
 import {
   TraceRetentionDaysSchema,
+  traceRetentionCeilingDays,
   traceRetentionFloorDays,
 } from "../src/tracing/trace-retention-days.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
@@ -32,6 +33,7 @@ import {
 import type { ScriptedModelStep } from "./fakes.ts";
 import { ownerInWarsaw } from "./owner-with-data.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
+import { onlyTheRetentionAlarm } from "./trace-retention-alarm.ts";
 
 type ModelCall = (typeof fakeModel.doGenerateCalls)[number];
 
@@ -202,7 +204,12 @@ describe("Trace pointers", () => {
         },
       ],
     });
-    const storedText = JSON.stringify(second?.trace);
+    const [stored] = await query<{ record: string }>(
+      ownerId,
+      `SELECT record FROM turn_traces WHERE sequence = ${second?.sequence}`
+    );
+    const storedText = stored?.record ?? "";
+    expect(storedText).toContain("Second words");
     expect(storedText).not.toContain("First words");
     expect(storedText).not.toContain("[Owner context]");
     expect(storedText).not.toContain("You are the Owner's Personal Agent");
@@ -503,25 +510,43 @@ describe("Retention", () => {
     await ownerSays(7409, "Hello", 1);
     const [first] = await waitForModelTraces(ownerId, 1);
 
-    const alarms = await runInDurableObject(
-      await agentOf(ownerId),
-      async (instance) => {
-        const sdkSchedules = await instance.listSchedules();
-        return sdkSchedules
-          .filter((schedule) => schedule.callback === "fireDueSchedules")
-          .map((schedule) => schedule.time);
-      }
-    );
-
     if (first === undefined) {
       throw new Error("Missing Trace");
     }
     const expiresAt = DateTime.add(DateTime.makeUnsafe(first.recordedAt), {
       days: 30,
     });
-    expect(alarms).toEqual([
-      Math.ceil(DateTime.toEpochMillis(expiresAt) / 1000),
-    ]);
+    const expectedAlarm = Math.ceil(DateTime.toEpochMillis(expiresAt) / 1000);
+    await vi.waitFor(
+      async () => {
+        const alarms = await runInDurableObject(
+          await agentOf(ownerId),
+          async (instance) => {
+            const sdkSchedules = await instance.listSchedules();
+            return sdkSchedules
+              .filter((schedule) => schedule.callback === "fireDueSchedules")
+              .map((schedule) => schedule.time);
+          }
+        );
+        expect(alarms).toEqual([expectedAlarm]);
+      },
+      { timeout: 10_000 }
+    );
+  });
+
+  it("arms a later retention alarm, not a past one, when a due run did not happen", async () => {
+    const ownerId = await addOwner(7414);
+    await insertOldTrace(ownerId, "expired-trace", 31);
+    await run(
+      ownerId,
+      `INSERT INTO trace_retention_runs (slot, ran_at) VALUES (0, '${daysAgo(2)}')`
+    );
+
+    const [alarmAt] = await onlyTheRetentionAlarm(ownerId);
+
+    expect(alarmAt).toBeGreaterThanOrEqual(
+      Math.floor(Date.now() / 1000) + 59 * 60
+    );
   });
 });
 
@@ -559,9 +584,12 @@ describe("the Trace trigger", () => {
 });
 
 describe("the retention value", () => {
-  it("refuses a Behavior Config value below the floor", () => {
+  it("refuses a Behavior Config value below the floor or above the ceiling", () => {
     expect(() =>
       TraceRetentionDaysSchema.make(traceRetentionFloorDays - 1)
+    ).toThrow();
+    expect(() =>
+      TraceRetentionDaysSchema.make(traceRetentionCeilingDays + 1)
     ).toThrow();
     expect(Schema.is(TraceRetentionDaysSchema)(traceRetentionFloorDays)).toBe(
       true

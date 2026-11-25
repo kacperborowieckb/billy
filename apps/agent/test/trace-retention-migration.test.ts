@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { sql } from "drizzle-orm";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { OwnerIdSchema } from "../src/owner-id.ts";
@@ -86,7 +86,18 @@ describe("the Trace retention trigger migration", () => {
       system: "The old system text",
       messages: [{ role: "user", content: "The old history" }],
     });
-    expect(stored?.trace).not.toHaveProperty("system");
+    const [row] = await runInDurableObject(agent, (_instance, state) =>
+      state.storage.sql
+        .exec<{ record: string }>(
+          "SELECT record FROM turn_traces WHERE event_id = 'old-turn'"
+        )
+        .toArray()
+    );
+    const storedRecord = Schema.decodeUnknownSync(
+      Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown))
+    )(row?.record);
+    expect(storedRecord).not.toHaveProperty("system");
+    expect(storedRecord).not.toHaveProperty("messages");
     const replay = await runInDurableObject(agent, (instance) =>
       instance.runtime.runPromise(
         stored === undefined ? Effect.die("No Trace") : replayTurn(stored.trace)
