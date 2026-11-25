@@ -24,7 +24,8 @@ export type CompactionResult =
   | "Compacted"
   | "StoppedByBurst"
   | "ModelFailed"
-  | "SummaryRefused";
+  | "SummaryRefused"
+  | "StorageFailed";
 
 const burstPollInterval = "250 millis";
 
