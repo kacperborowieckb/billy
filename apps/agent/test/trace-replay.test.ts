@@ -544,7 +544,7 @@ describe("Retention", () => {
     await insertOldTrace(ownerId, "expired-trace", 31);
     await run(
       ownerId,
-      `INSERT INTO trace_retention_runs (slot, ran_at) VALUES (0, '${daysAgo(2)}')`
+      `INSERT INTO trace_retention_runs (slot, ran_at) VALUES (0, '${daysAgo(5)}')`
     );
     const [expired] = await query<{ recorded_at: string }>(
       ownerId,
