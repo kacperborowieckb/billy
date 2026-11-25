@@ -118,6 +118,7 @@ const compactionCall = Effect.fnUntraced(function* compactionCall({
 const summaryAttempts = Effect.fnUntraced(function* summaryAttempts(
   request: CompactionRequest
 ) {
+  const inbox = yield* Inbox;
   const { maxSummaryTokens } = request.behavior;
   for (const summaryTarget of summaryTargetsOf(maxSummaryTokens)) {
     const call = yield* compactionCall({ ...request, summaryTarget });
@@ -135,6 +136,9 @@ const summaryAttempts = Effect.fnUntraced(function* summaryAttempts(
       outputTokens: call.reply.usage.outputTokens,
       reachedOutputLimit: call.reply.reachedOutputLimit,
     });
+    if (yield* inbox.burstIsDue(burstWaitOf(request.behavior))) {
+      return { _tag: "StoppedByBurst" } satisfies SummaryAttempts;
+    }
   }
   return { _tag: "Refused" } satisfies SummaryAttempts;
 });

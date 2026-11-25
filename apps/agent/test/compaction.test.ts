@@ -440,6 +440,35 @@ describe("Compaction", () => {
     ]);
   });
 
+  it("records no refusal when an Owner Burst stops the second Summary call", async () => {
+    const ownerId = await ownerInWarsaw(8814);
+    scriptModel([
+      ...fourTurnsOverTheLimit,
+      overLimitSummary,
+      reply("Fifth answer", 33_000),
+      summary("They talked about A."),
+    ]);
+    await chatThreeTurns(8814);
+    const releaseModel = holdModel(5);
+    await ownerSays(8814, "fourth message", 4);
+    await waitForModelCalls(6);
+
+    await telegramWebhook(
+      textUpdate({ fromUserId: 8814, text: "fifth message" })
+    );
+    await waitForModelCalls(7);
+    const refusedAfterStop = await refusedBlockRows(ownerId);
+    releaseModel();
+    await waitForSummaries(ownerId, 1);
+
+    expect(refusedAfterStop).toEqual([]);
+    expect(await refusedBlockRows(ownerId)).toEqual([]);
+    expect(systemTextOf(call(5).prompt)).toBe(
+      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens / 2)
+    );
+    expect(ownerTextsOf(call(6).prompt).at(-1)).toBe("fifth message");
+  });
+
   it("writes nothing after a reset during the call, and runs again at the next check", async () => {
     const ownerId = await ownerInWarsaw(8807);
     scriptModel([...fourTurnsOverTheLimit, summary("They talked about A.")]);
