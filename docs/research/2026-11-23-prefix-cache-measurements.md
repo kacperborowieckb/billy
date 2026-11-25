@@ -164,10 +164,10 @@ Method: the same as Part D. The real Worker ran in the wrangler test harness (`e
 
 - A temporary Worker entry lowered the Compaction values: history limit 6,000 tokens, kept 2,000, Summary at most 500. The values on `main` did not change.
 - The same entry sent a copy of each Operator metric data point to the proxy, so that the run has a record of the metric.
-- One Owner sent 21 messages. Messages 1 to 13 set facts and made small talk: time zone, a name, two Captures, the arrival of a sister, a choice of paint, and a guest Wi-Fi password. Messages 14 to 21 asked about the facts. The driver sent message 19 and message 21 while a `compaction` call ran.
-- Before the paid run, a free run with a local fake model used the same driver. All 41 calls of that run went through the proxy, and the fake model got the same 41 calls.
+- One Owner sent 21 messages. Messages 1 to 13 set facts and made small talk. The facts were a time zone, a name, two Captures, the arrival of a sister, a choice of paint, and a guest Wi-Fi password. Messages 14 to 21 asked about the facts. The driver sent message 19 and message 21 while a `compaction` call ran.
+- Before the paid run, a free run with a local fake model used the same driver. All 41 calls of that run went through the proxy. The fake model got the same 41 calls.
 
-The limit counts all input tokens that the provider reported: the system message and the tool definitions (about 9,700 tokens) and the history. So 6,000 was over the limit after each Turn, and the check started Compaction after each Turn from Turn 2. With the values on `main`, the history can grow to about 20,000 tokens before Compaction.
+The limit counts all input tokens that the provider reported: the system message and the tool definitions (about 9,700 tokens) and the history. So the input of each Turn was more than 6,000 tokens, and the check started Compaction after each Turn from Turn 2. With the values on `main`, the history can grow to about 20,000 tokens before Compaction.
 
 58 model calls: 38 calls of the main Conversation in 21 Turns, and 20 `compaction` calls. All were HTTP 200. The scripts were temporary and are not in the repository.
 
@@ -181,28 +181,33 @@ The limit counts all input tokens that the provider reported: the system message
 | 14 to 17, 19, 21 | Turns 10 to 13 (Turn 21: 10 to 17) | 547 to 564 | Refused: over 500 |
 | 18, 20 | Turns 10 to 13 | 555, 552 at the provider | Stopped by an Owner message |
 
-- 9 Compactions were written. Each one ran after the Delivery of the Turn, with one `compaction` call. After each, the next request had exactly one Summary block, and the Owner messages of the block were in no later request. The newest Turn stayed word for word.
-- No block had a running Turn. Each block ended with a Turn that was delivered before the `compaction` call started.
-- The Summary grows, because each new Summary covers the old one and the block. From Turn 14 on, every Summary was over 500 tokens and was refused, so the history was not shortened again: the request grew from 15 to 45 messages. Each refused Summary was a paid call. Issue [#216](https://github.com/kacperborowieckb/billy/issues/216).
-- An Owner message stopped the calls after Turns 18 and 20, and nothing was written: the requests of Turns 19 and 21 still have the Summary written after Turn 13 and all Turns from Turn 10 word for word. Both Summaries were over 500 tokens, so code would also have refused them. The free run with the fake model also checks a short Summary that code accepts. There, too, the stopped Compaction wrote nothing, and the next check wrote its Summary.
-- The provider did not stop the two calls. The proxy got the full answers (1,347 input and about 550 output tokens each), but Usage has no row for them: 20 `compaction` calls and 18 `compaction` rows. Issue [#217](https://github.com/kacperborowieckb/billy/issues/217).
+- Code wrote 9 Compactions. Each one ran after the Delivery of the Turn, with one `compaction` call. After each, the next request had exactly one Summary block. No later request had the Owner messages of the block. The newest Turn stayed word for word.
+- No block had a running Turn. Each block ended with a Turn that the agent delivered before the `compaction` call started.
+- The Summary grows, because each new Summary covers the old one and the block. From Turn 14 on, every Summary was over 500 tokens, and code refused it. So no Compaction shortened the history again. The request grew from 15 to 45 messages. Each refused Summary was a paid call. Issue [#216](https://github.com/kacperborowieckb/billy/issues/216).
+- An Owner message stopped the calls after Turns 18 and 20. Code wrote nothing. The requests of Turns 19 and 21 still have the Summary from Turn 13. They also have all Turns from Turn 10 word for word. Both Summaries were over 500 tokens, so code would also have refused them. The free run with the fake model also checks a short Summary that code accepts. There, too, the stopped Compaction wrote nothing, and the next check wrote its Summary.
+- The provider did not stop the two calls. The proxy got the full answers, with 1,347 input and about 550 output tokens each. But Usage has no row for them: the run has 20 `compaction` calls and 18 `compaction` rows. Issue [#217](https://github.com/kacperborowieckb/billy/issues/217).
 
 ### Facts after Compaction
 
-All replies after Compaction used the early facts. No fact was lost. The name came from the Profile, the time zone from the Owner settings, and the bike lock code, the arrival of the sister, the paint, the plumber, and the Wi-Fi password from `search_notes`. The agent captured each of these facts as a Note or a Profile fact when the Owner gave it. The last written Summary (after Turn 13) also named all the early facts and their Note ids, except the Wi-Fi password. That password was still word for word in the history. So this run does not show a fact that only the Summary kept.
+All replies after Compaction used the early facts. No fact was lost. The name came from the Profile, and the time zone came from the Owner settings. The other facts came from `search_notes`: the bike lock code, the arrival of the sister, the paint, the plumber, and the Wi-Fi password. The agent captured each of these facts as a Note or a Profile fact when the Owner gave it. The last written Summary (after Turn 13) also named all the early facts and their Note ids, except the Wi-Fi password. That password was still word for word in the history. So this run does not show a fact that only the Summary kept.
 
 ### Hit Rate
 
-| Calls | Calls | Input | Cached | Hit Rate |
+| Call group | Count | Input | Cached | Hit Rate |
 | --- | --- | --- | --- | --- |
 | Step 1, the first call after a written Compaction (a planned miss) | 9 | 93,639 | 86,912 | 92.8% |
 | Step 1, no Compaction written before it (Turns 2 and 11 to 21 except 14) | 11 | 123,687 | 122,304 | 98.9% |
 | Step 2 and later | 17 | 191,235 | 186,944 | 97.8% |
 | `compaction` calls | 20 | 21,902 | 13,568 | 61.9% |
 
-- The first call after a Compaction read the system message and the tool definitions from the cache (9,600 to 9,664 tokens) and read the Summary and the newest Turns again: 90.0% to 95.9% for each call.
+- The first call after a Compaction got the system message and the tool definitions from the cache (9,600 to 9,664 tokens). The provider read the Summary and the newest Turns again. Each of these calls had a Hit Rate of 90.0% to 95.9%:
+
+  | Turn | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 14 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | Hit Rate | 95.8% | 95.9% | 91.0% | 90.0% | 93.8% | 92.4% | 93.6% | 93.2% | 90.0% |
+
 - Turn 1 was warm (98.8%), because the system message and the tool definitions do not depend on the Owner.
-- The Operator metric named the reason of each step 1: `compaction` for 8 of the 9 calls after a Compaction, `owner_context_changed` for Turn 2 (time zone) and Turn 3 (the Profile fact and a Compaction), and `no_earlier_call` for Turn 1.
+- The Operator metric named the planned miss of each step 1. It named `compaction` for 8 of the 9 calls after a Compaction, and `no_earlier_call` for Turn 1. It named `owner_context_changed` for Turn 2 (time zone) and Turn 3 (the Profile fact and a Compaction).
 
 `pnpm control doctor` on the recorded metric, through a local fake of the Analytics Engine SQL API that ran its query on the recorded data points:
 
