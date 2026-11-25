@@ -35,9 +35,9 @@ const storedTurnsOf = (rows: readonly StoredConversationRow[]) => {
 };
 
 const firstInputTokensByEvent = (steps: readonly ReportedStep[]) => {
-  const firstInput = new Map<string, number>();
+  const firstInput = new Map<string, number | null>();
   for (const { eventId, inputTokens } of steps) {
-    if (inputTokens !== null && !firstInput.has(eventId)) {
+    if (!firstInput.has(eventId)) {
       firstInput.set(eventId, inputTokens);
     }
   }
@@ -51,7 +51,7 @@ const turnStartsOf = (
   const firstInput = firstInputTokensByEvent(steps);
   let previousFirstInput: number | undefined;
   return turns.map((turn) => {
-    const ownFirstInput = firstInput.get(turn.eventId);
+    const ownFirstInput = firstInput.get(turn.eventId) ?? undefined;
     const start =
       ownFirstInput === undefined
         ? undefined

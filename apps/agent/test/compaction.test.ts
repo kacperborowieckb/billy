@@ -434,6 +434,28 @@ describe("Compaction", () => {
     expect(compacted.map(textOf).join("\n")).not.toContain("fourth message");
   });
 
+  it("does not measure a Turn whose first step reported no input tokens", async () => {
+    const ownerId = await ownerInWarsaw(8812);
+    scriptModel([
+      reply("First answer", 2000),
+      {
+        callTool: captureNoteToolName,
+        input: { text: "Buy milk" },
+        inputTokens: "unreported",
+      },
+      reply("Kept.", 25_000),
+      reply("Third answer", 4000),
+      reply("Fourth answer", 31_000),
+      summary("They talked about A."),
+    ]);
+    await chatFourTurns(8812);
+    const rows = await waitForSummaries(ownerId, 1);
+
+    const compacted = rows.filter((row) => row.compacted_at !== null);
+    expect(compacted.map(textOf).join("\n")).toContain("third message");
+    expect(compacted.map(textOf).join("\n")).not.toContain("fourth message");
+  });
+
   it("compacts a Write-back before the cut with its block, and a later Side Session reads no compacted text", async () => {
     const ownerId = await ownerInWarsaw(8810);
     scriptModel([...fourTurnsOverTheLimit, summary("They talked about A.")]);

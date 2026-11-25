@@ -285,7 +285,7 @@ export interface ScriptedToolCall {
 }
 
 export interface ScriptedUsage {
-  readonly inputTokens?: number;
+  readonly inputTokens?: number | "unreported";
   readonly outputTokens?: number;
 }
 
@@ -293,7 +293,7 @@ export type ScriptedModelStep =
   | ({ readonly say: string } & ScriptedUsage)
   | { readonly error: string }
   | { readonly callTools: readonly ScriptedToolCall[] }
-  | {
+  | ({
       readonly callTool: string;
       readonly times?: number;
       readonly input:
@@ -301,7 +301,7 @@ export type ScriptedModelStep =
         | ((
             previousToolOutput: Record<string, unknown>
           ) => Record<string, unknown>);
-    };
+    } & ScriptedUsage);
 
 type ModelPrompt = MockLanguageModelV4["doGenerateCalls"][number]["prompt"];
 
@@ -398,18 +398,32 @@ const defaultModelFailureMessage = "The model provider is down";
 
 const modelFailure = { remaining: 0, message: defaultModelFailureMessage };
 
+const inputUsageOf = (inputTokens: number | "unreported") =>
+  inputTokens === "unreported"
+    ? {
+        total: undefined,
+        noCache: undefined,
+        cacheRead: undefined,
+        cacheWrite: undefined,
+      }
+    : {
+        total: inputTokens,
+        noCache: inputTokens - 12,
+        cacheRead: 12,
+        cacheWrite: 0,
+      };
+
 const usageOf = ({ inputTokens = 42, outputTokens = 7 }: ScriptedUsage) => ({
-  inputTokens: {
-    total: inputTokens,
-    noCache: inputTokens - 12,
-    cacheRead: 12,
-    cacheWrite: 0,
-  },
+  inputTokens: inputUsageOf(inputTokens),
   outputTokens: { total: outputTokens, text: outputTokens, reasoning: 0 },
 });
 
 const scriptedUsageOf = (scripted: ScriptedModelStep | undefined) =>
-  usageOf(scripted !== undefined && "say" in scripted ? scripted : {});
+  usageOf(
+    scripted !== undefined && ("say" in scripted || "callTool" in scripted)
+      ? scripted
+      : {}
+  );
 
 let releaseModel = Promise.resolve();
 let callsBeforeHold = 0;
