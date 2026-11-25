@@ -7,14 +7,20 @@ import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { traceRetentionAlarmAt } from "../src/tracing/trace-retention.ts";
 import { fakeTraceRetention } from "./fakes.ts";
 
-export const onlyTheRetentionAlarm = async (ownerId: string) =>
+export const onlyTheRetentionAlarm = async (
+  ownerId: string,
+  retryNotBefore: Option.Option<DateTime.Utc> = Option.none()
+) =>
   runInDurableObject(
     await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
     (instance) =>
       instance.runtime.runPromise(
         AgentStorage.pipe(
           Effect.flatMap(({ database }) =>
-            traceRetentionAlarmAt(database, fakeTraceRetention.days)
+            traceRetentionAlarmAt(database, {
+              days: fakeTraceRetention.days,
+              retryNotBefore,
+            })
           ),
           Effect.map(Option.toArray),
           Effect.map((instants) =>

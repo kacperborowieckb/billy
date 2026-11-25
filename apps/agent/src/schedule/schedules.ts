@@ -10,8 +10,8 @@ import {
 } from "../personal-agent/burst-wait.ts";
 import type { BurstWait } from "../personal-agent/burst-wait.ts";
 import { nextOccurrence } from "../time/next-occurrence.ts";
-import type { TraceRetentionDays } from "../tracing/trace-retention-days.ts";
 import { traceRetentionAlarmAt } from "../tracing/trace-retention.ts";
+import type { TraceRetention } from "../tracing/trace-retention.ts";
 import { earlierOf } from "./outcome-alarm-queries.ts";
 import { columnsOfAction } from "./schedule-action.ts";
 import { makeScheduleMoves } from "./schedule-moves.ts";
@@ -40,18 +40,21 @@ export interface AlarmClock {
 
 export interface AlarmLimits {
   readonly burstWait: () => BurstWait;
-  readonly traceRetentionDays: () => TraceRetentionDays;
+  readonly traceRetention: () => TraceRetention;
 }
 
 const defaultAlarmLimits: AlarmLimits = {
   burstWait: () => burstWaitOf(defaultBehaviorConfig),
-  traceRetentionDays: () => defaultBehaviorConfig.traceRetentionDays,
+  traceRetention: () => ({
+    days: defaultBehaviorConfig.traceRetentionDays,
+    retryNotBefore: Option.none(),
+  }),
 };
 
 const makeSchedules = Effect.fnUntraced(function* makeSchedules(
   ownerId: OwnerId,
   clock: AlarmClock,
-  { burstWait, traceRetentionDays }: AlarmLimits
+  { burstWait, traceRetention }: AlarmLimits
 ) {
   const { database } = yield* AgentStorage;
   const journal = yield* Journal;
@@ -64,7 +67,7 @@ const makeSchedules = Effect.fnUntraced(function* makeSchedules(
   const rearm = Effect.all([
     queries.earliestAlarmAt,
     Effect.suspend(() => burstAlarmAt(burstWait())),
-    Effect.suspend(() => traceRetentionAlarmAt(database, traceRetentionDays())),
+    Effect.suspend(() => traceRetentionAlarmAt(database, traceRetention())),
   ]).pipe(
     Effect.map(([scheduleAt, burstAt, retentionAt]) =>
       earlierOf(earlierOf(scheduleAt, burstAt), retentionAt)

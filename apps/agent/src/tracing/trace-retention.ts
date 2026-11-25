@@ -126,24 +126,35 @@ const oldestExpiringAt = Effect.fnUntraced(function* oldestExpiringAt(
   return earlierOf(instantOf(trace?.recordedAt), instantOf(row?.compactedAt));
 });
 
+export interface TraceRetention {
+  readonly days: TraceRetentionDays;
+  readonly retryNotBefore: Option.Option<DateTime.Utc>;
+}
+
+export const retentionRetryAfterFailure = DateTime.now.pipe(
+  Effect.map((now) => DateTime.add(now, retentionRetryDelay))
+);
+
+const laterOf = (
+  instant: DateTime.Utc,
+  notBefore: Option.Option<DateTime.Utc>
+) =>
+  Option.isSome(notBefore) ? DateTime.max(instant, notBefore.value) : instant;
+
 export const traceRetentionAlarmAt = Effect.fnUntraced(
   function* traceRetentionAlarmAt(
     database: Database,
-    retentionDays: TraceRetentionDays
+    { days, retryNotBefore }: TraceRetention
   ) {
     const oldest = yield* oldestExpiringAt(database);
-    const notBefore = nextRunNotBefore(yield* lastRunAt(database));
-    const retryAt = DateTime.add(yield* DateTime.now, retentionRetryDelay);
+    const nextRun = nextRunNotBefore(yield* lastRunAt(database));
     return oldest.pipe(
-      Option.map((instant) => {
-        const dueAt = DateTime.max(
-          DateTime.add(instant, { days: retentionDays }),
-          retryAt
-        );
-        return Option.isSome(notBefore)
-          ? DateTime.max(dueAt, notBefore.value)
-          : dueAt;
-      })
+      Option.map((instant) =>
+        laterOf(
+          laterOf(DateTime.add(instant, { days }), nextRun),
+          retryNotBefore
+        )
+      )
     );
   }
 );

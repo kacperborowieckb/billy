@@ -1,7 +1,11 @@
 import { generateText, jsonSchema, tool } from "ai";
-import { env, runInDurableObject } from "cloudflare:test";
+import {
+  env,
+  runDurableObjectAlarm,
+  runInDurableObject,
+} from "cloudflare:test";
 import { sql } from "drizzle-orm";
-import { DateTime, Effect, Schema } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OwnerIdSchema } from "../src/owner-id.ts";
@@ -534,19 +538,53 @@ describe("Retention", () => {
     );
   });
 
-  it("arms a later retention alarm, not a past one, when a due run did not happen", async () => {
+  it("keeps an overdue run due through repeated rearms, and the alarm then deletes the old Trace", async () => {
     const ownerId = await addOwner(7414);
     await insertOldTrace(ownerId, "expired-trace", 31);
     await run(
       ownerId,
       `INSERT INTO trace_retention_runs (slot, ran_at) VALUES (0, '${daysAgo(2)}')`
     );
+    const [expired] = await query<{ recorded_at: string }>(
+      ownerId,
+      "SELECT recorded_at FROM turn_traces WHERE event_id = 'expired-trace'"
+    );
+    const dueAt = Math.ceil(
+      DateTime.toEpochMillis(
+        DateTime.add(DateTime.makeUnsafe(expired?.recorded_at ?? ""), {
+          days: 30,
+        })
+      ) / 1000
+    );
+    const agent = await agentOf(ownerId);
+    const rearm = () =>
+      runInDurableObject(agent, (instance) =>
+        instance.runtime.runPromise(
+          Schedules.pipe(Effect.flatMap((schedules) => schedules.rearm))
+        )
+      );
 
-    const [alarmAt] = await onlyTheRetentionAlarm(ownerId);
+    await rearm();
+    expect(await onlyTheRetentionAlarm(ownerId)).toEqual([dueAt]);
+    await rearm();
+    expect(await onlyTheRetentionAlarm(ownerId)).toEqual([dueAt]);
+    await runDurableObjectAlarm(agent);
 
-    const nowSeconds = Date.now() / 1000;
-    expect(alarmAt).toBeGreaterThanOrEqual(Math.floor(nowSeconds) + 50);
-    expect(alarmAt).toBeLessThanOrEqual(Math.ceil(nowSeconds) + 61);
+    await vi.waitFor(
+      async () =>
+        expect(await traceEventIds(ownerId)).not.toContain("expired-trace"),
+      { timeout: 10_000 }
+    );
+  });
+
+  it("arms the next attempt one minute after a failed run, not at the past due instant", async () => {
+    const ownerId = await addOwner(7415);
+    await insertOldTrace(ownerId, "expired-trace", 31);
+    const retryAt = DateTime.add(DateTime.nowUnsafe(), { minutes: 1 });
+
+    expect(await onlyTheRetentionAlarm(ownerId, Option.some(retryAt))).toEqual([
+      Math.ceil(DateTime.toEpochMillis(retryAt) / 1000),
+    ]);
   });
 });
 
