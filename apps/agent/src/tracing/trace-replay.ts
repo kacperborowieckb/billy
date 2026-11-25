@@ -13,14 +13,14 @@ import type {
 } from "../personal-agent/storage-values.ts";
 import { contentHashOf } from "./content-hash.ts";
 import { traceRequestParts } from "./trace-storage-schema.ts";
-import { conversationRowsHashOf } from "./traced-request.ts";
+import { messagesHashOf } from "./traced-request.ts";
 import type {
   PointedRequest,
   SentConversationRows,
   TracedRequestRecord,
 } from "./traced-request.ts";
 
-export type ReplayedPart = RequestPartKind | "conversation_rows";
+export type ReplayedPart = RequestPartKind | "conversation_rows" | "tail";
 
 export interface ReplayProblem {
   readonly part: ReplayedPart;
@@ -94,16 +94,18 @@ const checkedRows = Effect.fnUntraced(function* checkedRows(
   sent: SentConversationRows
 ) {
   const conversation = yield* Conversation;
-  const messages = (yield* conversation.sentRows(sent)).map(
-    (row) => row.message
-  );
-  if ((yield* conversationRowsHashOf(messages)) === sent.hash) {
-    return found(messages);
+  const rows = yield* conversation.sentRows(sent);
+  const messages = Option.all(rows.map((row) => decodeMessage(row.message)));
+  if (rows.length === 0 && sent.hash !== (yield* messagesHashOf([]))) {
+    return problemWith<readonly ModelMessage[]>("conversation_rows", "missing");
   }
-  return problemWith<readonly ModelMessage[]>(
-    "conversation_rows",
-    messages.length === 0 ? "missing" : "changed"
-  );
+  if (
+    Option.isNone(messages) ||
+    (yield* messagesHashOf(messages.value)) !== sent.hash
+  ) {
+    return problemWith<readonly ModelMessage[]>("conversation_rows", "changed");
+  }
+  return found(messages.value);
 });
 
 const replayPointedRequest = Effect.fnUntraced(function* replayPointedRequest(
@@ -126,25 +128,30 @@ const replayPointedRequest = Effect.fnUntraced(function* replayPointedRequest(
     decodeMessage
   );
   const rows = yield* checkedRows(request.conversationRows);
+  const tail =
+    (yield* messagesHashOf(request.tail)) === request.tailHash
+      ? found(request.tail)
+      : problemWith<readonly ModelMessage[]>("tail", "changed");
   if (
     system._tag === "Found" &&
     toolDefinitions._tag === "Found" &&
     ownerContext._tag === "Found" &&
-    rows._tag === "Found"
+    rows._tag === "Found" &&
+    tail._tag === "Found"
   ) {
     return {
       _tag: "Replayed",
       request: {
         system: system.value,
         toolDefinitions: toolDefinitions.value,
-        messages: [ownerContext.value, ...rows.value, ...request.tail],
+        messages: [ownerContext.value, ...rows.value, ...tail.value],
       },
     } satisfies TurnReplay;
   }
   return {
     _tag: "PartsDiffer",
-    problems: [system, toolDefinitions, ownerContext, rows].flatMap((check) =>
-      check._tag === "Problem" ? [check.problem] : []
+    problems: [system, toolDefinitions, ownerContext, rows, tail].flatMap(
+      (check) => (check._tag === "Problem" ? [check.problem] : [])
     ),
   } satisfies TurnReplay;
 });

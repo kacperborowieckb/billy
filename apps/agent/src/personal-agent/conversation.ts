@@ -9,7 +9,11 @@ import {
 } from "../model-gateway/model-message-schema.ts";
 import type { SentConversationRows } from "../tracing/traced-request.ts";
 import { AgentStorage } from "./agent-storage.ts";
-import { sentRowsCondition, storedRowsOf } from "./conversation-rows.ts";
+import {
+  sentRowsCondition,
+  storedRowsOf,
+  summaryFirst,
+} from "./conversation-rows.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
@@ -79,7 +83,15 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
   );
 
   const sentRows = (sent: SentConversationRows) =>
-    storedRowsWhere(sentRowsCondition(sent));
+    database
+      .select({
+        kind: conversationMessages.kind,
+        message: conversationMessages.message,
+      })
+      .from(conversationMessages)
+      .where(sentRowsCondition(sent))
+      .orderBy(asc(conversationMessages.sequence))
+      .pipe(Effect.map(summaryFirst));
 
   const summaryEventId = database
     .select({ eventId: conversationMessages.eventId })

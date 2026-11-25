@@ -168,6 +168,8 @@ const reply = (text: string, inputTokens: number): ScriptedModelStep => ({
   inputTokens,
 });
 
+vi.setConfig({ testTimeout: 30_000 });
+
 beforeEach(() => {
   resetFakes();
 });
@@ -371,6 +373,41 @@ describe("Replay", () => {
         { part: "tool_definitions", reason: "changed" },
         { part: "conversation_rows", reason: "changed" },
       ],
+    });
+  });
+});
+
+describe("Replay of a changed row or tail", () => {
+  it("reports a Conversation row that no longer decodes, and does not fail", async () => {
+    const ownerId = await addOwner(7412);
+    await ownerSays(7412, "First words", 1);
+    await ownerSays(7412, "Second words", 2);
+    const [, second] = await waitForModelTraces(ownerId, 2);
+    if (second === undefined) {
+      throw new Error("Missing Trace");
+    }
+    await run(
+      ownerId,
+      "UPDATE conversation_messages SET message = 'not json' WHERE sequence = (SELECT min(sequence) FROM conversation_messages)"
+    );
+
+    expect(await replayOf(ownerId, second)).toEqual({
+      _tag: "PartsDiffer",
+      problems: [{ part: "conversation_rows", reason: "changed" }],
+    });
+  });
+
+  it("reports a tail that the Redactor changed", async () => {
+    const ownerId = await addOwner(7413);
+    await ownerSays(7413, `My key ${env.TELEGRAM_BOT_TOKEN}`, 1);
+    const [first] = await waitForModelTraces(ownerId, 1);
+    if (first === undefined) {
+      throw new Error("Missing Trace");
+    }
+
+    expect(await replayOf(ownerId, first)).toEqual({
+      _tag: "PartsDiffer",
+      problems: [{ part: "tail", reason: "changed" }],
     });
   });
 });

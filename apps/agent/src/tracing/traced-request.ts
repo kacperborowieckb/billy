@@ -33,6 +33,7 @@ const PointedRequestSchema = Schema.Struct({
   toolDefinitionsHash: Schema.String,
   ownerContextHash: Schema.String,
   conversationRows: SentConversationRowsSchema,
+  tailHash: Schema.String,
   tail: Schema.Array(ModelMessageSchema),
 });
 
@@ -88,7 +89,7 @@ export const encodeToolDefinitions = Schema.encodeSync(
 
 export const encodeOwnerContext = encodeMessage;
 
-export const conversationRowsHashOf = (messages: readonly ModelMessage[]) =>
+export const messagesHashOf = (messages: readonly ModelMessage[]) =>
   contentHashOf(encodeMessages(messages));
 
 const sentConversationRowsOf = Effect.fnUntraced(
@@ -99,7 +100,7 @@ const sentConversationRowsOf = Effect.fnUntraced(
       summarySequence: summary?.sequence ?? null,
       firstSequence: others[0]?.sequence ?? null,
       lastSequence: others.at(-1)?.sequence ?? null,
-      hash: yield* conversationRowsHashOf(rows.map((row) => row.message)),
+      hash: yield* messagesHashOf(rows.map((row) => row.message)),
     } satisfies SentConversationRows;
   }
 );
@@ -122,6 +123,7 @@ export const tracedRequestOf = Effect.fnUntraced(function* tracedRequestOf(
       toolDefinitionsHash,
       ownerContextHash,
       conversationRows: yield* sentConversationRowsOf(sent.rows),
+      tailHash: yield* messagesHashOf(sent.tail),
       tail: sent.tail.map((message) => redactor.redactMessage(message)),
     },
     parts: [
