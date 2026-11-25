@@ -3,18 +3,14 @@ import { Clock, Effect, Option } from "effect";
 
 import { dropDraftsOf } from "../approval/pending-approvals.ts";
 import { turnTrustGiven } from "../approval/turn-trust.ts";
-import type { BehaviorConfig } from "../behavior/behavior-config.ts";
-import type { AgentTools } from "../model-gateway/agent-tool.ts";
-import type { TrustLevel } from "../notes/note.ts";
-import type { OwnerId } from "../owner-id.ts";
 import type { TurnMetricResult } from "../tracing/operator-metrics.ts";
 import { Redactor } from "../tracing/redactor.ts";
+import { tracedRequestOf } from "../tracing/traced-request.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
-import type { TurnTrace } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { staySilent } from "./delivery.ts";
-import type { InboxEvent } from "./inbox.ts";
 import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
+import type { ModelTurn } from "./model-turn-kind.ts";
 import { sent, silentResult, superseded } from "./model-turn-result.ts";
 import type { ModelTurnResult } from "./model-turn-result.ts";
 import { generateWithOutcomeTools } from "./outcome-tools.ts";
@@ -24,7 +20,6 @@ import type { TurnEnding } from "./stored-turn.ts";
 import { approvalAskingOf, deliverTurnOutcome } from "./turn-delivery.ts";
 import { recordTurnMetric } from "./turn-metric.ts";
 import { unpreparedTurn } from "./turn-preparation.ts";
-import type { TurnPreparation } from "./turn-preparation.ts";
 import { TurnProgress } from "./turn-progress.ts";
 import {
   modelFailureReason,
@@ -32,35 +27,8 @@ import {
   stepLimitReason,
   stepMessagesOfReply,
 } from "./turn-record.ts";
-import type { ModelTraceInput } from "./turn-record.ts";
 import { recordSuperseded, restartCountForTurn } from "./turn-restart.ts";
 import type { Restart } from "./turn-restart.ts";
-import type { TurnSession } from "./turn-session.ts";
-
-export interface ModelTurnKind<Failure, Requirements> {
-  readonly task: "reply" | "scheduled_task" | "proactive";
-  readonly event: InboxEvent;
-  readonly replyTo?: InboxEvent;
-  readonly inputs: readonly ModelMessage[];
-  readonly instructions?: readonly string[];
-  readonly tools: AgentTools;
-  readonly trustLevel: TrustLevel;
-  readonly asksOwnerForApproval?: boolean;
-  readonly traceOf: (model: ModelTraceInput) => TurnTrace;
-  readonly restartSection?: string;
-  readonly restartBeforeDelivery?: (
-    restartsDone: number
-  ) => Effect.Effect<Option.Option<Restart>, Failure, Requirements>;
-  readonly prepare?: Effect.Effect<TurnPreparation, Failure, Requirements>;
-  readonly tracesSendFailure?: boolean;
-}
-
-interface ModelTurn<Failure, Requirements> {
-  readonly ownerId: OwnerId;
-  readonly behavior: BehaviorConfig;
-  readonly session: TurnSession;
-  readonly kind: ModelTurnKind<Failure, Requirements>;
-}
 
 export const runModelTurn = <Failure, Requirements>({
   ownerId,
@@ -96,7 +64,7 @@ export const runModelTurn = <Failure, Requirements>({
         reason: stepLimitReason(behavior.maxToolSteps),
       } satisfies ModelTurnResult;
     }
-    const { system, turnContext, messages } = yield* session.request({
+    const sessionRequest = yield* session.request({
       eventId,
       behavior,
       instructions: kind.instructions ?? [],
@@ -109,6 +77,11 @@ export const runModelTurn = <Failure, Requirements>({
       inputs: kind.inputs,
       earlier,
     });
+    const { system, turnContext, messages } = sessionRequest;
+    const tracedRequest = yield* tracedRequestOf(
+      { ...sessionRequest, task: kind.task, tools: kind.tools },
+      redactor
+    );
     const turn = { eventId, turnContext, inputs: kind.inputs };
     const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
       session.commit({ ...turn, steps, ending });
@@ -131,8 +104,7 @@ export const runModelTurn = <Failure, Requirements>({
     const { outcome } = decided;
     const modelLatencyMillis = (yield* Clock.currentTimeMillis) - startedAt;
     const traceInput = {
-      system,
-      messages,
+      request: tracedRequest.pointer,
       outcome,
       modelLatencyMillis,
       redactor,
@@ -142,7 +114,10 @@ export const runModelTurn = <Failure, Requirements>({
       trustLevelChange: Option.getOrUndefined(trust.change()),
     };
     const recordTrace = (delivered: boolean) =>
-      traces.record(kind.traceOf({ ...traceInput, delivered }));
+      traces.record(
+        kind.traceOf({ ...traceInput, delivered }),
+        tracedRequest.parts
+      );
     const recordMetric = (
       result: TurnMetricResult,
       outcomeKind?: OutcomeKind,
@@ -165,11 +140,14 @@ export const runModelTurn = <Failure, Requirements>({
       const { coveredEventIds, newEventIds } = restart.value;
       yield* recordSuperseded(
         restart.value,
-        kind.traceOf({
-          ...traceInput,
-          delivered: false,
-          restart: { coveredEventIds, newEventIds },
-        }),
+        {
+          trace: kind.traceOf({
+            ...traceInput,
+            delivered: false,
+            restart: { coveredEventIds, newEventIds },
+          }),
+          requestParts: tracedRequest.parts,
+        },
         eventId
       );
       yield* recordMetric("superseded", undefined, restart.value.restartCount);

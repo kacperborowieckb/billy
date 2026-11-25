@@ -7,6 +7,7 @@ import {
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { burstMessageLabel } from "../src/personal-agent/event-message.ts";
+import { TraceRetentionDaysSchema } from "../src/tracing/trace-retention-days.ts";
 
 export const fakeTelegramApiUrl = "https://telegram.fake";
 
@@ -486,13 +487,23 @@ export const failModel = (
 
 export const fakeToolApprovalExpiryMillis = 60 * 60 * 1000;
 
+export const defaultFakeToolDescription = "Keep a word";
+
 export const fakeTool = {
   name: "keep_note",
+  description: defaultFakeToolDescription,
   kept: [] as string[],
   failWith: undefined as string | undefined,
 };
 
 export const defaultTestMaxRestarts = 2;
+
+export const defaultTestTraceRetentionDays =
+  TraceRetentionDaysSchema.make(3650);
+
+export const fakeTraceRetention = {
+  days: defaultTestTraceRetentionDays,
+};
 
 export const fakeBurstWait = {
   quietMillis: 0,
@@ -501,11 +512,13 @@ export const fakeBurstWait = {
 };
 
 export const resetFakes = () => {
+  fakeTraceRetention.days = defaultTestTraceRetentionDays;
   fakeBurstWait.quietMillis = 0;
   fakeBurstWait.maxWaitMillis = 0;
   fakeBurstWait.maxRestarts = defaultTestMaxRestarts;
   modelScript.length = 0;
   fakeTool.kept = [];
+  fakeTool.description = defaultFakeToolDescription;
   fakeTool.failWith = undefined;
   modelFailure.remaining = 0;
   modelFailure.message = defaultModelFailureMessage;

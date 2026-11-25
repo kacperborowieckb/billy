@@ -196,7 +196,7 @@ describe("Personal Agent migrations", () => {
         "notes_fts_delete",
         "notes_fts_insert",
         "notes_fts_update",
-        "turn_traces_no_delete",
+        "turn_traces_no_recent_delete",
         "turn_traces_no_update",
       ]);
     });

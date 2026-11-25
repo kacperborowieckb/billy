@@ -8,6 +8,7 @@ import {
   ownerCurrentTimeText,
   ownerTimeZone,
 } from "../time/owner-current-time.ts";
+import type { SentRow } from "../tracing/traced-request.ts";
 import { Conversation } from "./conversation.ts";
 import { recentChatSection } from "./recent-chat-section.ts";
 import { storeFinishedTurn } from "./stored-turn.ts";
@@ -27,6 +28,27 @@ interface SessionRequestInput {
   readonly earlier: readonly ModelMessage[];
 }
 
+interface SessionRequestParts {
+  readonly system: string;
+  readonly turnContext: string;
+  readonly ownerContext: ModelMessage;
+  readonly rows: readonly SentRow[];
+  readonly tail: readonly ModelMessage[];
+}
+
+export interface SessionRequest extends SessionRequestParts {
+  readonly messages: readonly ModelMessage[];
+}
+
+const sessionRequestOf = (parts: SessionRequestParts): SessionRequest => ({
+  ...parts,
+  messages: [
+    parts.ownerContext,
+    ...parts.rows.map((row) => row.message),
+    ...parts.tail,
+  ],
+});
+
 const ownerContextOf = Effect.fnUntraced(function* ownerContextOf(
   behavior: BehaviorConfig
 ) {
@@ -43,23 +65,20 @@ const conversationRequest = Effect.fnUntraced(function* conversationRequest({
   earlier,
 }: SessionRequestInput) {
   const conversation = yield* Conversation;
-  const history = yield* conversation.history;
+  const rows = yield* conversation.uncompactedRows;
   const ownerContext = yield* ownerContextOf(behavior);
   const turnContext = turnContextBlock(
     yield* ownerCurrentTimeText(behavior),
     situation
   );
   yield* (yield* TurnProgress).recordTurnContext(eventId, turnContext);
-  return {
+  return sessionRequestOf({
     system: systemPrompt({ behavior, instructions }),
     turnContext,
-    messages: [
-      ownerContext,
-      ...history,
-      ...withTurnContext(turnContext, inputs),
-      ...earlier,
-    ],
-  };
+    ownerContext,
+    rows,
+    tail: [...withTurnContext(turnContext, inputs), ...earlier],
+  });
 });
 
 const newRunBlock = Effect.fnUntraced(function* newRunBlock(
@@ -104,11 +123,13 @@ const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
       eventId,
       newRunBlock(behavior, situation)
     );
-    return {
+    return sessionRequestOf({
       system: systemPrompt({ behavior, instructions }),
       turnContext: block,
-      messages: [ownerContext, ...withTurnContext(block, inputs), ...earlier],
-    };
+      ownerContext,
+      rows: [],
+      tail: [...withTurnContext(block, inputs), ...earlier],
+    });
   }
 );
 

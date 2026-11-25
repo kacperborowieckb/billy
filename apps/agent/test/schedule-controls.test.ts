@@ -22,6 +22,7 @@ import { Schedules } from "../src/schedule/schedules.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import { fakeModel, fakeTelegram, resetFakes, scriptModel } from "./fakes.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
+import { onlyTheRetentionAlarm } from "./trace-retention-alarm.ts";
 
 type ControlServices =
   | Inbox
@@ -443,7 +444,9 @@ describe("cancel_schedule", () => {
     await askAndWaitForReply(9120, "cancel it");
 
     expect(await rowOf(ownerId, "gift")).toMatchObject({ state: "cancelled" });
-    expect(await alarmsOf(ownerId)).toEqual([]);
+    expect(await alarmsOf(ownerId)).toEqual(
+      await onlyTheRetentionAlarm(ownerId)
+    );
     const [call] = await toolCallsOf(ownerId);
     expect(call?.failed).toBe(false);
     expect(await journalTagsOf(ownerId)).toContain("ScheduleCancelled");

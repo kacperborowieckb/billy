@@ -10,6 +10,7 @@ export default defineConfig({
     "./src/proactive/proactive-schema.ts",
     "./src/schedule/schedule-open-loops-schema.ts",
     "./src/approval/pending-approvals-schema.ts",
+    "./src/tracing/trace-storage-schema.ts",
   ],
   out: "./src/personal-agent/migrations",
 });

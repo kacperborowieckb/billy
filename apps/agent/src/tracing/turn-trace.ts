@@ -1,8 +1,7 @@
 import { asc, eq } from "drizzle-orm";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import { RestartRecordSchema } from "../journal/journal.ts";
-import { ModelMessageSchema } from "../model-gateway/model-message-schema.ts";
 import { ReasoningEffortSchema } from "../model-gateway/model-provider.ts";
 import { OwnerIdSchema } from "../owner-id.ts";
 import type { OwnerId } from "../owner-id.ts";
@@ -14,6 +13,9 @@ import {
   proactiveHoldReasons,
   turnResults,
 } from "../personal-agent/storage-values.ts";
+import { storeRequestParts } from "./trace-request-parts.ts";
+import { TracedRequestSchema } from "./traced-request.ts";
+import type { RequestPart } from "./traced-request.ts";
 
 const TraceUsageSchema = Schema.Struct({
   inputTokens: Schema.NullOr(Schema.Number),
@@ -42,8 +44,7 @@ const modelTraceFields = {
     attemptTimeoutMillis: Schema.Number,
     reasoningEffort: Schema.optionalKey(ReasoningEffortSchema),
   }),
-  system: Schema.String,
-  messages: Schema.Array(ModelMessageSchema),
+  request: TracedRequestSchema,
   steps: Schema.Array(TraceStepSchema).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed([]))
   ),
@@ -236,17 +237,23 @@ const makeTurnTraces = (ownerId: OwnerId) =>
   Effect.gen(function* makeTurnTracesEffect() {
     const { database } = yield* AgentStorage;
 
-    const record = ({ eventId, result, ...body }: TurnTrace) =>
-      database
-        .insert(turnTraces)
-        .values({
-          ownerId,
-          recordedAt: new Date().toISOString(),
-          eventId,
-          result,
-          record: encodeBody(body),
+    const record = (
+      { eventId, result, ...body }: TurnTrace,
+      requestParts: readonly RequestPart[] = []
+    ) =>
+      database.transaction(() =>
+        Effect.gen(function* recordEffect() {
+          const recordedAt = DateTime.formatIso(yield* DateTime.now);
+          yield* storeRequestParts(database, requestParts, recordedAt);
+          yield* database.insert(turnTraces).values({
+            ownerId,
+            recordedAt,
+            eventId,
+            result,
+            record: encodeBody(body),
+          });
         })
-        .pipe(Effect.asVoid);
+      );
 
     const read = database
       .select()

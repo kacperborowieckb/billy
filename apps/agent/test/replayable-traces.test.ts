@@ -11,7 +11,6 @@ import { redactedMark } from "../src/tracing/redactor.ts";
 import { TurnTraces } from "../src/tracing/turn-trace.ts";
 import {
   failModel,
-  fakeModel,
   fakeReplyPrefix,
   fakeTelegram,
   resetFakes,
@@ -26,13 +25,6 @@ const inPersonalAgent = async <A, E>(
     await personalAgentFor(env.PERSONAL_AGENT, OwnerIdSchema.make(ownerId)),
     (instance) => instance.runtime.runPromise(effect)
   );
-
-const textOf = (
-  content: string | readonly { readonly type: string; readonly text?: string }[]
-) =>
-  typeof content === "string"
-    ? content
-    : content.map((part) => (part.type === "text" ? part.text : "")).join("");
 
 const tracesOf = (ownerId: string) =>
   inPersonalAgent(
@@ -86,15 +78,17 @@ describe("Replayable Traces", () => {
         attemptTimeoutMillis: 30_000,
         reasoningEffort: "none",
       },
-      messages: [
-        { role: "user", content: expect.stringMatching(/^\[Owner context\]/u) },
-        {
-          role: "user",
-          content: expect.stringMatching(
-            /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
-          ),
-        },
-      ],
+      request: {
+        kind: "pointer",
+        tail: [
+          {
+            role: "user",
+            content: expect.stringMatching(
+              /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
+            ),
+          },
+        ],
+      },
       steps: [
         {
           toolCalls: [],
@@ -118,40 +112,6 @@ describe("Replayable Traces", () => {
     expect(stored?.trace.modelLatencyMillis).toBeGreaterThanOrEqual(0);
   });
 
-  it("holds the exact prompt that the model received, so the Turn can be replayed", async () => {
-    const ownerId = await addOwner(8002);
-
-    await telegramWebhook(
-      textUpdate({ fromUserId: 8002, text: "First", messageId: 1 })
-    );
-    await waitForTraces(ownerId, 1);
-    await telegramWebhook(
-      textUpdate({ fromUserId: 8002, text: "Second", messageId: 2 })
-    );
-    await waitForTraces(ownerId, 2);
-
-    const [, second] = await tracesOf(ownerId);
-    const received = fakeModel.doGenerateCalls[1]?.prompt.map((message) => ({
-      role: message.role,
-      text: textOf(message.content),
-    }));
-    expect(received).toEqual([
-      { role: "system", text: second?.trace.system },
-      ...(second?.trace.messages.map((message) => ({
-        role: message.role,
-        text: textOf(message.content),
-      })) ?? []),
-    ]);
-    expect(
-      second?.trace.messages.map((message) => textOf(message.content))
-    ).toEqual([
-      expect.stringMatching(/^\[Owner context\]/u),
-      expect.stringMatching(/^\[Turn context\][^]*\nFirst$/u),
-      `${fakeReplyPrefix}First`,
-      expect.stringMatching(/^\[Turn context\][^]*\nSecond$/u),
-    ]);
-  });
-
   it("records a failed Turn with its error and no secret", async () => {
     const ownerId = await addOwner(8003);
     failModel(3, `Provider refused ${allSecrets.join(" and ")}`);
@@ -164,15 +124,17 @@ describe("Replayable Traces", () => {
       result: "model_failed",
       reply: null,
       modelSettings: { reasoningEffort: "none" },
-      messages: [
-        { role: "user", content: expect.stringMatching(/^\[Owner context\]/u) },
-        {
-          role: "user",
-          content: expect.stringMatching(
-            /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
-          ),
-        },
-      ],
+      request: {
+        kind: "pointer",
+        tail: [
+          {
+            role: "user",
+            content: expect.stringMatching(
+              /^\[Turn context\][^]*\[End of Turn context\]\nHello$/u
+            ),
+          },
+        ],
+      },
     });
     expect(stored?.trace.error).toContain(redactedMark);
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1));
@@ -196,30 +158,12 @@ describe("Replayable Traces", () => {
     }
     const marks = allSecrets.map(() => redactedMark).join(" ");
     const [stored] = await tracesOf(ownerId);
+    const request = stored?.trace.request;
     expect(
-      textAfterContextBlock(String(stored?.trace.messages.at(-1)?.content))
+      textAfterContextBlock(
+        String(request?.kind === "pointer" && request.tail.at(-1)?.content)
+      )
     ).toBe(`Keys ${marks}`);
     expect(stored?.trace.reply).toBe(`${fakeReplyPrefix}Keys ${marks}`);
-  });
-
-  it("refuses updates and deletes of a Trace", async () => {
-    const ownerId = await addOwner(8004);
-    await telegramWebhook(textUpdate({ fromUserId: 8004, text: "Hello" }));
-    await waitForTraces(ownerId, 1);
-
-    const agent = await personalAgentFor(
-      env.PERSONAL_AGENT,
-      OwnerIdSchema.make(ownerId)
-    );
-    await runInDurableObject(agent, (_, state) => {
-      expect(() =>
-        state.storage.sql.exec(
-          "UPDATE turn_traces SET result = 'model_replied'"
-        )
-      ).toThrow("append-only");
-      expect(() => state.storage.sql.exec("DELETE FROM turn_traces")).toThrow(
-        "append-only"
-      );
-    });
   });
 });

@@ -118,3 +118,15 @@ export const pendingApprovalStates = [
   "failed",
   "unconfirmed",
 ] as const;
+
+export const modelTurnTasks = ["reply", "scheduled_task", "proactive"] as const;
+
+export type ModelTurnTask = (typeof modelTurnTasks)[number];
+
+export const requestPartKinds = [
+  "system",
+  "tool_definitions",
+  "owner_context",
+] as const;
+
+export type RequestPartKind = (typeof requestPartKinds)[number];

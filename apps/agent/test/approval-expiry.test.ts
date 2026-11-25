@@ -27,6 +27,7 @@ import {
   telegramWebhook,
   textUpdate,
 } from "./telegram-requests.ts";
+import { onlyTheRetentionAlarm } from "./trace-retention-alarm.ts";
 
 interface PendingApprovalRow extends Record<string, SqlStorageValue> {
   pending_approval_id: string;
@@ -210,7 +211,9 @@ describe("Pending Approvals expire", { timeout: 40_000 }, () => {
     expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls);
     expect(await countOf(ownerId, "turn_traces")).toBe(traces);
     expect(await countOf(ownerId, "schedules WHERE set_by = 'owner'")).toBe(0);
-    expect(await alarmsOf(ownerId)).toEqual([]);
+    expect(await alarmsOf(ownerId)).toEqual(
+      await onlyTheRetentionAlarm(ownerId)
+    );
 
     await fireTheAlarm(ownerId);
     expect(fakeTelegram.edits).toHaveLength(1);

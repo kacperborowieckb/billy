@@ -1,12 +1,15 @@
 import type { ModelMessage } from "ai";
 import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
   ModelMessageJsonSchema,
   ModelMessageSchema,
 } from "../model-gateway/model-message-schema.ts";
+import type { SentConversationRows } from "../tracing/traced-request.ts";
 import { AgentStorage } from "./agent-storage.ts";
+import { sentRowsCondition, storedRowsOf } from "./conversation-rows.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
@@ -32,13 +35,6 @@ export interface NewSummary {
   readonly lastCompactedSequence: number;
   readonly message: ModelMessage;
 }
-
-const summaryFirst = <Row extends { readonly kind: ConversationRowKind }>(
-  rows: readonly Row[]
-) => [
-  ...rows.filter((row) => row.kind === "summary"),
-  ...rows.filter((row) => row.kind !== "summary"),
-];
 
 const chatTextRowKinds: readonly ConversationRowKind[] = [
   "input",
@@ -70,27 +66,20 @@ const decodedRows = (
 const makeConversation = Effect.gen(function* makeConversationEffect() {
   const { database } = yield* AgentStorage;
 
-  const uncompactedRows = database
-    .select()
-    .from(conversationMessages)
-    .where(isNull(conversationMessages.compactedAt))
-    .orderBy(asc(conversationMessages.sequence))
-    .pipe(
-      Effect.flatMap((rows) =>
-        Effect.all(
-          summaryFirst(rows).map((row) =>
-            decodeMessage(row.message).pipe(
-              Effect.map((message): StoredConversationRow => ({
-                sequence: row.sequence,
-                eventId: row.eventId,
-                kind: row.kind,
-                message,
-              }))
-            )
-          )
-        ).pipe(Effect.orDie)
-      )
-    );
+  const storedRowsWhere = (where: SQL) =>
+    database
+      .select()
+      .from(conversationMessages)
+      .where(where)
+      .orderBy(asc(conversationMessages.sequence))
+      .pipe(Effect.flatMap(storedRowsOf));
+
+  const uncompactedRows = storedRowsWhere(
+    isNull(conversationMessages.compactedAt)
+  );
+
+  const sentRows = (sent: SentConversationRows) =>
+    storedRowsWhere(sentRowsCondition(sent));
 
   const summaryEventId = database
     .select({ eventId: conversationMessages.eventId })
@@ -214,6 +203,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
   return {
     history,
     uncompactedRows,
+    sentRows,
     summaryEventId,
     replaceWithSummary,
     append,
