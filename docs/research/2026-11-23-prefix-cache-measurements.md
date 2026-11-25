@@ -2,7 +2,7 @@
 
 Date: 2026-11-23
 
-Issue: [#179](https://github.com/kacperborowieckb/billy/issues/179). Decision: [0033](../decisions/0033-prompt-and-conversation-architecture.md). Code on `main` at `a1287c5`. [Part D](#part-d-results-after-the-change) measures the code of [#182](https://github.com/kacperborowieckb/billy/issues/182) on 2026-11-25 ([#202](https://github.com/kacperborowieckb/billy/issues/202)).
+Issue: [#179](https://github.com/kacperborowieckb/billy/issues/179). Decision: [0033](../decisions/0033-prompt-and-conversation-architecture.md). Code on `main` at `a1287c5`. [Part D](#part-d-results-after-the-change) measures the code of [#182](https://github.com/kacperborowieckb/billy/issues/182) on 2026-11-25 ([#202](https://github.com/kacperborowieckb/billy/issues/202)). [Part E](#part-e-results-compaction) measures Compaction ([#215](https://github.com/kacperborowieckb/billy/issues/215)).
 
 The repository owner approved the real model calls (decision [0002](../decisions/0002-agent-authority.md)). All content was synthetic. This record has no tokens, account ids, or URLs.
 
@@ -156,11 +156,76 @@ Turns 2 to 12: 126,325 input tokens, 123,968 cached, **98.1%**. Before the chang
 - The run has no Compaction, no Stub, and no Profile change after Turn 1, so it has none of the planned misses.
 - The calls were seconds to 2 minutes apart. The run does not measure gaps longer than the cache lifetime.
 
+## Part E results: Compaction
+
+Date: 2026-11-25, about 14:02 to 14:08 UTC. Issue: [#215](https://github.com/kacperborowieckb/billy/issues/215). Code on `main` at `620bbfc`. The repository owner approved this run on 2026-11-25 (decision 0002).
+
+Method: the same as Part D. The real Worker ran in the wrangler test harness (`eval/worker.ts`, temporary local storage, the fake Telegram API). A recording proxy on `127.0.0.1` stopped all calls at 1,000,000 input tokens. The gateway token was only in the environment of the proxy. No local values file was present. Every call sent `x-session-affinity` and `cf-aig-skip-cache: true`. These parts were different for the run only:
+
+- A temporary Worker entry lowered the Compaction values: history limit 6,000 tokens, kept 2,000, Summary at most 500. The values on `main` did not change.
+- The same entry sent a copy of each Operator metric data point to the proxy, so that the run has a record of the metric.
+- One Owner sent 21 messages. Messages 1 to 13 set facts and made small talk. The facts were a time zone, a name, two Captures, the arrival of a sister, a choice of paint, and a guest Wi-Fi password. Messages 14 to 21 asked about the facts. The driver sent message 19 and message 21 while a `compaction` call ran.
+- Before the paid run, a free run with a local fake model used the same driver. All 41 calls of that run went through the proxy. The fake model got the same 41 calls.
+
+The limit counts all input tokens that the provider reported: the system message and the tool definitions (about 9,700 tokens) and the history. So the input of each Turn was more than 6,000 tokens, and the check started Compaction after each Turn from Turn 2. With the values on `main`, the history can grow to about 20,000 tokens before Compaction.
+
+58 model calls: 38 calls of the main Conversation in 21 Turns, and 20 `compaction` calls. All were HTTP 200. The scripts were temporary and are not in the repository.
+
+### Compactions
+
+| After Turn | Block | Summary tokens | Result |
+| --- | --- | --- | --- |
+| 2 to 9 | Turn 1, then one Turn each | 50, 82, 180, 310, 425, 406, 439, 470 | Written |
+| 10, 11, 12 | Turn 9 | 548, 569, 536 | Refused: over 500 |
+| 13 | Turn 9 | 464 | Written |
+| 14 to 17, 19, 21 | Turns 10 to 13 (Turn 21: 10 to 17) | 547 to 564 | Refused: over 500 |
+| 18, 20 | Turns 10 to 13 | 555, 552 at the provider | Stopped by an Owner message |
+
+- Code wrote 9 Compactions. Each one ran after the Delivery of the Turn, with one `compaction` call. After each, the next request had exactly one Summary block. No later request had the Owner messages of the block. The newest Turn stayed word for word.
+- No block had a running Turn. Each block ended with a Turn that the agent delivered before the `compaction` call started.
+- The Summary grows, because each new Summary covers the old one and the block. From Turn 14 on, every Summary was over 500 tokens. Code refused each one that an Owner message did not stop. So no Compaction shortened the history again. The request grew from 15 to 45 messages. Each refused Summary was a paid call. Issue [#216](https://github.com/kacperborowieckb/billy/issues/216).
+- An Owner message stopped the calls after Turns 18 and 20. Code wrote nothing. The requests of Turns 19 and 21 still have the Summary from Turn 13. They also have all Turns from Turn 10 word for word. Both Summaries were over 500 tokens, so code would also have refused them. The free run with the fake model also checks a short Summary that code accepts. There, too, the stopped Compaction wrote nothing, and the next check wrote its Summary.
+- The provider did not stop the two calls. The proxy got the full answers, with 1,347 input and about 550 output tokens each. But Usage has no row for them: the run has 20 `compaction` calls and 18 `compaction` rows. Issue [#217](https://github.com/kacperborowieckb/billy/issues/217).
+
+### Facts after Compaction
+
+All replies after Compaction used the early facts. No fact was lost. The name came from the Profile, and the time zone came from the Owner settings. The other facts came from `search_notes`: the bike lock code, the arrival of the sister, the paint, the plumber, and the Wi-Fi password. The agent captured each of these facts as a Note or a Profile fact when the Owner gave it. The last written Summary (after Turn 13) also named all the early facts and their Note ids, except the Wi-Fi password. That password was still word for word in the history. So this run does not show a fact that only the Summary kept.
+
+### Hit Rate
+
+| Call group | Count | Input | Cached | Hit Rate |
+| --- | --- | --- | --- | --- |
+| Step 1, the first call after a written Compaction (a planned miss) | 9 | 93,639 | 86,912 | 92.8% |
+| Step 1, no Compaction written before it (Turns 2 and 11 to 21 except 14) | 11 | 123,687 | 122,304 | 98.9% |
+| Step 2 and later | 17 | 191,235 | 186,944 | 97.8% |
+| `compaction` calls | 20 | 21,902 | 13,568 | 61.9% |
+
+- The first call after a Compaction got the system message and the tool definitions from the cache (9,600 to 9,664 tokens). The provider read the Summary and the newest Turns again. Each of these calls had a Hit Rate of 90.0% to 95.9%:
+
+  | Turn | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 14 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | Hit Rate | 95.8% | 95.9% | 91.0% | 90.0% | 93.8% | 92.4% | 93.6% | 93.2% | 90.0% |
+
+- Turn 1 was warm (98.8%), because the system message and the tool definitions do not depend on the Owner.
+- The Operator metric named the planned miss of each step 1. It named `compaction` for 8 of the 9 calls after a Compaction, and `no_earlier_call` for Turn 1. It named `owner_context_changed` for Turn 2 (time zone) and Turn 3 (the Profile fact and a Compaction).
+
+`pnpm control doctor` on the recorded metric, through a local fake of the Analytics Engine SQL API that ran its query on the recorded data points:
+
+```text
+Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned miss)
+  ok       Step 2 and later: 97.8% of 191235 input tokens (limit 90.0%)
+  ok       Step 1 inside 60 minutes: 99.0% of 113827 input tokens (limit 80.0%)
+```
+
+The doctor result was "problems found" only because the local secrets were missing. The run had no local values file, which is what the method requires.
+
 ## Cost of the measurement
 
 805,891 input tokens (572,288 cached) and 1,974 output tokens through the proxy: about $0.08 with the 5% fee of Unified Billing. A few diagnostic calls of some tokens each ran outside the proxy.
 
 Part D: 317,122 input tokens (304,960 cached) and 1,693 output tokens through the proxy: about $0.01 with the 5% fee. Outside the proxy, one check of the token used 7 input tokens. A test of the driver at about 08:20 to 08:21 UTC was meant to use a fake model. But a local values file was present and set the real gateway URL and token. So the Worker called the real gateway for 6 Owner messages, with no record and no stop. Estimated cost: less than $0.05. The run of Part D had no local values file.
+
+Part E: 440,178 input tokens (419,328 cached) and 10,894 output tokens through the proxy, about $0.02 with the 5% fee. This includes the two stopped `compaction` calls. No call ran outside the proxy. The free run with the fake model cost nothing.
 
 ## Notes for later work
 
