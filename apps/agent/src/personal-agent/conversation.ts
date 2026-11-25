@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
@@ -199,7 +199,10 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       .values({ slot: 0, lastCompactedSequence, refusedAt })
       .onConflictDoUpdate({
         target: refusedCompactionBlocks.slot,
-        set: { lastCompactedSequence, refusedAt },
+        set: {
+          lastCompactedSequence: sql`max(${refusedCompactionBlocks.lastCompactedSequence}, excluded.last_compacted_sequence)`,
+          refusedAt,
+        },
       });
   });
 

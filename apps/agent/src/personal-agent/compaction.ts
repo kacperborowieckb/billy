@@ -169,7 +169,10 @@ export const compactWhenOverLimit = Effect.fnUntraced(
     }
     const lastRefusedBlockEnd = yield* conversation.lastRefusedBlockEnd;
     if (
-      Option.contains(lastRefusedBlockEnd, block.value.lastCompactedSequence)
+      Option.exists(
+        lastRefusedBlockEnd,
+        (refusedEnd) => block.value.lastCompactedSequence <= refusedEnd
+      )
     ) {
       return "RefusedBlockSkipped" satisfies CompactionResult;
     }

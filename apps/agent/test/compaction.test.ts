@@ -440,6 +440,40 @@ describe("Compaction", () => {
     ]);
   });
 
+  it("makes no call for a block that ends before a refused block, after the history total falls", async () => {
+    const ownerId = await ownerInWarsaw(8815);
+    scriptModel([
+      reply("First answer", 2000),
+      reply("Second answer", 23_000),
+      reply("Third answer", 24_000),
+      reply("Fourth answer", 30_000),
+      reply("Fifth answer", 40_000),
+      overLimitSummary,
+      overLimitSummary,
+      reply("Sixth answer", 31_500),
+      reply("Seventh answer", 31_600),
+    ]);
+    await chatFourTurns(8815);
+    await ownerSays(8815, "fifth message", 5);
+    await vi.waitFor(
+      async () => expect(await refusedBlockRows(ownerId)).toHaveLength(1),
+      { timeout: 10_000 }
+    );
+    const refusedAtFifth = await refusedBlockRows(ownerId);
+    expect(JSON.stringify(compactionDataOf(call(5)).chat)).toContain(
+      "fourth message"
+    );
+
+    await ownerSays(8815, "sixth message", 6);
+    await ownerSays(8815, "seventh message", 7);
+
+    expect(fakeModel.doGenerateCalls).toHaveLength(9);
+    expect(ownerTextsOf(call(8).prompt).at(-1)).toBe("seventh message");
+    expect(await compactionUsageRows(ownerId)).toHaveLength(2);
+    expect(await refusedBlockRows(ownerId)).toEqual(refusedAtFifth);
+    expect(await compactedOrSummaryRows(ownerId)).toEqual([]);
+  });
+
   it("records no refusal when an Owner Burst stops the second Summary call", async () => {
     const ownerId = await ownerInWarsaw(8814);
     scriptModel([
