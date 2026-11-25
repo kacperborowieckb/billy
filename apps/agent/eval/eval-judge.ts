@@ -90,6 +90,7 @@ export const judgeExchanges = Effect.fnUntraced(function* judgeExchanges(
       gateway.generate({
         task: "eval_judge",
         trust: fixedTurnTrust("owner"),
+        asksOwnerForApproval: false,
         system: judgeInstructions(request.rubric),
         messages: [
           {

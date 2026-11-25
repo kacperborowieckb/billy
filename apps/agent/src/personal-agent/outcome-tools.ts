@@ -63,7 +63,7 @@ const withEarlierSteps = (
 interface OutcomeGeneration {
   readonly eventId: string;
   readonly earlierMessages: readonly ModelMessage[];
-  readonly request: ModelRequest;
+  readonly request: Omit<ModelRequest, "asksOwnerForApproval">;
   readonly tools: AgentTools;
   readonly defaultReaction: string;
   readonly approvalAsking: ApprovalAsking;
@@ -107,6 +107,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         .generate({
           ...request,
           eventId,
+          asksOwnerForApproval: approvalAsking._tag === "AskOwner",
           messages: [
             ...request.messages,
             ...earlier.flatMap((step) => step.responseMessages),

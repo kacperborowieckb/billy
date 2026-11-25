@@ -34,7 +34,9 @@ const call = (
     try: () =>
       Promise.resolve(
         tool
-          .toAiSdkTool(runToolEffect(Effect.runPromise))
+          .toAiSdkTool(runToolEffect(Effect.runPromise), () => ({
+            _tag: "Run",
+          }))
           .execute?.(input, { toolCallId, messages: [], context: {} })
       ),
     catch: (error) =>

@@ -27,8 +27,10 @@ import { ModelUnavailable } from "./model-unavailable.ts";
 import { StepLimitReached } from "./step-limit-reached.ts";
 import {
   approvalStatusOf,
+  toolInputGateOf,
   blockedCallReachingTheGate,
 } from "./tool-approval.ts";
+import type { TurnGate } from "./tool-approval.ts";
 import { sumUsage, UsageLedger } from "./usage-ledger.ts";
 import type { Usage } from "./usage-ledger.ts";
 
@@ -39,6 +41,7 @@ export interface ModelRequest {
   readonly messages: readonly ModelMessage[];
   readonly tools?: AgentTools;
   readonly trust: TurnTrust;
+  readonly asksOwnerForApproval: boolean;
   readonly stepLimit: number;
 }
 
@@ -55,11 +58,15 @@ export interface ModelReply {
 const attemptTimeout = `${attemptTimeoutMillis} millis` as const;
 const firstRetryDelay = "1 second";
 
-const aiSdkToolsOf = (tools: AgentTools, runTool: RunToolEffect) =>
+const aiSdkToolsOf = (
+  tools: AgentTools,
+  turnGate: TurnGate,
+  runTool: RunToolEffect
+) =>
   Object.fromEntries(
     Object.entries(tools).map(([name, agentTool]) => [
       name,
-      agentTool.toAiSdkTool(runTool),
+      agentTool.toAiSdkTool(runTool, toolInputGateOf(agentTool, turnGate)),
     ])
   );
 
@@ -71,8 +78,8 @@ const toolLoopAgentOf = (
   new ToolLoopAgent({
     model: retryingModelCalls(route.model),
     instructions: request.system,
-    tools: aiSdkToolsOf(request.tools ?? noTools, runTool),
-    toolApproval: approvalStatusOf(request.tools ?? noTools, request.trust),
+    tools: aiSdkToolsOf(request.tools ?? noTools, request, runTool),
+    toolApproval: approvalStatusOf(request.tools ?? noTools, request),
     repairToolCall: blockedCallReachingTheGate(request.tools ?? noTools),
     stopWhen: isStepCount(request.stepLimit),
     maxRetries: 0,

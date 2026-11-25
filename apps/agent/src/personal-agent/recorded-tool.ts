@@ -45,6 +45,7 @@ export type RecordedToolDefinition<
   readonly failureMessage: string | ((cause: Cause.Cause<unknown>) => string);
   readonly recordedInput?: (input: Input) => JSONValue;
   readonly marksItsWorkUntrusted?: (input: Input) => boolean;
+  readonly codeWrittenInput?: (input: Input) => Input;
 };
 
 const toolFailedFrom =
@@ -117,6 +118,9 @@ export const recordedTool = <
   agentTool({
     description: definition.description,
     ...approvalOf(definition),
+    ...(definition.codeWrittenInput === undefined
+      ? {}
+      : { codeWrittenInput: definition.codeWrittenInput }),
     ...(definition.marksItsWorkUntrusted === undefined
       ? {}
       : {

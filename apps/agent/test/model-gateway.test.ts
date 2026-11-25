@@ -202,6 +202,7 @@ describe("Model Gateway transport", () => {
             system: "Be brief.",
             messages: [{ role: "user", content: "Hi" }],
             trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
             stepLimit: 4,
           })
         ),
@@ -313,6 +314,7 @@ describe("The gate in the Model Gateway", () => {
               messages: [{ role: "user", content: "Keep secret" }],
               tools: { keep_word: tool },
               trust: fixedTurnTrust("owner"),
+              asksOwnerForApproval: true,
               stepLimit: 4,
             })
           ),
@@ -354,6 +356,7 @@ describe("The gate in the Model Gateway", () => {
             messages: [{ role: "user", content: "Keep secret" }],
             tools: { keep_word: keepWordTool(kept, "blocked") },
             trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
             stepLimit: 4,
           })
         ),
@@ -411,6 +414,7 @@ describe("The gate in the Model Gateway", () => {
             messages: [{ role: "user", content: "Keep secret" }],
             tools: { keep_word: keepWordTool(kept, "blocked") },
             trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
             stepLimit: 4,
           })
         ),
@@ -436,7 +440,8 @@ describe("The gate in the Model Gateway", () => {
   it("never runs the work of a blocked tool, even when execute is called without the gate", async () => {
     const kept: string[] = [];
     const { execute } = keepWordTool(kept, "blocked").toAiSdkTool(
-      runToolEffect(Effect.runPromise)
+      runToolEffect(Effect.runPromise),
+      () => ({ _tag: "Run" })
     );
 
     await expect(
@@ -467,6 +472,7 @@ describe("The gate in the Model Gateway", () => {
             messages: [{ role: "user", content: "Keep milk" }],
             tools: { keep_word: keepWordTool(kept, "change") },
             trust: fixedTurnTrust("owner"),
+            asksOwnerForApproval: true,
             stepLimit: 4,
           })
         ),
@@ -494,6 +500,7 @@ describe("The gate in the Model Gateway", () => {
             messages: [{ role: "user", content: "Keep milk" }],
             tools: { keep_word: keepWordTool(kept, "change") },
             trust: fixedTurnTrust("untrusted"),
+            asksOwnerForApproval: true,
             stepLimit: 4,
           })
         ),

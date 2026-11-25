@@ -9,6 +9,7 @@ import type { RiskClass, RiskClassified } from "../src/approval/risk-class.ts";
 import {
   blockedCallReason,
   gateDecisionOf,
+  untrustedChangeWithoutOwnerReason,
 } from "../src/approval/tool-gate.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { agentTool } from "../src/model-gateway/agent-tool.ts";
@@ -82,9 +83,10 @@ const everyToolSet = async (): Promise<Record<string, AgentTools>> =>
       )
   );
 
-const gatedTool = (tool: RiskClassified) => ({
+const gatedTool = (tool: RiskClassified, hasCodeWrittenInput = false) => ({
   ...tool,
   marksItsWorkUntrusted: () => false,
+  hasCodeWrittenInput,
 });
 
 const WideInput = z.object({ wide: z.boolean() });
@@ -152,6 +154,7 @@ describe("Risk Class", () => {
         tool: gatedTool(tool),
         input: {},
         trustLevel: "owner",
+        asksOwnerForApproval: true,
       })
     ).toEqual({
       _tag: "Deny",
@@ -183,6 +186,7 @@ describe("The gate", () => {
           tool: gatedTool(riskClassified(riskClass)),
           input: {},
           trustLevel,
+          asksOwnerForApproval: true,
         });
         expect(decision, `${riskClass} in ${trustLevel}`).toEqual(
           expectedDecision[trustLevel][riskClass]
@@ -198,14 +202,53 @@ describe("The gate", () => {
         of: (input) => (input.wide ? "approve" : "change"),
       }),
       marksItsWorkUntrusted: () => true,
+      hasCodeWrittenInput: false,
     };
+    const untrustedCall = {
+      tool,
+      trustLevel: "untrusted",
+      asksOwnerForApproval: true,
+    } as const;
 
     expect(
-      gateDecisionOf({ tool, input: { wide: false }, trustLevel: "untrusted" })
+      gateDecisionOf({ ...untrustedCall, input: { wide: false } })
     ).toEqual({ _tag: "Run" });
-    expect(
-      gateDecisionOf({ tool, input: { wide: true }, trustLevel: "untrusted" })
-    ).toEqual({ _tag: "AskOwner" });
+    expect(gateDecisionOf({ ...untrustedCall, input: { wide: true } })).toEqual(
+      {
+        _tag: "AskOwner",
+      }
+    );
+  });
+});
+
+const sideSessionCall = (
+  trustLevel: "owner" | "untrusted",
+  hasCodeWrittenInput: boolean
+) => ({
+  tool: gatedTool(riskClassified("change"), hasCodeWrittenInput),
+  input: {},
+  trustLevel,
+  asksOwnerForApproval: false,
+});
+
+describe("The gate in a Turn that cannot ask the Owner for Approval", () => {
+  it("runs a change call of an owner Side Session with the input of the model", () => {
+    expect(gateDecisionOf(sideSessionCall("owner", true))).toEqual({
+      _tag: "Run",
+    });
+  });
+
+  it("runs a change call of an untrusted Side Session with the input that code writes, when the tool has one", () => {
+    expect(gateDecisionOf(sideSessionCall("untrusted", true))).toEqual({
+      _tag: "RunCodeWrittenInput",
+    });
+  });
+
+  it("denies a change call of an untrusted Side Session with a reason for the model, when the tool has no code-written input", () => {
+    expect(gateDecisionOf(sideSessionCall("untrusted", false))).toEqual({
+      _tag: "Deny",
+      reason: untrustedChangeWithoutOwnerReason,
+    });
   });
 });
 
