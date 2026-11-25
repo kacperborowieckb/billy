@@ -23,8 +23,11 @@ import {
 } from "./fired-scheduled-task.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
+import { TurnProgress } from "./turn-progress.ts";
 import { settleFromJournal } from "./turn-recovery.ts";
 import { sideSession } from "./turn-session.ts";
+import type { TurnSession } from "./turn-session.ts";
+import { writeBackMarkerOf } from "./write-back.ts";
 
 const hasEndedSending = (state: DeliveryState) =>
   state._tag === "Sent" ||
@@ -103,11 +106,14 @@ const failureNoticeTextOf = (schedule: Option.Option<Schedule>) => {
     : scheduledTaskFailureText(schedule.value.action.prompt);
 };
 
-const resumeUnsentFor = (
-  ownerId: OwnerId,
-  event: ScheduleFiredEvent,
-  schedule: Option.Option<Schedule>
-) =>
+interface UnsentRun {
+  readonly ownerId: OwnerId;
+  readonly event: ScheduleFiredEvent;
+  readonly schedule: Option.Option<Schedule>;
+  readonly session: TurnSession;
+}
+
+const resumeUnsentFor = ({ ownerId, event, schedule, session }: UnsentRun) =>
   Effect.fnUntraced(function* resumeSkipped(
     skipped:
       | { readonly dailyTokenBudget: number; readonly tokensSpent: number }
@@ -118,7 +124,7 @@ const resumeUnsentFor = (
     }
     if (Option.isSome(schedule) && schedule.value.action._tag === "RunPrompt") {
       yield* resumeSkippedScheduledTask(
-        { ownerId, event, action: schedule.value.action },
+        { ownerId, event, action: schedule.value.action, session },
         skipped
       );
     }
@@ -135,11 +141,19 @@ export const handleFiredSchedule = Effect.fnUntraced(
     const schedules = yield* Schedules;
     const schedule = yield* schedules.byId(event.scheduleId);
 
+    const progress = yield* TurnProgress;
+    const session = sideSession(
+      yield* progress.keepWriteBackMarker(
+        event.eventId,
+        yield* writeBackMarkerOf(behavior, event, schedule)
+      )
+    );
+
     yield* recover({ ownerId, behavior, event, schedule });
     const outcome = yield* settleFromJournal(event, {
-      resumeUnsent: resumeUnsentFor(ownerId, event, schedule),
+      resumeUnsent: resumeUnsentFor({ ownerId, event, schedule, session }),
       failureNoticeText: failureNoticeTextOf(schedule),
-      session: sideSession,
+      session,
     });
     if (outcome === "settled") {
       return;
@@ -160,7 +174,13 @@ export const handleFiredSchedule = Effect.fnUntraced(
     const { action } = schedule.value;
     switch (action._tag) {
       case "SendText": {
-        return yield* deliverReminder({ ownerId, behavior, event, action });
+        return yield* deliverReminder({
+          ownerId,
+          behavior,
+          event,
+          action,
+          session,
+        });
       }
       case "RunPrompt": {
         if (schedule.value.setBy === "agent") {
@@ -170,6 +190,7 @@ export const handleFiredSchedule = Effect.fnUntraced(
             event,
             action,
             schedule: schedule.value,
+            session,
           });
         }
         return yield* runScheduledTask({
@@ -178,6 +199,7 @@ export const handleFiredSchedule = Effect.fnUntraced(
           event,
           schedule: schedule.value,
           action,
+          session,
         });
       }
       default: {

@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 import {
@@ -7,7 +7,6 @@ import {
   ModelMessageSchema,
 } from "../model-gateway/model-message-schema.ts";
 import { AgentStorage } from "./agent-storage.ts";
-import { untrustedReplyStub } from "./conversation-stubs.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
@@ -23,11 +22,32 @@ export interface ConversationRow {
   readonly message: ModelMessage;
 }
 
+const chatTextRowKinds: readonly ConversationRowKind[] = [
+  "input",
+  "reply",
+  "write_back",
+  "write_back_stub",
+];
+
 export interface ConversationEntry {
   readonly eventId: string;
   readonly rows: readonly ConversationRow[];
   readonly recordedAs?: string | undefined;
 }
+
+const decodedRows = (
+  rows: readonly {
+    readonly kind: ConversationRowKind;
+    readonly message: string;
+  }[]
+) =>
+  Effect.all(
+    rows.map(({ kind, message }) =>
+      decodeMessage(message).pipe(
+        Effect.map((decoded): ConversationRow => ({ kind, message: decoded }))
+      )
+    )
+  ).pipe(Effect.orDie);
 
 const makeConversation = Effect.gen(function* makeConversationEffect() {
   const { database } = yield* AgentStorage;
@@ -73,29 +93,45 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       })
     );
 
-  const turnReplyIsStoredInFull = Effect.fnUntraced(
-    function* turnReplyIsStoredInFull(eventId: string) {
+  const recentTextRows = Effect.fnUntraced(function* recentTextRows(
+    count: number
+  ) {
+    const rows = yield* database
+      .select({
+        kind: conversationMessages.kind,
+        message: conversationMessages.message,
+      })
+      .from(conversationMessages)
+      .where(inArray(conversationMessages.kind, chatTextRowKinds))
+      .orderBy(desc(conversationMessages.sequence))
+      .limit(count)
+      .pipe(Effect.orDie);
+    return (yield* decodedRows(rows)).toReversed();
+  });
+
+  const sentTextIsStoredInFull = Effect.fnUntraced(
+    function* sentTextIsStoredInFull(eventId: string) {
       const rows = yield* database
-        .select({ message: conversationMessages.message })
+        .select({
+          kind: conversationMessages.kind,
+          message: conversationMessages.message,
+        })
         .from(conversationMessages)
         .where(
           and(
             eq(conversationMessages.eventId, eventId),
-            eq(conversationMessages.kind, "reply")
+            inArray(conversationMessages.kind, [
+              "write_back",
+              "write_back_stub",
+            ])
           )
         )
         .pipe(Effect.orDie);
-      const replies = yield* Effect.all(
-        rows.map((row) => decodeMessage(row.message))
-      ).pipe(Effect.orDie);
-      return (
-        replies.length > 0 &&
-        replies.every((reply) => reply.content !== untrustedReplyStub)
-      );
+      return rows.length > 0 && rows.every(({ kind }) => kind === "write_back");
     }
   );
 
-  return { history, append, turnReplyIsStoredInFull };
+  return { history, append, recentTextRows, sentTextIsStoredInFull };
 });
 
 export class Conversation extends Context.Service<

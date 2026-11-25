@@ -29,6 +29,8 @@ import { storeDueScheduleEvents } from "../src/personal-agent/due-schedule-event
 import { Inbox } from "../src/personal-agent/inbox.ts";
 import { OwnerChannelConversation } from "../src/personal-agent/owner-channel-conversation.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
+import type { TurnProgress } from "../src/personal-agent/turn-progress.ts";
+import { mainConversation } from "../src/personal-agent/turn-session.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
 import { OperatorMetrics } from "../src/tracing/operator-metrics.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
@@ -265,6 +267,7 @@ const inAgent = async <A, E>(
     | Redactor
     | Schedules
     | StoredFormLimits
+    | TurnProgress
     | TurnTraces
   >
 ) =>
@@ -372,7 +375,11 @@ describe("Delivery through its interface", () => {
       "delivery-notice",
       Effect.gen(function* scenario() {
         const event = yield* storeOwnerMessage;
-        yield* failWithNotice(event, "model down");
+        yield* failWithNotice({
+          event,
+          session: mainConversation,
+          reason: "model down",
+        });
         return yield* deliveryStateOf(event.eventId);
       })
     );

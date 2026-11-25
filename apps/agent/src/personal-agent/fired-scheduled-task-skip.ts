@@ -13,7 +13,8 @@ import { nameOfPrompt } from "./fired-scheduled-task-name.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
 import { scheduledTaskTokensSpentToday } from "./scheduled-task-budget.ts";
-import { replied, storeFinishedTurn } from "./stored-turn.ts";
+import { replied } from "./stored-turn.ts";
+import type { TurnSession } from "./turn-session.ts";
 
 const scheduledTaskSkipText = (redactedPrompt: string) =>
   `Your Scheduled Task "${nameOfPrompt(redactedPrompt)}" was skipped because of the daily limit for Scheduled Tasks.`;
@@ -34,6 +35,7 @@ const skipNoticeOf = Effect.fnUntraced(function* skipNoticeOf(prompt: string) {
 const finishSkippedScheduledTask = Effect.fnUntraced(
   function* finishSkippedScheduledTask(
     event: ScheduleFiredEvent,
+    session: TurnSession,
     { input, text }: SkipNotice
   ) {
     const inbox = yield* Inbox;
@@ -45,7 +47,7 @@ const finishSkippedScheduledTask = Effect.fnUntraced(
       yield* fail(event, delivery.reason);
       return;
     }
-    yield* storeFinishedTurn({
+    yield* session.commit({
       eventId: event.eventId,
       inputs: [input],
       steps: [],
@@ -97,6 +99,7 @@ interface ScheduledTaskSkip {
   readonly ownerId: OwnerId;
   readonly event: ScheduleFiredEvent;
   readonly action: RunPrompt;
+  readonly session: TurnSession;
   readonly dailyTokenBudget: number;
   readonly tokensSpent: number;
   readonly startedAt: number;
@@ -106,6 +109,7 @@ const skipScheduledTask = Effect.fnUntraced(function* skipScheduledTask({
   ownerId,
   event,
   action,
+  session,
   dailyTokenBudget,
   tokensSpent,
   startedAt,
@@ -129,7 +133,7 @@ const skipScheduledTask = Effect.fnUntraced(function* skipScheduledTask({
     tokensSpent,
     latencyMillis: (yield* Clock.currentTimeMillis) - startedAt,
   });
-  yield* finishSkippedScheduledTask(event, notice);
+  yield* finishSkippedScheduledTask(event, session, notice);
 });
 
 interface BudgetCheck {
@@ -137,6 +141,7 @@ interface BudgetCheck {
   readonly behavior: BehaviorConfig;
   readonly event: ScheduleFiredEvent;
   readonly action: RunPrompt;
+  readonly session: TurnSession;
   readonly startedAt: number;
 }
 
@@ -145,6 +150,7 @@ export const skipOverBudget = Effect.fnUntraced(function* skipOverBudget({
   behavior,
   event,
   action,
+  session,
   startedAt,
 }: BudgetCheck) {
   const tokensSpent = yield* scheduledTaskTokensSpentToday(behavior);
@@ -155,6 +161,7 @@ export const skipOverBudget = Effect.fnUntraced(function* skipOverBudget({
     ownerId,
     event,
     action,
+    session,
     dailyTokenBudget: behavior.scheduledTaskDailyTokenBudget,
     tokensSpent,
     startedAt,
@@ -166,11 +173,12 @@ interface SkippedRun {
   readonly ownerId: OwnerId;
   readonly event: ScheduleFiredEvent;
   readonly action: RunPrompt;
+  readonly session: TurnSession;
 }
 
 export const resumeSkippedScheduledTask = Effect.fnUntraced(
   function* resumeSkippedScheduledTask(
-    { ownerId, event, action }: SkippedRun,
+    { ownerId, event, action, session }: SkippedRun,
     skipped: Pick<ScheduledTaskSkip, "dailyTokenBudget" | "tokensSpent">
   ) {
     const notice = yield* skipNoticeOf(action.prompt);
@@ -181,6 +189,6 @@ export const resumeSkippedScheduledTask = Effect.fnUntraced(
       latencyMillis: 0,
       ...skipped,
     });
-    yield* finishSkippedScheduledTask(event, notice);
+    yield* finishSkippedScheduledTask(event, session, notice);
   }
 );

@@ -18,12 +18,15 @@ import { skipOverBudget } from "./fired-scheduled-task-skip.ts";
 import { Inbox } from "./inbox.ts";
 import type { ScheduleFiredEvent } from "./inbox.ts";
 import { runModelTurn } from "./model-turn.ts";
-import { scheduledTaskSection } from "./scheduled-task-section.ts";
+import {
+  scheduledTaskInstructions,
+  scheduledTaskSection,
+} from "./scheduled-task-section.ts";
 import { scheduledTaskTools } from "./scheduled-task-tools.ts";
 import type { TurnPreparation } from "./turn-preparation.ts";
 import { TurnProgress } from "./turn-progress.ts";
 import { scheduledTaskTraceOf } from "./turn-record.ts";
-import { sideSession } from "./turn-session.ts";
+import type { TurnSession } from "./turn-session.ts";
 
 export const scheduledTaskFailureText = Effect.fnUntraced(
   function* scheduledTaskFailureText(prompt: string) {
@@ -32,19 +35,28 @@ export const scheduledTaskFailureText = Effect.fnUntraced(
   }
 );
 
-const failScheduledTask = Effect.fnUntraced(function* failScheduledTask(
-  event: ScheduleFiredEvent,
-  action: RunPrompt,
-  reason: string
-) {
+interface ScheduledTaskFailure {
+  readonly event: ScheduleFiredEvent;
+  readonly action: RunPrompt;
+  readonly session: TurnSession;
+  readonly reason: string;
+}
+
+const failScheduledTask = Effect.fnUntraced(function* failScheduledTask({
+  event,
+  action,
+  session,
+  reason,
+}: ScheduledTaskFailure) {
   const schedules = yield* Schedules;
 
   yield* recordFailure(event, reason);
   yield* schedules.complete(event.scheduleId, event.dueAt, event.eventId);
-  yield* sendFailureNotice(
+  yield* sendFailureNotice({
     event,
-    yield* scheduledTaskFailureText(action.prompt)
-  );
+    session,
+    text: yield* scheduledTaskFailureText(action.prompt),
+  });
 });
 
 const scheduledTaskPreparation = Effect.fnUntraced(
@@ -79,6 +91,7 @@ interface ScheduledTaskRun {
   readonly event: ScheduleFiredEvent;
   readonly schedule: Schedule;
   readonly action: RunPrompt;
+  readonly session: TurnSession;
 }
 
 export const runScheduledTask = Effect.fnUntraced(function* runScheduledTask({
@@ -87,6 +100,7 @@ export const runScheduledTask = Effect.fnUntraced(function* runScheduledTask({
   event,
   schedule,
   action,
+  session,
 }: ScheduledTaskRun) {
   const toolServices = yield* agentToolServices;
   const { schedules } = toolServices;
@@ -100,6 +114,7 @@ export const runScheduledTask = Effect.fnUntraced(function* runScheduledTask({
       behavior,
       event,
       action,
+      session,
       startedAt,
     });
     if (check === "Stopped") {
@@ -109,11 +124,12 @@ export const runScheduledTask = Effect.fnUntraced(function* runScheduledTask({
   const result = yield* runModelTurn({
     ownerId,
     behavior,
-    session: sideSession,
+    session,
     kind: {
       task: "scheduled_task",
       event,
       inputs: [scheduledTaskInputMessage(action.prompt)],
+      instructions: [scheduledTaskInstructions],
       tools: scheduledTaskTools(event.eventId, { ...toolServices, behavior }),
       trustLevel: "owner",
       prepare: scheduledTaskPreparation(behavior, event, schedule),
@@ -134,7 +150,12 @@ export const runScheduledTask = Effect.fnUntraced(function* runScheduledTask({
       break;
     }
     case "Failed": {
-      yield* failScheduledTask(event, action, result.reason);
+      yield* failScheduledTask({
+        event,
+        action,
+        session,
+        reason: result.reason,
+      });
       break;
     }
     case "SendFailed": {

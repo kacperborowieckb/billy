@@ -12,7 +12,6 @@ import {
   fail,
   honestFailureText,
   recordUnconfirmedSend,
-  rememberFailureNotice,
   sendFailureNotice,
   unconfirmedSendReason,
 } from "./delivery.ts";
@@ -150,11 +149,16 @@ const settleState = Effect.fnUntraced(function* settleState<
       const noticeText = yield* recovery.failureNoticeText;
       yield* noticeText === undefined
         ? inbox.markFailed([event])
-        : sendFailureNotice(event, noticeText, recovery.replyTo);
+        : sendFailureNotice({
+            event,
+            session: recovery.session,
+            text: noticeText,
+            replyTo: recovery.replyTo,
+          });
       return "settled" as const;
     }
     case "FailedNoticeSent": {
-      yield* rememberFailureNotice(event, state.text);
+      yield* recovery.session.rememberFailureNotice(event.eventId, state.text);
       yield* inbox.markFailed([event]);
       return "settled" as const;
     }

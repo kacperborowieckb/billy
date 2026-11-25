@@ -90,7 +90,12 @@ const settleAnswer = Effect.fnUntraced(function* settleAnswer(
       break;
     }
     case "Failed": {
-      yield* failWithNotice(event, result.reason, newestEventOf(burst));
+      yield* failWithNotice({
+        event,
+        session: mainConversation,
+        reason: result.reason,
+        replyTo: newestEventOf(burst),
+      });
       break;
     }
     case "SendFailed": {

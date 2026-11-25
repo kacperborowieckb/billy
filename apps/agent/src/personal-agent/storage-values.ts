@@ -18,10 +18,22 @@ export const conversationRowKinds = [
   "input",
   "step",
   "reply",
+  "write_back",
+  "write_back_stub",
   "approval_status",
 ] as const;
 
 export type ConversationRowKind = (typeof conversationRowKinds)[number];
+
+export const writeBackKinds = [
+  "Brief",
+  "Follow-up",
+  "Scheduled Task",
+  "Reminder",
+  "Schedule",
+] as const;
+
+export type WriteBackKind = (typeof writeBackKinds)[number];
 
 export const trustLevels = ["owner", "untrusted"] as const;
 

@@ -3,6 +3,7 @@ export interface BehaviorConfig {
   readonly maxToolSteps: number;
   readonly maxProfileCharacters: number;
   readonly maxStoredToolResultCharacters: number;
+  readonly sideSessionRecentChatMessages: number;
   readonly reminderGraceMillis: number;
   readonly scheduledTaskDailyTokenBudget: number;
   readonly maxActiveScheduledTasks: number;
@@ -27,6 +28,7 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   maxToolSteps: 8,
   maxProfileCharacters: 2000,
   maxStoredToolResultCharacters: 4000,
+  sideSessionRecentChatMessages: 6,
   reminderGraceMillis: 5 * 60 * 1000,
   scheduledTaskDailyTokenBudget: 200_000,
   maxActiveScheduledTasks: 10,

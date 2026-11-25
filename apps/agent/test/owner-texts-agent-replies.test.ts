@@ -7,7 +7,7 @@ import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import {
   ownerContextLabel,
-  textAfterTurnContext,
+  textAfterContextBlock,
   turnContextLabel,
 } from "../src/personal-agent/context-labels.ts";
 import { Inbox } from "../src/personal-agent/inbox.ts";
@@ -132,7 +132,7 @@ describe("Owner texts, agent replies", () => {
       `${fakeReplyPrefix}first`,
       turnContextLabel,
     ]);
-    expect(texts.map(textAfterTurnContext).slice(1)).toEqual([
+    expect(texts.map(textAfterContextBlock).slice(1)).toEqual([
       "first",
       `${fakeReplyPrefix}first`,
       "second",
