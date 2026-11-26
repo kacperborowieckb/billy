@@ -209,6 +209,17 @@ describe("the check of MCP arguments", () => {
     );
   });
 
+  it("accepts a schema that holds a keyword name only as a value", () => {
+    const schema = {
+      type: "object",
+      properties: { mode: { enum: ["$dynamicRef"] } },
+    };
+
+    expect(
+      mcpArgumentProblemOf(schema, { mode: "$dynamicRef" })
+    ).toBeUndefined();
+  });
+
   it("names only a location and a keyword, never a value from the schema", () => {
     const schema = {
       type: "object",

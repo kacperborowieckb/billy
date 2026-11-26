@@ -20,11 +20,22 @@ const safeLocationPattern = /[^A-Za-z0-9_.#/-]/gu;
 
 const safeKeywordPattern = /^[A-Za-z$]{1,32}$/u;
 
-const usesUnsupportedKeyword = (
-  inputSchema: Readonly<Record<string, unknown>>
-) => {
-  const text = JSON.stringify(inputSchema);
-  return unsupportedKeywords.some((keyword) => text.includes(`"${keyword}"`));
+const isUnsupportedKeywordEntry = ([key, value]: readonly [string, unknown]) =>
+  typeof value === "string" &&
+  unsupportedKeywords.some((keyword) => keyword === key);
+
+const usesUnsupportedKeyword = (schema: unknown): boolean => {
+  if (Array.isArray(schema)) {
+    return schema.some(usesUnsupportedKeyword);
+  }
+  if (typeof schema !== "object" || schema === null) {
+    return false;
+  }
+  const entries = Object.entries(schema);
+  return (
+    entries.some(isUnsupportedKeywordEntry) ||
+    entries.some(([, value]) => usesUnsupportedKeyword(value))
+  );
 };
 
 const problemOf = ({
