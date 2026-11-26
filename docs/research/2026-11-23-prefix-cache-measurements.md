@@ -272,7 +272,7 @@ As in the first run, the doctor result was "problems found" only because the loc
 
 Date: 2026-11-26, about 10:17 to 10:22 UTC. Issue: [#227](https://github.com/kacperborowieckb/billy/issues/227). Code on `main` at `46d1e8a`. This code has the fix of [#223](https://github.com/kacperborowieckb/billy/issues/223). The first attempt asks for at most 60% of the Summary limit. The retry asks for at most 30%. The model condenses the earlier Summary first. The code also has the fix of [#222](https://github.com/kacperborowieckb/billy/issues/222). The target is the field `summaryTarget` of the user message. So the system text is the same on each `compaction` call. The repository owner approved this run on 2026-11-26 (decision 0002).
 
-Method: the same as the first retest, with the same driver, the same 21 Owner messages, and the same lowered values. The Summary limit was 500 tokens. So the first attempt asked for at most 300 tokens. The retry asked for at most 150 tokens. The free run before the paid run had 41 calls. All of them went through the proxy, and the fake model got the same 41 calls.
+Method: the same as the first retest, with the same driver, the same 21 Owner messages, and the same lowered values. The Summary limit was 500 tokens. So the first attempt asked for at most 300 tokens. The retry asked for at most 150 tokens. The free run before the paid run had 41 calls. All of them went through the proxy. The fake model got the same 41 calls.
 
 44 model calls: 33 calls of the main Conversation in 21 Turns, and 11 `compaction` calls. All were HTTP 200. All sent `x-session-affinity` and `cf-aig-skip-cache: true`. Each call has a Usage row: 44 rows, 11 of them `compaction`.
 
@@ -285,10 +285,10 @@ Method: the same as the first retest, with the same driver, the same 21 Owner me
 | 12 to 21 | none | none | No call: the block ends at the refused block |
 
 - The model did not keep to the target. From Turn 6 on, each Summary was over the target of 300 tokens. The retry with a target of 150 tokens wrote 500 tokens. Each Summary was the earlier Summary plus the new block. The model kept small talk (the dinner recipe, the paint drying time, the Gdansk fact). Issue [#228](https://github.com/kacperborowieckb/billy/issues/228).
-- The first attempts of Turns 2 to 7 were shorter than in the first retest (28 to 402 tokens, against 72 to 496). But the size went up after each Turn, and code refused a block after Turn 11. In the first retest, the first refusal came after Turn 16.
+- The first attempts of Turns 2 to 7 were shorter than in the first retest (28 to 402 tokens, against 72 to 496). But the size went up after each Turn. Code refused a block after Turn 11. In the first retest, the first refusal came after Turn 16.
 - The Summary text is short for its tokens. The refused retry had 175 words (1,341 characters) for 500 tokens. From Turn 8 on, each Summary had 8 UUIDs. The prompt tells the model to name Notes, Schedules, and the Profile by their ids.
 - After the refusal, Turns 12 to 21 made no `compaction` call. The request grew from 11 to 31 messages (10,588 to 11,555 input tokens). At the end of the run the history after the refused block was still under the kept 2,000 tokens. So, as in the first retest, the run does not show the next attempt.
-- No Owner message stopped a `compaction` call. The driver sent messages 19 and 21 to stop a running call, but no call ran after Turn 11.
+- No Owner message stopped a `compaction` call. The driver sent messages 19 and 21 to stop a running call. But no call ran after Turn 11.
 - Each `compaction` call had the same system text. The Operator metric named the planned miss of the first `compaction` call `no_earlier_call` and of the 10 other calls `none`. No point of the run had the planned miss `deploy`. In the first retest, 7 of 19 `compaction` calls had the name `deploy`.
 
 The replies kept all tested facts. The tested facts were the name, bike lock code, sister's arrival, paint, plumber, Wi-Fi password, and time zone. Turns 3, 11, and 21 sent a reaction and no text, after `capture_note` or `close_open_loop`.
