@@ -30,6 +30,23 @@ const holdsLiteralData = ([key, value]: readonly [string, unknown]) =>
   literalKeywords.some((keyword) => keyword === key) ||
   (key === "enum" && Array.isArray(value));
 
+const nameMapKeywords = [
+  "properties",
+  "patternProperties",
+  "$defs",
+  "definitions",
+  "dependentSchemas",
+] as const;
+
+const isNameMap = ([key, value]: readonly [string, unknown]) =>
+  nameMapKeywords.some((keyword) => keyword === key) &&
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value);
+
+const subschemasOf = (entry: readonly [string, unknown]): readonly unknown[] =>
+  isNameMap(entry) ? Object.values(entry[1] as object) : [entry[1]];
+
 const usesUnsupportedKeyword = (schema: unknown): boolean => {
   if (Array.isArray(schema)) {
     return schema.some(usesUnsupportedKeyword);
@@ -42,7 +59,8 @@ const usesUnsupportedKeyword = (schema: unknown): boolean => {
     entries.some(isUnsupportedKeywordEntry) ||
     entries
       .filter((entry) => !holdsLiteralData(entry))
-      .some(([, value]) => usesUnsupportedKeyword(value))
+      .flatMap(subschemasOf)
+      .some(usesUnsupportedKeyword)
   );
 };
 

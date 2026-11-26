@@ -243,6 +243,21 @@ describe("the check of MCP arguments", () => {
     expect(mcpArgumentProblemOf(schema, { $dynamicRef: 5 })).toContain("fails");
   });
 
+  it.each(["const", "default", "examples", "enum"])(
+    "refuses a property named %s whose schema uses an unsupported keyword",
+    (name) => {
+      const schema = {
+        type: "object",
+        $defs: { text: { type: "string" } },
+        properties: { [name]: { $dynamicRef: "#/$defs/text" } },
+      };
+
+      expect(mcpArgumentProblemOf(schema, { [name]: 123 })).toContain(
+        "cannot be used"
+      );
+    }
+  );
+
   it("names only a location and a keyword, never a value from the schema", () => {
     const schema = {
       type: "object",
