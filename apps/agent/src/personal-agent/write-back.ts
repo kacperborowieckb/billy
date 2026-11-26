@@ -78,12 +78,29 @@ const readToolNames: ReadonlySet<string> = new Set([
 
 const decodeMcpCallOutput = Schema.decodeUnknownOption(McpCallOutputSchema);
 
+const FoundMcpToolsOutput = Schema.Struct({
+  connection: Schema.String,
+  matchCount: Schema.Int,
+});
+
+const decodeFoundMcpToolsOutput =
+  Schema.decodeUnknownOption(FoundMcpToolsOutput);
+
 const connectionsReadBy = ({ call, output }: SucceededCall): string[] => {
-  if (call.toolName !== callMcpToolToolName || output.type !== "json") {
+  if (output.type !== "json") {
+    return [];
+  }
+  if (call.toolName === findMcpToolsToolName) {
+    const found = decodeFoundMcpToolsOutput(output.value);
+    return found._tag === "Some" && found.value.matchCount > 0
+      ? [found.value.connection]
+      : [];
+  }
+  if (call.toolName !== callMcpToolToolName) {
     return [];
   }
   const decoded = decodeMcpCallOutput(output.value);
-  return decoded._tag === "Some" && decoded.value.status === "done"
+  return decoded._tag === "Some" && decoded.value.result !== undefined
     ? [decoded.value.connection]
     : [];
 };

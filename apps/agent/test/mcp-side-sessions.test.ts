@@ -11,7 +11,10 @@ import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import type { Journal } from "../src/journal/journal.ts";
 import { McpConnections } from "../src/mcp/mcp-connections.ts";
 import { testMcpCatalogId } from "../src/mcp/mcp-test-catalog.ts";
-import { callMcpToolToolName } from "../src/mcp/mcp-tool-names.ts";
+import {
+  callMcpToolToolName,
+  findMcpToolsToolName,
+} from "../src/mcp/mcp-tool-names.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
@@ -314,6 +317,31 @@ describe(
         )
       ).toHaveLength(1);
       expect(await pendingApprovalCount(ownerId)).toBe(0);
+    });
+  }
+);
+
+describe(
+  "the Write-back of a Side Session that read server text",
+  multiTurnTimeout,
+  () => {
+    it("names the Connection for a call that returned an error text and for a tool search", async () => {
+      const ownerId = await ownerWithConnection(9960);
+      scriptModel([
+        {
+          callTool: findMcpToolsToolName,
+          input: { connection: testMcpCatalogId, query: "search" },
+        },
+        callOf("failing_read"),
+        { say: "Nothing to report" },
+      ]);
+
+      await runBrief(ownerId);
+
+      const [writeBack] = await writeBacksOf(ownerId);
+      expect(writeBack?.kind).toBe("write_back_stub");
+      expect(writeBack?.message).toContain("(read: Test server)");
+      expect(writeBack?.message).not.toContain("find_mcp_tools");
     });
   }
 );
