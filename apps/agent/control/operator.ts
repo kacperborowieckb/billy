@@ -3,6 +3,7 @@ import { Data, Effect, Option, Schema } from "effect";
 import { AddOwnerResponseSchema } from "../src/edge/operator-contract.ts";
 import type { AddOwnerResponse } from "../src/edge/operator-contract.ts";
 import { localValue } from "./local-values.ts";
+import { McpConnectionNotAdded } from "./mcp-connection-not-added.ts";
 import { OperatorTokenMissing } from "./operator-token-missing.ts";
 
 export const localWorkerUrl = "http://localhost:8787";
@@ -61,3 +62,34 @@ export const renderAddedOwner = (owner: AddOwnerResponse) =>
     `Added Owner ${owner.ownerId} for ${owner.channelIdentity} through the Directory.`,
     `Registration: ${owner.registration}`,
   ].join("\n");
+
+export const addMcpConnection = Effect.fnUntraced(function* addMcpConnection({
+  workerUrl,
+  token,
+  ownerId,
+  catalogId,
+}: {
+  readonly workerUrl: string;
+  readonly token: string;
+  readonly ownerId: string;
+  readonly catalogId: string;
+}) {
+  const response = yield* Effect.promise(() =>
+    fetch(new URL("/operator/mcp-connections", workerUrl), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ownerId, catalogId }),
+    })
+  );
+  const body = yield* Effect.promise(() => response.text());
+  if (response.status !== 201) {
+    return yield* new McpConnectionNotAdded({
+      status: response.status,
+      detail: body,
+    });
+  }
+  return `Added the MCP Connection ${catalogId} for Owner ${ownerId} through the MCP Hub.`;
+});

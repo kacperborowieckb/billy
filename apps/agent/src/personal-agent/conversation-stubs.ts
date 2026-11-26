@@ -8,6 +8,8 @@ import type {
 import { Context, Layer, Schema } from "effect";
 
 import { pendingApprovalIdOfOutput } from "../approval/draft-approval.ts";
+import { mcpCallStubOf, McpCallOutputSchema } from "../mcp/mcp-call-output.ts";
+import { callMcpToolToolName } from "../mcp/mcp-tool-names.ts";
 import {
   untrustedContentClosing,
   untrustedContentOpening,
@@ -103,10 +105,23 @@ const isToolName = Schema.is(
 export const storedToolNameOf = (toolName: string) =>
   isToolName(toolName) ? toolName : "unknown_tool";
 
+const decodeMcpCallOutput = Schema.decodeUnknownOption(McpCallOutputSchema);
+
+const mcpCallStubOfOutput = (output: ToolOutput | undefined) => {
+  if (output?.type !== "json") {
+    return;
+  }
+  const decoded = decodeMcpCallOutput(output.value);
+  return decoded._tag === "Some" ? mcpCallStubOf(decoded.value) : undefined;
+};
+
 export const untrustedToolCallStub = (
   toolName: string,
   output: ToolOutput | undefined
 ) =>
+  (toolName === callMcpToolToolName
+    ? mcpCallStubOfOutput(output)
+    : undefined) ??
   `[${storedToolNameOf(toolName)}: ${toolCallStatusOf(output)}.${noteIdsText(output)} Input and result removed from the history]`;
 
 export const withUntrustedContentStubbed = (text: string): string => {

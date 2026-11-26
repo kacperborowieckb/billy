@@ -13,6 +13,13 @@ export const edgeRoutes = [
     purpose:
       "Adds an Owner with a Telegram Channel Identity through the Directory. Registration stays closed.",
   },
+  {
+    method: "POST",
+    path: "/operator/mcp-connections",
+    access: "Operator token as Authorization: Bearer",
+    purpose:
+      "Adds an MCP Connection for an Owner from the MCP Catalog through the Owner's MCP Hub. Only the test-only catalog entry exists now.",
+  },
 ] as const;
 
 export type EdgeRoute = (typeof edgeRoutes)[number];

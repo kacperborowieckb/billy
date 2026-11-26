@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PendingApprovals } from "../src/approval/pending-approvals.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { approvalNotSentStatus } from "../src/channels/telegram/telegram-send.ts";
+import { mcpHubClient } from "../src/mcp/mcp-hub-client.ts";
+import { callMcpToolToolName } from "../src/mcp/mcp-tool-names.ts";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
 import { updateNoteToolName } from "../src/notes/update-note-tool.ts";
@@ -191,9 +193,15 @@ const changeToolNamesOfOwnerMessageTurn = async (ownerId: string) =>
           { ...(yield* agentToolServices), behavior: defaultBehaviorConfig }
         );
         return Object.entries(tools)
-          .filter(([, tool]) => !tool.readsForEveryInput)
+          .filter(
+            ([name, tool]) =>
+              !tool.readsForEveryInput && name !== callMcpToolToolName
+          )
           .map(([name]) => name);
-      }).pipe(Effect.provide(Redactor.layer([])))
+      }).pipe(
+        Effect.provide(Redactor.layer([])),
+        Effect.provide(mcpHubClient(env.MCP_HUB, OwnerIdSchema.make(ownerId)))
+      )
     )
   );
 

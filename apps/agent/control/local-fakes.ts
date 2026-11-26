@@ -22,6 +22,7 @@ import { readBody, sendJson } from "./fake-http.ts";
 import { fakeJudgeMessage, fakeJudgeModel } from "./fake-judge.ts";
 import type { FakeJudgeVerdict } from "./fake-judge.ts";
 import { fakeKeepMessage, fakeKeepPrefix } from "./fake-keep.ts";
+import { fakeMcpMessage, isFakeMcpMessage } from "./fake-mcp.ts";
 import { toolCallNamesOf } from "./fake-model-call.ts";
 import type { FakeModelCall } from "./fake-model-call.ts";
 import { fakeNoteEditMessage, isFakeNoteEdit } from "./fake-note-edits.ts";
@@ -80,6 +81,9 @@ const fakeAssistantMessage = (
   }
   if (systemText.includes(scheduledTaskMarker)) {
     return fakeScheduledTaskMessage(ownerText);
+  }
+  if (isFakeMcpMessage(ownerText)) {
+    return fakeMcpMessage(ownerText, toolResult);
   }
   if (isFakeSmallTalk(ownerText)) {
     return fakeSmallTalkMessage(toolResult);

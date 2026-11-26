@@ -6,6 +6,9 @@ export interface BehaviorConfig {
   readonly maxToolSteps: number;
   readonly maxProfileCharacters: number;
   readonly maxStoredToolResultCharacters: number;
+  readonly mcpConnectTimeoutMillis: number;
+  readonly mcpCallTimeoutMillis: number;
+  readonly mcpResultMaxCharacters: number;
   readonly sideSessionRecentChatMessages: number;
   readonly reminderGraceMillis: number;
   readonly scheduledTaskDailyTokenBudget: number;
@@ -35,6 +38,9 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   maxToolSteps: 8,
   maxProfileCharacters: 2000,
   maxStoredToolResultCharacters: 4000,
+  mcpConnectTimeoutMillis: 30_000,
+  mcpCallTimeoutMillis: 30_000,
+  mcpResultMaxCharacters: 8000,
   sideSessionRecentChatMessages: 6,
   reminderGraceMillis: 5 * 60 * 1000,
   scheduledTaskDailyTokenBudget: 200_000,

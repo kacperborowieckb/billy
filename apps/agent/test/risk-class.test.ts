@@ -12,6 +12,7 @@ import {
   untrustedChangeWithoutOwnerReason,
 } from "../src/approval/tool-gate.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
+import { mcpHubClient } from "../src/mcp/mcp-hub-client.ts";
 import { agentTool } from "../src/model-gateway/agent-tool.ts";
 import type { AgentTools } from "../src/model-gateway/agent-tool.ts";
 import type { ModelStep } from "../src/model-gateway/model-step.ts";
@@ -35,6 +36,8 @@ const readTools = new Set([
   "list_linked_notes",
   "list_open_loops",
   "list_schedules",
+  "find_mcp_tools",
+  "call_mcp_tool",
   "stay_silent",
   "react",
   "quiet_hours",
@@ -79,7 +82,12 @@ const everyToolSet = async (): Promise<Record<string, AgentTools>> =>
             proactive: proactiveTools("event-1", services),
             scheduledTask: scheduledTaskTools("event-1", services),
           };
-        }).pipe(Effect.provide(Redactor.layer([env.AI_GATEWAY_TOKEN])))
+        }).pipe(
+          Effect.provide(Redactor.layer([env.AI_GATEWAY_TOKEN])),
+          Effect.provide(
+            mcpHubClient(env.MCP_HUB, OwnerIdSchema.make("risk-class-owner"))
+          )
+        )
       )
   );
 
@@ -212,7 +220,7 @@ describe("The gate", () => {
 
     expect(
       gateDecisionOf({ ...untrustedCall, input: { wide: false } })
-    ).toEqual({ _tag: "Run" });
+    ).toEqual({ _tag: "RunMarkedUntrusted" });
     expect(gateDecisionOf({ ...untrustedCall, input: { wide: true } })).toEqual(
       {
         _tag: "AskOwner",

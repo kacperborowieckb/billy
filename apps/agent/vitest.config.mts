@@ -4,6 +4,7 @@ import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 const testSecrets = {
+  MCP_TEST_SERVER_URL: "https://mcp.test.example/mcp",
   AI_GATEWAY_TOKEN: "test-ai-gateway-token",
   OPERATOR_TOKEN: "test-operator-token",
   TELEGRAM_BOT_TOKEN: "test-telegram-bot-token",

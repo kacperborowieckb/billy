@@ -1,22 +1,25 @@
 import { Agent, getAgentByName } from "agents";
-import { DateTime, Effect, Layer, ManagedRuntime, Option } from "effect";
+import type { Layer } from "effect";
+import { DateTime, Effect, ManagedRuntime, Option } from "effect";
 
-import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Channel } from "../channels/channel.ts";
 import type { Event } from "../event.ts";
-import { Journal } from "../journal/journal.ts";
+import type { McpCatalog } from "../mcp/mcp-catalog.ts";
+import type { McpHubPort } from "../mcp/mcp-hub-contract.ts";
+import { mcpCatalogFor } from "../mcp/mcp-test-catalog.ts";
+import type { McpToolCopy } from "../mcp/mcp-tool-copy.ts";
+import {
+  receiveMcpConnectionState,
+  receiveMcpToolCatalog,
+} from "../mcp/receive-mcp-copy.ts";
 import { noTools } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ModelGateway } from "../model-gateway/model-gateway.ts";
-import { UsageLedger } from "../model-gateway/usage-ledger.ts";
-import { Notes } from "../notes/notes.ts";
+import type { UsageLedger } from "../model-gateway/usage-ledger.ts";
 import { OwnerIdSchema } from "../owner-id.ts";
 import type { OwnerId } from "../owner-id.ts";
-import { OwnerPreferences } from "../preferences/owner-preferences.ts";
-import { ProactiveMessages } from "../proactive/proactive-messages.ts";
-import { Profile } from "../profile/profile.ts";
 import { Schedules } from "../schedule/schedules.ts";
 import type { AlarmClock } from "../schedule/schedules.ts";
 import type { OperatorMetrics } from "../tracing/operator-metrics.ts";
@@ -25,64 +28,20 @@ import {
   retentionRetryAfterFailure,
   runTraceRetentionWhenDue,
 } from "../tracing/trace-retention.ts";
-import type { TraceRetention } from "../tracing/trace-retention.ts";
-import { TurnTraces } from "../tracing/turn-trace.ts";
 import { showTypingOnce } from "./acknowledge.ts";
-import { AgentStorage } from "./agent-storage.ts";
 import { burstWaitOf } from "./burst-wait.ts";
-import type { BurstWait } from "./burst-wait.ts";
-import { StoredFormLimits } from "./conversation-stubs.ts";
-import type { StoredFormLimitValues } from "./conversation-stubs.ts";
-import { Conversation } from "./conversation.ts";
 import { fireDueSchedulesThen } from "./due-schedule-events.ts";
 import { expireDueApprovals } from "./expire-due-approvals.ts";
 import { Inbox } from "./inbox.ts";
 import { recordOutcomesDueAtAlarm } from "./outcome-records.ts";
-import { OwnerChannelConversation } from "./owner-channel-conversation.ts";
-import { PrefixCacheSessions } from "./prefix-cache.ts";
+import { personalAgentLayer } from "./personal-agent-layer.ts";
 import { receiveEvent } from "./receive-event.ts";
-import { TurnProgress } from "./turn-progress.ts";
+import type { McpConnectionState } from "./storage-values.ts";
 import { liveTurnServices } from "./turn-services.ts";
 import { takeTurn } from "./turn.ts";
 
-interface AgentSettings {
-  readonly clock: AlarmClock;
-  readonly burstWait: () => BurstWait;
-  readonly traceRetention: () => TraceRetention;
-  readonly storedFormLimits: () => StoredFormLimitValues;
-}
-
-const personalAgentLayer = (
-  storage: DurableObjectStorage,
-  ownerId: OwnerId,
-  { clock, burstWait, traceRetention, storedFormLimits }: AgentSettings
-) => {
-  const journal = Journal.layer(ownerId);
-  const schedules = Schedules.layer(ownerId, clock, {
-    burstWait,
-    traceRetention,
-  }).pipe(Layer.provide(journal));
-  return Layer.mergeAll(
-    schedules,
-    Inbox.layer.pipe(Layer.provide(Layer.merge(journal, TurnProgress.layer))),
-    journal,
-    Notes.layer(ownerId).pipe(Layer.provide(journal)),
-    Profile.layer(ownerId).pipe(Layer.provide(journal)),
-    OwnerPreferences.layer.pipe(Layer.provide(journal)),
-    ProactiveMessages.layer.pipe(Layer.provide(journal)),
-    PendingApprovals.layer.pipe(Layer.provide(journal)),
-    Conversation.layer,
-    PrefixCacheSessions.layer,
-    StoredFormLimits.layer(storedFormLimits),
-    OwnerChannelConversation.layer,
-    TurnProgress.layer,
-    UsageLedger.layer(ownerId),
-    TurnTraces.layer(ownerId)
-  ).pipe(Layer.provideMerge(AgentStorage.layer(storage)));
-};
-
 export type TurnServices = Layer.Layer<
-  Channel | ModelGateway | OperatorMetrics | Redactor,
+  Channel | McpHubPort | ModelGateway | OperatorMetrics | Redactor,
   unknown,
   UsageLedger
 >;
@@ -101,6 +60,8 @@ export class PersonalAgent extends Agent<Env> {
 
   protected readonly behavior: BehaviorConfig = defaultBehaviorConfig;
 
+  protected readonly mcpCatalog: McpCatalog = mcpCatalogFor(this.env);
+
   private traceRetentionRetryNotBefore: Option.Option<DateTime.Utc> =
     Option.none();
 
@@ -117,6 +78,7 @@ export class PersonalAgent extends Agent<Env> {
         retryNotBefore: this.traceRetentionRetryNotBefore,
       }),
       storedFormLimits: () => this.behavior,
+      mcpCatalog: this.mcpCatalog,
     })
   );
 
@@ -139,6 +101,24 @@ export class PersonalAgent extends Agent<Env> {
       );
     }
     return "stored";
+  }
+
+  async receiveMcpToolCatalog(
+    catalogId: string,
+    tools: readonly McpToolCopy[]
+  ): Promise<void> {
+    await this.runtime.runPromise(
+      receiveMcpToolCatalog(this.mcpCatalog, catalogId, tools)
+    );
+  }
+
+  async receiveMcpConnectionState(
+    catalogId: string,
+    state: McpConnectionState
+  ): Promise<void> {
+    await this.runtime.runPromise(
+      receiveMcpConnectionState(this.mcpCatalog, catalogId, state)
+    );
   }
 
   async fireDueSchedules(): Promise<void> {

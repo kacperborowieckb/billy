@@ -6,11 +6,12 @@ import {
   renderChatActions,
 } from "./answer-without-text.ts";
 import { checkBurstSend } from "./burst-split.ts";
+import { startFakeMcpServer } from "./fake-mcp-http.ts";
 import type { FakeModelCall } from "./fake-model-call.ts";
 import { startLocalFakes } from "./local-fakes.ts";
 import type { FakeTelegramMessage } from "./local-fakes.ts";
 import { startLocalWorker, temporarySecrets } from "./local-worker.ts";
-import { addOwner, renderAddedOwner } from "./operator.ts";
+import { addMcpConnection, addOwner, renderAddedOwner } from "./operator.ts";
 import { selectReplyTo } from "./reply-selection.ts";
 import { sendTelegramUpdate } from "./telegram-update.ts";
 
@@ -92,19 +93,23 @@ export const requestReply = ({
   contains,
   waitForLaterMessage,
   burst = false,
+  mcp = false,
 }: {
   readonly messages: readonly string[];
   readonly contains: string | undefined;
   readonly waitForLaterMessage: boolean;
   readonly burst?: boolean;
+  readonly mcp?: boolean;
 }) =>
   Effect.gen(function* requestReplyEffect() {
     const fakes = yield* startLocalFakes();
+    const fakeMcp = mcp ? yield* startFakeMcpServer() : undefined;
     const secrets = temporarySecrets();
     const url = yield* startLocalWorker({
       vars: {
         TELEGRAM_API_URL: fakes.telegramApiUrl,
         AI_GATEWAY_URL: fakes.aiGatewayUrl,
+        ...(fakeMcp === undefined ? {} : { MCP_TEST_SERVER_URL: fakeMcp.url }),
       },
       secrets,
     });
@@ -118,6 +123,16 @@ export const requestReply = ({
       telegramUserId: sampleTelegramUserId,
     });
     lines.push(renderAddedOwner(owner));
+    if (fakeMcp !== undefined) {
+      lines.push(
+        yield* addMcpConnection({
+          workerUrl: url.origin,
+          token: secrets.OPERATOR_TOKEN,
+          ownerId: owner.ownerId,
+          catalogId: "test_server",
+        })
+      );
+    }
 
     let replyParts: readonly string[] = [];
     const unprompted: FakeTelegramMessage[] = [];
@@ -171,6 +186,15 @@ export const requestReply = ({
           fakes.chatActions().slice(chatActionsBefore, sent.chatActionsBefore)
         ),
         `Telegram sendMessage to chat ${sent.chatId}, reply to message ${sent.replyToMessageId ?? "none"}: "${replyParts.join("")}"`
+      );
+    }
+    if (fakeMcp !== undefined) {
+      lines.push(
+        `Model tool calls: ${fakes
+          .modelCalls()
+          .flatMap((call) => call.toolCalls)
+          .join(", ")}`,
+        `Fake MCP server tool calls: ${fakeMcp.calls().join(", ")}`
       );
     }
     if (contains === undefined) {

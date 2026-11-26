@@ -152,3 +152,16 @@ export const requestPartKinds = [
 ] as const;
 
 export type RequestPartKind = (typeof requestPartKinds)[number];
+
+export const mcpConnectionStates = [
+  "authenticating",
+  "ready",
+  "failed",
+  "needs_sign_in",
+] as const;
+
+export type McpConnectionState = (typeof mcpConnectionStates)[number];
+
+export const mcpCallStatuses = ["done", "failed", "timed_out"] as const;
+
+export type McpCallStatus = (typeof mcpCallStatuses)[number];

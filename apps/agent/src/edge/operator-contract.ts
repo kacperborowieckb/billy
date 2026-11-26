@@ -11,3 +11,8 @@ export const AddOwnerResponseSchema = Schema.Struct({
 });
 
 export type AddOwnerResponse = typeof AddOwnerResponseSchema.Type;
+
+export const AddMcpConnectionRequestSchema = Schema.Struct({
+  ownerId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+  catalogId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+});

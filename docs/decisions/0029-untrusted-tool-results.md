@@ -6,6 +6,8 @@ Partly superseded: [0034](0034-architecture-review-changes.md) changes "Which Tu
 
 Partly superseded: [0030](0030-untrusted-context-of-a-turn.md) replaces the last "Revisit if" item, which names two ways that Untrusted Content enters an Owner message Turn and that this record does not cover.
 
+Partly superseded: [0036](0036-mcp-connections.md) replaces "The exception of `capture_note`". A new Note that links to no existing Note runs with no Approval in every `untrusted` Turn, and code marks it `untrusted`.
+
 Date: 2026-11-21
 
 Ticket [#146](https://github.com/kacperborowieckb/billy/issues/146) of spec [#139](https://github.com/kacperborowieckb/billy/issues/139). It builds on [0027](0027-actions-and-approval.md) and adds rules that 0027 does not give. All rules of 0027 and [0028](0028-approval-requests-in-telegram.md) stay in force.

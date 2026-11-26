@@ -1,6 +1,7 @@
 import { Data, Effect, Layer, Option, Schema } from "effect";
 
 import { telegramChannel } from "../channels/telegram/telegram-channel.ts";
+import { mcpHubClient } from "../mcp/mcp-hub-client.ts";
 import {
   aiGatewayModelProvider,
   BillingModeSchema,
@@ -85,7 +86,8 @@ export const liveTurnServices = (env: Env, ownerId: OwnerId) =>
           apiUrl: config.TELEGRAM_API_URL,
           botToken: config.TELEGRAM_BOT_TOKEN,
         }),
-        liveModelGateway(config, ownerId)
+        liveModelGateway(config, ownerId),
+        mcpHubClient(env.MCP_HUB, ownerId)
       )
     )
   );

@@ -120,12 +120,19 @@ const request = Command.make(
       ),
       Flag.withDefault(false)
     ),
+    mcp: Flag.Boolean("mcp").pipe(
+      Flag.withDescription(
+        "Start a fake MCP server, add the test-only MCP Connection for the Owner through the MCP Hub, and let the fake model find and read its tools. Use it with a message that starts with 'mcp: '."
+      ),
+      Flag.withDefault(false)
+    ),
   },
-  ({ contains, message, waitForLaterMessage, burst }) =>
+  ({ contains, message, waitForLaterMessage, burst, mcp }) =>
     requestReply({
       contains: Option.getOrUndefined(contains),
       waitForLaterMessage,
       burst,
+      mcp,
       messages: message.length === 0 ? ["Hello agent"] : message,
     }).pipe(Effect.flatMap(Console.log))
 ).pipe(
