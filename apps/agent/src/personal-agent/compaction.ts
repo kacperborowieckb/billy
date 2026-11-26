@@ -20,6 +20,7 @@ import {
 import { Conversation } from "./conversation.ts";
 import { Inbox } from "./inbox.ts";
 import { recordCompactionSteps } from "./model-step-metrics.ts";
+import { openItemsOf, openItemsText } from "./open-items.ts";
 
 export type CompactionResult =
   | "NotNeeded"
@@ -221,13 +222,14 @@ export const compactWhenOverLimit = Effect.fnUntraced(
       yield* conversation.recordRefusedBlock(block.value.lastCompactedSequence);
       return "SummaryRefused" satisfies CompactionResult;
     }
+    const openItems = openItemsText(yield* openItemsOf(behavior));
     if (yield* inbox.burstIsDue(burstWaitOf(behavior))) {
       return "StoppedByBurst" satisfies CompactionResult;
     }
     yield* conversation.replaceWithSummary({
       compactionId,
       lastCompactedSequence: block.value.lastCompactedSequence,
-      message: summaryMessage(attempts.summary),
+      message: summaryMessage(attempts.summary, openItems),
     });
     return "Compacted" satisfies CompactionResult;
   }

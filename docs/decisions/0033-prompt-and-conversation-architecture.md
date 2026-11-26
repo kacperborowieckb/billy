@@ -4,6 +4,8 @@ Status: accepted
 
 Partly superseded: [0034](0034-architecture-review-changes.md) changes four rules. A Side Session follows its Trust Level, and a Proactive Turn has change tools, so "the change tools are missing" is not true for it. The Stub of an MCP result keeps ordered ids. Compaction marks the rows that the Summary replaces and does not delete them: they stay until the Trace retention ends, and a Trace points to the rows and holds no copy. The check for Compaction reads the token count of the provider.
 
+Partly superseded: [0035](0035-summary-open-items.md) changes the rule that the `compaction` prompt names Notes by id. The model writes the Summary prose with no ids. Code adds the open items with their ids.
+
 Date: 2026-11-23
 
 Issue [#179](https://github.com/kacperborowieckb/billy/issues/179) (measure and decide). Issue [#182](https://github.com/kacperborowieckb/billy/issues/182) builds this decision. The measurement, with its method and all numbers, is in [the prefix cache research](../research/2026-11-23-prefix-cache-measurements.md).
