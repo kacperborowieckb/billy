@@ -220,6 +220,18 @@ describe("the check of MCP arguments", () => {
     ).toBeUndefined();
   });
 
+  it("accepts a schema that has a property named like an unsupported keyword", () => {
+    const schema = {
+      type: "object",
+      properties: { $dynamicRef: { type: "string" } },
+    };
+
+    expect(
+      mcpArgumentProblemOf(schema, { $dynamicRef: "value" })
+    ).toBeUndefined();
+    expect(mcpArgumentProblemOf(schema, { $dynamicRef: 5 })).toContain("fails");
+  });
+
   it("names only a location and a keyword, never a value from the schema", () => {
     const schema = {
       type: "object",
