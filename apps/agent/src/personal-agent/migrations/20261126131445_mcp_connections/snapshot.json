@@ -1512,7 +1512,7 @@
       "table": "mcp_connections",
       "name": "catalog_id",
       "type": "text",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
