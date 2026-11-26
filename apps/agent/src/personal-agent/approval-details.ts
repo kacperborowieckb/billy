@@ -12,6 +12,9 @@ export interface ApprovalDetailsPress {
   readonly pendingApprovalId: string;
 }
 
+export const detailsNotSentText =
+  "The details could not be sent. Tap Details again to retry.";
+
 export const detailsFilenameOf = (pendingApprovalId: string) =>
   `approval-${pendingApprovalId}.txt`;
 
@@ -30,12 +33,18 @@ export const showApprovalDetails = Effect.fnUntraced(
     if (Option.isNone(approval)) {
       return;
     }
-    yield* channel.sendDocument({
+    const delivery = yield* channel.sendDocument({
       conversationId: press.conversationId,
       filename: detailsFilenameOf(press.pendingApprovalId),
       text: redactor.redact(
         JSON.stringify(approval.value.frozenInput, null, 2)
       ),
     });
+    if (delivery._tag === "Failed") {
+      yield* channel.send({
+        conversationId: press.conversationId,
+        text: detailsNotSentText,
+      });
+    }
   }
 );

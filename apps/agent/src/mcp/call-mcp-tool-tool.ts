@@ -179,7 +179,11 @@ export const callMcpToolTool = (services: McpToolServices, eventId: string) =>
               riskClass: mcpCallRiskClass(services, input),
               status: statusOf(outcome),
             })
-            .pipe(Effect.orDie);
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError("The MCP call was not journaled", cause)
+              )
+            );
           return outputOf({
             entry,
             tool: input.tool,

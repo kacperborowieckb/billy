@@ -64,6 +64,7 @@ export interface TelegramDocument {
 
 const fakeTelegramState = {
   documents: [] as TelegramDocument[],
+  documentsRefused: false,
   sent: [] as SentTelegramMessage[],
   reactions: [] as TelegramReaction[],
   answer: "confirm" as TelegramAnswer,
@@ -105,6 +106,12 @@ const answerDocument = async (request: Request) => {
     filename: file instanceof File ? file.name : "",
     text: file instanceof File ? await file.text() : "",
   });
+  if (fakeTelegramState.documentsRefused) {
+    return Response.json(
+      { ok: false, description: "Bad Request: file refused" },
+      { status: 400 }
+    );
+  }
   return Response.json({
     ok: true,
     result: { message_id: 8000 + fakeTelegramState.documents.length },
@@ -173,6 +180,9 @@ const answerReaction = async (request: Request) => {
 };
 
 export const fakeTelegram = {
+  refuseDocuments: () => {
+    fakeTelegramState.documentsRefused = true;
+  },
   get documents(): readonly TelegramDocument[] {
     return fakeTelegramState.documents;
   },
@@ -595,6 +605,7 @@ export const resetFakes = () => {
   metricsState.failing = false;
   fakeTelegramState.sent = [];
   fakeTelegramState.documents = [];
+  fakeTelegramState.documentsRefused = false;
   fakeTelegramState.reactions = [];
   fakeTelegramState.answer = "confirm";
   fakeTelegramState.chatActions = [];

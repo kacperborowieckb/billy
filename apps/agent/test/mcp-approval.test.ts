@@ -252,6 +252,23 @@ describe("Approval for an MCP call that changes a service", () => {
     await vi.waitFor(() => expect(fakeTelegram.documents).toHaveLength(1));
   });
 
+  it("tells the Owner when the Details file cannot be sent", async () => {
+    const { approval } = await askFor(9962, "create_page", { title: "X" });
+    fakeTelegram.refuseDocuments();
+    const sentBefore = fakeTelegram.sent.length;
+
+    await press(
+      9962,
+      `details:${approval.pending_approval_id}`,
+      Number(approval.channel_message_id)
+    );
+
+    await vi.waitFor(() =>
+      expect(fakeTelegram.sent.length).toBeGreaterThan(sentBefore)
+    );
+    expect(fakeTelegram.sent.at(-1)?.body.text).toContain("could not be sent");
+  });
+
   it("shows failed when an approved call gets an error from the service", async () => {
     const { ownerId, approval } = await askFor(9959, "failing_write", {});
 
