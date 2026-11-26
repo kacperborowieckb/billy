@@ -25,7 +25,12 @@ const decodeCallOutput = Schema.decodeUnknownOption(CallOutputSchema);
 const titlesOf = (result: string) => {
   const start = result.indexOf("{");
   const end = result.lastIndexOf("}");
-  const parsed: unknown = JSON.parse(result.slice(start, end + 1));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.slice(start, end + 1));
+  } catch {
+    return [];
+  }
   return typeof parsed === "object" && parsed !== null && "results" in parsed
     ? (parsed.results as readonly { readonly title: string }[]).map(
         ({ title }) => title

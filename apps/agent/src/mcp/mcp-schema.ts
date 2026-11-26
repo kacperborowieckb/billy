@@ -6,7 +6,7 @@ import { mcpConnectionStates } from "../personal-agent/storage-values.ts";
 export const mcpConnections = sqliteTable(
   "mcp_connections",
   {
-    catalogId: text("catalog_id").notNull().primaryKey(),
+    catalogId: text("catalog_id").primaryKey().notNull(),
     state: text("state", { enum: mcpConnectionStates }).notNull(),
     updatedAt: text("updated_at").notNull(),
   },

@@ -64,12 +64,16 @@ export const handleAddMcpConnection = (request: Request, env: Env) =>
         error: "Send a JSON body with an ownerId and a catalogId.",
       });
     }
-    const { outcome } = yield* Effect.promise(() =>
+    const answer = yield* Effect.tryPromise(() =>
       env.MCP_HUB.getByName(body.value.ownerId).addConnection(
         body.value.catalogId,
         defaultBehaviorConfig.mcpConnectTimeoutMillis
       )
-    );
+    ).pipe(Effect.option);
+    if (answer._tag === "None") {
+      return json(502, { error: "The MCP Hub did not answer." });
+    }
+    const { outcome } = answer.value;
     switch (outcome) {
       case "added": {
         return json(201, { catalogId: body.value.catalogId });

@@ -81,7 +81,7 @@ export const refusedReasonOf = (
     return undefined;
   }
   return url.protocol === "https:"
-    ? privateHostReason(url.hostname.toLowerCase())
+    ? privateHostReason(url.hostname.toLowerCase().replace(/\.+$/u, ""))
     : "The address is not HTTPS";
 };
 

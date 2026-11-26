@@ -128,6 +128,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       await agent.receiveMcpConnectionState(catalogId, "ready");
       return { outcome: "added" };
     } catch {
+      await this.ctx.storage.delete(`connection:${catalogId}`);
       await agent.receiveMcpConnectionState(catalogId, "failed");
       return { outcome: "failed" };
     }

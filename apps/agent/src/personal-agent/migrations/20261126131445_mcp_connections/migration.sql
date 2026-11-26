@@ -1,5 +1,5 @@
 CREATE TABLE `mcp_connections` (
-	`catalog_id` text PRIMARY KEY,
+	`catalog_id` text NOT NULL PRIMARY KEY,
 	`state` text NOT NULL,
 	`updated_at` text NOT NULL,
 	CONSTRAINT "mcp_connections_state_check" CHECK("state" IN ('authenticating', 'ready', 'failed', 'needs_sign_in'))

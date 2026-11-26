@@ -26,6 +26,9 @@ describe("the outbound guard of the MCP Hub", () => {
     "https://printer.local/mcp",
     "https://intranet/mcp",
     "https://2130706433/mcp",
+    "https://localhost./mcp",
+    "https://intranet./mcp",
+    "https://metadata.internal./mcp",
   ])("refuses %s", (url) => {
     expect(refused(url)).toBe(true);
   });

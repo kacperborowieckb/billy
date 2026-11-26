@@ -293,6 +293,7 @@ describe("the results of an MCP call", () => {
       )
     );
     expect(found.map((note) => note.text)).toEqual(["Kept from the page"]);
+    expect(found.map((note) => note.trustLevel)).toEqual(["untrusted"]);
     const unchanged = await inAgent(
       ownerId,
       Notes.pipe(

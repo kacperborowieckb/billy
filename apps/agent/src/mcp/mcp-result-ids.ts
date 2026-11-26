@@ -1,6 +1,8 @@
 import { matchesMcpIdShape } from "./mcp-catalog.ts";
 import type { McpIdShape } from "./mcp-catalog.ts";
 
+export const maxStubIds = 50;
+
 export interface McpResultId {
   readonly position: number;
   readonly id: string | number;
@@ -55,10 +57,10 @@ export const mcpResultIdsOf = (
   text: string,
   structured: unknown
 ): McpResultIds => {
-  const results = resultListOf(structured ?? parsedJson(text), field) ?? [];
+  const results = resultListOf(parsedJson(text) ?? structured, field) ?? [];
   return {
     resultCount: results.length,
-    ids: results.flatMap((item, index) => {
+    ids: results.slice(0, maxStubIds).flatMap((item, index) => {
       const value = hasField(item, field)
         ? (item as Record<string, unknown>)[field]
         : undefined;

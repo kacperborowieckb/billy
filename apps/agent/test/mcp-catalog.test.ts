@@ -141,4 +141,24 @@ describe("the ids of an MCP result", () => {
       ids: [{ position: 2, id: uuid }],
     });
   });
+
+  it("keeps at most the first ids of a very long result, with their positions", () => {
+    const text = JSON.stringify({
+      results: Array.from({ length: 80 }, () => ({ id: uuid })),
+    });
+
+    const { resultCount, ids } = mcpResultIdsOf(shape, text, null);
+
+    expect(resultCount).toBe(80);
+    expect(ids).toHaveLength(50);
+    expect(ids.at(-1)?.position).toBe(50);
+  });
+
+  it("takes the order of the text that the model reads when the structured data differs", () => {
+    const other = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+    const text = JSON.stringify({ results: [{ id: uuid }, { id: other }] });
+    const structured = { results: [{ id: other }, { id: uuid }] };
+
+    expect(mcpResultIdsOf(shape, text, structured).ids[0]?.id).toBe(uuid);
+  });
 });
