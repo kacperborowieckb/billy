@@ -220,6 +220,17 @@ describe("the check of MCP arguments", () => {
     ).toBeUndefined();
   });
 
+  it("accepts a schema whose literal data holds an unsupported keyword name", () => {
+    const schema = {
+      type: "object",
+      properties: { x: { enum: [{ $dynamicRef: "literal" }] } },
+    };
+
+    expect(
+      mcpArgumentProblemOf(schema, { x: { $dynamicRef: "literal" } })
+    ).toBeUndefined();
+  });
+
   it("accepts a schema that has a property named like an unsupported keyword", () => {
     const schema = {
       type: "object",

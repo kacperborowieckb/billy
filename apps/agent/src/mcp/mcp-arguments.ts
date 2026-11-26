@@ -24,6 +24,12 @@ const isUnsupportedKeywordEntry = ([key, value]: readonly [string, unknown]) =>
   typeof value === "string" &&
   unsupportedKeywords.some((keyword) => keyword === key);
 
+const literalKeywords = ["const", "default", "examples"] as const;
+
+const holdsLiteralData = ([key, value]: readonly [string, unknown]) =>
+  literalKeywords.some((keyword) => keyword === key) ||
+  (key === "enum" && Array.isArray(value));
+
 const usesUnsupportedKeyword = (schema: unknown): boolean => {
   if (Array.isArray(schema)) {
     return schema.some(usesUnsupportedKeyword);
@@ -34,7 +40,9 @@ const usesUnsupportedKeyword = (schema: unknown): boolean => {
   const entries = Object.entries(schema);
   return (
     entries.some(isUnsupportedKeywordEntry) ||
-    entries.some(([, value]) => usesUnsupportedKeyword(value))
+    entries
+      .filter((entry) => !holdsLiteralData(entry))
+      .some(([, value]) => usesUnsupportedKeyword(value))
   );
 };
 
