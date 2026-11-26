@@ -53,22 +53,28 @@ const parsedJson = (text: string): unknown => {
   }
 };
 
+const validIdOf = (item: unknown, field: string, shape: McpIdShape) => {
+  const value = hasField(item, field)
+    ? (item as Record<string, unknown>)[field]
+    : undefined;
+  return matchesMcpIdShape(shape, value) &&
+    (typeof value === "string" || typeof value === "number")
+    ? value
+    : undefined;
+};
+
 export const mcpResultIdsOf = (
   { field, shape }: { readonly field: string; readonly shape: McpIdShape },
   text: string
 ): McpResultIds => {
   const results = resultListOf(parsedJson(text), field) ?? [];
+  const valid = results.flatMap((item, index) => {
+    const id = validIdOf(item, field, shape);
+    return id === undefined ? [] : [{ position: index + 1, id }];
+  });
   return {
     resultCount: results.length,
-    omittedIds: Math.max(0, results.length - maxStubIds),
-    ids: results.slice(0, maxStubIds).flatMap((item, index) => {
-      const value = hasField(item, field)
-        ? (item as Record<string, unknown>)[field]
-        : undefined;
-      return matchesMcpIdShape(shape, value) &&
-        (typeof value === "string" || typeof value === "number")
-        ? [{ position: index + 1, id: value }]
-        : [];
-    }),
+    omittedIds: Math.max(0, valid.length - maxStubIds),
+    ids: valid.slice(0, maxStubIds),
   };
 };

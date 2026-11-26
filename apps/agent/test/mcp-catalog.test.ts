@@ -166,4 +166,15 @@ describe("the ids of an MCP result", () => {
   it("keeps no positional id when the text is not JSON", () => {
     expect(mcpResultIdsOf(shape, `Page ${uuid}`).ids).toEqual([]);
   });
+
+  it("counts only valid ids as omitted", () => {
+    const text = JSON.stringify({
+      results: [
+        ...Array.from({ length: 50 }, () => ({ id: uuid })),
+        { id: "invalid" },
+      ],
+    });
+
+    expect(mcpResultIdsOf(shape, text).omittedIds).toBe(0);
+  });
 });
