@@ -20,6 +20,7 @@ import type { GateDecision, GatedTool } from "../approval/tool-gate.ts";
 
 export class ToolFailed extends Data.TaggedError("ToolFailed")<{
   readonly message: string;
+  readonly unconfirmed?: true;
 }> {}
 
 export const unexpectedToolFailureMessage = "The tool failed unexpectedly";

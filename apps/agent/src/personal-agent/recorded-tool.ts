@@ -62,7 +62,10 @@ export type RecordedToolDefinition<
 };
 
 const toolFailedFrom =
-  (failureMessage: string | ((cause: Cause.Cause<unknown>) => string)) =>
+  (
+    failureMessage: string | ((cause: Cause.Cause<unknown>) => string),
+    hasExternalEffect: boolean
+  ) =>
   (cause: Cause.Cause<unknown>) =>
     Cause.findErrorOption(cause).pipe(
       Option.filter((error) => error instanceof ToolFailed),
@@ -73,6 +76,7 @@ const toolFailedFrom =
               typeof failureMessage === "string"
                 ? failureMessage
                 : failureMessage(cause),
+            ...(hasExternalEffect ? { unconfirmed: true as const } : {}),
           })
       )
     );
@@ -172,7 +176,10 @@ export const recordedTool = <
           )
           .pipe(
             Effect.catchCause((cause) => {
-              const failure = toolFailedFrom(definition.failureMessage)(cause);
+              const failure = toolFailedFrom(
+                definition.failureMessage,
+                definition.hasExternalEffect === true
+              )(cause);
               return progress
                 .recordFailedToolCall(call, failure.message)
                 .pipe(Effect.andThen(Effect.fail(failure)));
@@ -180,7 +187,12 @@ export const recordedTool = <
           );
       },
       Effect.catchCause((cause) =>
-        Effect.fail(toolFailedFrom(definition.failureMessage)(cause))
+        Effect.fail(
+          toolFailedFrom(
+            definition.failureMessage,
+            definition.hasExternalEffect === true
+          )(cause)
+        )
       )
     ),
   });

@@ -89,7 +89,11 @@ export const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
           }
       ),
       Effect.catchTag("ToolFailed", (failure) =>
-        Effect.succeed(failedRun(redactor.redact(failure.message)))
+        Effect.succeed(
+          failure.unconfirmed === true
+            ? ({ result: "unconfirmed" } as const)
+            : failedRun(redactor.redact(failure.message))
+        )
       ),
       Effect.catchCause(() =>
         Effect.succeed(failedRun(unexpectedToolFailureMessage))

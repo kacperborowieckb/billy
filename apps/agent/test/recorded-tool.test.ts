@@ -47,6 +47,7 @@ const inRecordedTool = async <A>(
   ownerId: string,
   run: (tools: {
     readonly progress: TurnProgress["Service"];
+    readonly redactor: Redactor["Service"];
     readonly toolOf: (work: KeepWord) => AgentTool;
   }) => Effect.Effect<A, unknown>
 ) =>
@@ -71,7 +72,7 @@ const inRecordedTool = async <A>(
                 work: ({ word }) => work(word),
               }
             );
-          return yield* run({ progress, toolOf });
+          return yield* run({ progress, redactor, toolOf });
         }).pipe(Effect.provide(Redactor.layer([env.AI_GATEWAY_TOKEN])))
       )
   );
@@ -283,5 +284,32 @@ describe("Recorded tool", () => {
       env.AI_GATEWAY_TOKEN
     );
     expect(JSON.stringify(outcome.recorded)).toContain(redactedMark);
+  });
+});
+
+describe("a recorded tool with an external effect", () => {
+  it("reports an unexpected failure as unconfirmed when it runs after an Approval", async () => {
+    const ownerId = await addOwner(9970);
+
+    const failure = await inRecordedTool(ownerId, ({ progress, redactor }) =>
+      recordedTool(
+        { eventId, progress, redactor },
+        {
+          name: "write_outside",
+          riskClass: "change",
+          resolve: Effect.succeed,
+          approvalSummary: ({ word }) => `Write "${word}"`,
+          description: "Write outside",
+          inputSchema: WordInput,
+          failureMessage,
+          hasExternalEffect: true,
+          work: () => Effect.die("the record of the output was lost"),
+        }
+      )
+        .executeApproved({ word: "x" }, "approval-x")
+        .pipe(Effect.flip)
+    );
+
+    expect(failure).toMatchObject({ unconfirmed: true });
   });
 });
