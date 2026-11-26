@@ -120,15 +120,14 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       ) {
         throw new Error("The MCP server did not connect in time");
       }
-      await this.ctx.storage.put(`connection:${catalogId}`, true);
       await agent.receiveMcpToolCatalog(
         catalogId,
         this.manager.listTools({ serverId: catalogId }).map(toolCopyOf)
       );
       await agent.receiveMcpConnectionState(catalogId, "ready");
+      await this.ctx.storage.put(`connection:${catalogId}`, true);
       return { outcome: "added" };
     } catch {
-      await this.ctx.storage.delete(`connection:${catalogId}`);
       await agent.receiveMcpConnectionState(catalogId, "failed");
       return { outcome: "failed" };
     }

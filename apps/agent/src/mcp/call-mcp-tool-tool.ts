@@ -57,13 +57,12 @@ const refusal = (message: string) => Effect.fail(new ToolFailed({ message }));
 
 const resultIdsOutput = (
   idShape: Parameters<typeof mcpResultIdsOf>[0] | undefined,
-  text: string,
-  structured: unknown
+  text: string
 ) => {
   if (idShape === undefined) {
     return {};
   }
-  const { resultCount, ids } = mcpResultIdsOf(idShape, text, structured);
+  const { resultCount, ids } = mcpResultIdsOf(idShape, text);
   return { resultCount, resultIds: ids };
 };
 
@@ -105,11 +104,7 @@ const outputOf = ({
       truncated ? outcome.text.slice(0, limit) : outcome.text
     ),
     ...(truncated ? { truncated: true, notice: truncatedNotice(limit) } : {}),
-    ...resultIdsOutput(
-      mcpCatalogToolOf(entry, tool)?.resultIds,
-      outcome.text,
-      outcome.structured
-    ),
+    ...resultIdsOutput(mcpCatalogToolOf(entry, tool)?.resultIds, outcome.text),
   };
 };
 

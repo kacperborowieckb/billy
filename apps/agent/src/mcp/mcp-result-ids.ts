@@ -54,10 +54,9 @@ const parsedJson = (text: string): unknown => {
 
 export const mcpResultIdsOf = (
   { field, shape }: { readonly field: string; readonly shape: McpIdShape },
-  text: string,
-  structured: unknown
+  text: string
 ): McpResultIds => {
-  const results = resultListOf(parsedJson(text) ?? structured, field) ?? [];
+  const results = resultListOf(parsedJson(text), field) ?? [];
   return {
     resultCount: results.length,
     ids: results.slice(0, maxStubIds).flatMap((item, index) => {
