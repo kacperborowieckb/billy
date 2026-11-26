@@ -56,7 +56,14 @@ export interface TelegramPressAnswer {
 
 export type ChatActionAnswer = "confirm" | "refuse" | "hang" | "hang-first";
 
+export interface TelegramDocument {
+  readonly chatId: number;
+  readonly filename: string;
+  readonly text: string;
+}
+
 const fakeTelegramState = {
+  documents: [] as TelegramDocument[],
   sent: [] as SentTelegramMessage[],
   reactions: [] as TelegramReaction[],
   answer: "confirm" as TelegramAnswer,
@@ -88,6 +95,20 @@ const answerEdit = async (request: Request) => {
     );
   }
   return Response.json({ ok: true, result: true });
+};
+
+const answerDocument = async (request: Request) => {
+  const form = await request.formData();
+  const file = form.get("document");
+  fakeTelegramState.documents.push({
+    chatId: Number(form.get("chat_id")),
+    filename: file instanceof File ? file.name : "",
+    text: file instanceof File ? await file.text() : "",
+  });
+  return Response.json({
+    ok: true,
+    result: { message_id: 8000 + fakeTelegramState.documents.length },
+  });
 };
 
 const answerPressAnswer = async (request: Request) => {
@@ -152,6 +173,9 @@ const answerReaction = async (request: Request) => {
 };
 
 export const fakeTelegram = {
+  get documents(): readonly TelegramDocument[] {
+    return fakeTelegramState.documents;
+  },
   get sent(): readonly SentTelegramMessage[] {
     return fakeTelegramState.sent;
   },
@@ -213,6 +237,9 @@ export const fakeTelegram = {
     }
     if (request.url.endsWith("/editMessageText")) {
       return answerEdit(request);
+    }
+    if (request.url.endsWith("/sendDocument")) {
+      return answerDocument(request);
     }
     if (request.url.endsWith("/answerCallbackQuery")) {
       return answerPressAnswer(request);
@@ -567,6 +594,7 @@ export const resetFakes = () => {
   recordedDataPoints.length = 0;
   metricsState.failing = false;
   fakeTelegramState.sent = [];
+  fakeTelegramState.documents = [];
   fakeTelegramState.reactions = [];
   fakeTelegramState.answer = "confirm";
   fakeTelegramState.chatActions = [];

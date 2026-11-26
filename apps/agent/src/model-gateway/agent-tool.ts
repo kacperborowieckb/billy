@@ -35,6 +35,7 @@ export interface AgentTool extends GatedTool {
   readonly inputJsonSchema: InputJsonSchema;
   readonly approvalSummaryOf: ApprovalSummaryOf;
   readonly approvalExpiryMillis?: number;
+  readonly hasExternalEffect?: true;
   readonly executeApproved: (
     frozenInput: unknown,
     toolCallId: string
@@ -101,6 +102,7 @@ type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly inputSchema: FlexibleSchema<Input>;
   readonly marksItsWorkUntrusted?: InputCheck<Input>;
   readonly codeWrittenInput?: (input: Input) => Input;
+  readonly hasExternalEffect?: true;
   readonly execute: (
     input: Input,
     call: ToolCall
@@ -182,6 +184,9 @@ export const agentTool = <Input, Output>(
     ...classified,
     marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
     hasCodeWrittenInput: definition.codeWrittenInput !== undefined,
+    ...(definition.hasExternalEffect === true
+      ? { hasExternalEffect: true as const }
+      : {}),
     approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
     ...(definition.approvalExpiryMillis === undefined
       ? {}

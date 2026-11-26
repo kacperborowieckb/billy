@@ -50,6 +50,12 @@ export interface ApprovalPressAnswer {
   readonly notice?: string;
 }
 
+export interface OutgoingDocument {
+  readonly conversationId: string;
+  readonly filename: string;
+  readonly text: string;
+}
+
 export interface OutgoingReaction {
   readonly conversationId: string;
   readonly channelMessageId: string;
@@ -73,6 +79,9 @@ export class Channel extends Context.Service<
     ) => Effect.Effect<ApprovalDelivery>;
     readonly editApprovalMessage: (
       edit: ApprovalMessageEdit
+    ) => Effect.Effect<Delivery>;
+    readonly sendDocument: (
+      document: OutgoingDocument
     ) => Effect.Effect<Delivery>;
     readonly answerPress: (answer: ApprovalPressAnswer) => Effect.Effect<void>;
     readonly react: (

@@ -6,6 +6,7 @@ import { TypingNotShown } from "../typing-not-shown.ts";
 import {
   answerPress,
   editApprovalMessage,
+  sendDocument,
 } from "./telegram-approval-answer.ts";
 import { telegramReactionFor } from "./telegram-reactions.ts";
 import { failed, send, sendWithApprovals } from "./telegram-send.ts";
@@ -107,6 +108,7 @@ export const telegramChannel = (config: TelegramConfig) =>
     sendWithApprovals: sendWithApprovals(config),
     editApprovalMessage: editApprovalMessage(config),
     answerPress: answerPress(config),
+    sendDocument: sendDocument(config),
     react: react(config),
     allowedReaction: telegramReactionFor,
     showTyping: showTyping(config),

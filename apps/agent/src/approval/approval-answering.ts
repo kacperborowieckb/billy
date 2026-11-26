@@ -8,7 +8,8 @@ export interface ApprovalAnswering {
 
 export type ApprovalRunOutcome =
   | { readonly result: "executed"; readonly output: unknown }
-  | { readonly result: "failed"; readonly reason: string };
+  | { readonly result: "failed"; readonly reason: string }
+  | { readonly result: "unconfirmed" };
 
 export interface ApprovalRunRecord {
   readonly eventId: string;

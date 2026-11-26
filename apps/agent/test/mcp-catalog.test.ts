@@ -94,6 +94,8 @@ describe("the Risk Class of an MCP tool", () => {
     archive_page: "approve",
     create_page: "approve",
     wipe_workspace: "blocked",
+    rename_page: "change",
+    slow_write: "approve",
     hidden_new_tool: "approve",
   };
 
@@ -176,5 +178,18 @@ describe("the ids of an MCP result", () => {
     });
 
     expect(mcpResultIdsOf(shape, text).omittedIds).toBe(0);
+  });
+});
+
+describe("summary templates of the MCP Catalog", () => {
+  it("reports a placeholder that is not a field path", () => {
+    const withBadTemplate = {
+      ...entry,
+      tools: [{ name: "x", riskClass: "approve", summary: "make {bad path}" }],
+    };
+
+    expect(mcpCatalogProblems([withBadTemplate])).toEqual([
+      expect.stringContaining("invalid placeholder {bad path}"),
+    ]);
   });
 });

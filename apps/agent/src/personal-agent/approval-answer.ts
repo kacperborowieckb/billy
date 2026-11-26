@@ -8,128 +8,33 @@ import {
 } from "../approval/approval-status.ts";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
 import type { PendingApproval } from "../approval/pending-approvals.ts";
-import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { Channel } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
-import {
-  toolNamed,
-  unexpectedToolFailureMessage,
-} from "../model-gateway/agent-tool.ts";
-import type { AgentTools } from "../model-gateway/agent-tool.ts";
-import { Redactor } from "../tracing/redactor.ts";
+import { toolNamed } from "../model-gateway/agent-tool.ts";
 import { AgentStorage } from "./agent-storage.ts";
-import { agentToolServices } from "./agent-tool-services.ts";
 import {
   channelAnswerTimeoutMillis,
   editApprovalMessage,
 } from "./approval-message-edit.ts";
-import type { Burst } from "./burst.ts";
+import { runApprovedCall, turnToolsOf } from "./approved-call.ts";
+import type { ApprovalAnswerSettings } from "./approved-call.ts";
 import { Conversation } from "./conversation.ts";
 import { Inbox } from "./inbox.ts";
 import type { ApprovalAnsweredEvent } from "./inbox.ts";
-import { ownerMessageTools } from "./owner-message-tools.ts";
 
-export interface ApprovalAnswerSettings {
-  readonly behavior: BehaviorConfig;
-  readonly tools: AgentTools;
-}
-
-export const turnGoneReason = "The Turn of this Approval is no longer stored";
-
-export const toolGoneReason = "The tool of this Approval no longer exists";
-
-const burstOfTurn = Effect.fnUntraced(function* burstOfTurn(
-  turnEventId: string
-) {
-  const journal = yield* Journal;
-  const inbox = yield* Inbox;
-  const linkedEventIds = yield* journal.eventIdsAnsweredByTurn(turnEventId);
-  const events = yield* inbox.ownerMessagesWithIds([
-    turnEventId,
-    ...linkedEventIds,
-  ]);
-  const turnEvent = events.find((event) => event.eventId === turnEventId);
-  return turnEvent === undefined
-    ? Option.none<Burst>()
-    : Option.some<Burst>([
-        turnEvent,
-        ...events.filter((event) => event !== turnEvent),
-      ]);
-});
-
-const failedRun = (reason: string): ApprovalRunOutcome => ({
-  result: "failed",
-  reason,
-});
-
-const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
-  { behavior, tools }: ApprovalAnswerSettings,
-  approval: PendingApproval
-) {
-  const redactor = yield* Redactor;
-  const burst = yield* burstOfTurn(approval.turnEventId);
-  if (Option.isNone(burst)) {
-    return failedRun(turnGoneReason);
-  }
-  const turnTools = {
-    ...tools,
-    ...ownerMessageTools(burst.value, {
-      ...(yield* agentToolServices),
-      behavior,
-    }),
-  };
-  const tool = toolNamed(turnTools, approval.toolName);
-  if (tool === undefined) {
-    return failedRun(toolGoneReason);
-  }
-  return yield* tool
-    .executeApproved(approval.frozenInput, approval.pendingApprovalId)
-    .pipe(
-      Effect.map((output): ApprovalRunOutcome => ({
-        result: "executed",
-        output,
-      })),
-      Effect.catchTag("ToolFailed", (failure) =>
-        Effect.succeed(failedRun(redactor.redact(failure.message)))
-      ),
-      Effect.catchCause(() =>
-        Effect.succeed(failedRun(unexpectedToolFailureMessage))
-      )
-    );
-});
-
-const answerAndRun = Effect.fnUntraced(function* answerAndRun(
-  settings: ApprovalAnswerSettings,
-  event: ApprovalAnsweredEvent,
+const appendApprovalStatus = Effect.fnUntraced(function* appendApprovalStatus(
+  eventId: string,
   approval: PendingApproval
 ) {
   const pendingApprovals = yield* PendingApprovals;
   const conversation = yield* Conversation;
-  const answering = {
-    eventId: event.eventId,
-    pendingApprovalId: approval.pendingApprovalId,
-  };
-  if (
-    !(yield* pendingApprovals.answerPending({
-      ...answering,
-      answer: event.answer,
-    }))
-  ) {
-    return;
-  }
-  if (event.answer === "approve") {
-    yield* pendingApprovals.recordRun({
-      ...answering,
-      outcome: yield* runApprovedCall(settings, approval),
-    });
-  }
   const answered = yield* pendingApprovals.byId(approval.pendingApprovalId);
   const status = answered.pipe(
     Option.flatMap((row) => Option.fromNullishOr(statusOfApproval(row)))
   );
   if (Option.isSome(status)) {
     yield* conversation.append({
-      eventId: event.eventId,
+      eventId,
       rows: [
         {
           kind: "approval_status",
@@ -140,6 +45,116 @@ const answerAndRun = Effect.fnUntraced(function* answerAndRun(
         },
       ],
     });
+  }
+});
+
+const answerPending = Effect.fnUntraced(function* answerPending(
+  event: ApprovalAnsweredEvent,
+  approval: PendingApproval
+) {
+  const pendingApprovals = yield* PendingApprovals;
+  return yield* pendingApprovals.answerPending({
+    eventId: event.eventId,
+    pendingApprovalId: approval.pendingApprovalId,
+    answer: event.answer,
+  });
+});
+
+const recordRunAndStatus = Effect.fnUntraced(function* recordRunAndStatus(
+  eventId: string,
+  approval: PendingApproval,
+  outcome: ApprovalRunOutcome
+) {
+  const pendingApprovals = yield* PendingApprovals;
+  yield* pendingApprovals.recordRun({
+    eventId,
+    pendingApprovalId: approval.pendingApprovalId,
+    outcome,
+  });
+  yield* appendApprovalStatus(eventId, approval);
+});
+
+const answerAndRunInOneTransaction = Effect.fnUntraced(
+  function* answerAndRunInOneTransaction(
+    settings: ApprovalAnswerSettings,
+    event: ApprovalAnsweredEvent,
+    approval: PendingApproval
+  ) {
+    if (!(yield* answerPending(event, approval))) {
+      return;
+    }
+    if (event.answer === "approve") {
+      yield* recordRunAndStatus(
+        event.eventId,
+        approval,
+        yield* runApprovedCall(settings, approval)
+      );
+      return;
+    }
+    yield* appendApprovalStatus(event.eventId, approval);
+  }
+);
+
+const hasExternalEffect = Effect.fnUntraced(function* hasExternalEffect(
+  settings: ApprovalAnswerSettings,
+  approval: PendingApproval
+) {
+  const turnTools = yield* turnToolsOf(settings, approval);
+  return (
+    Option.isSome(turnTools) &&
+    toolNamed(turnTools.value, approval.toolName)?.hasExternalEffect === true
+  );
+});
+
+const answerThenRunOutsideTransaction = Effect.fnUntraced(
+  function* answerThenRunOutsideTransaction(
+    settings: ApprovalAnswerSettings,
+    event: ApprovalAnsweredEvent,
+    approval: PendingApproval
+  ) {
+    const { database } = yield* AgentStorage;
+    const answered = yield* database.transaction(() =>
+      answerPending(event, approval)
+    );
+    if (!answered) {
+      return;
+    }
+    const outcome = yield* runApprovedCall(settings, approval);
+    yield* database.transaction(() =>
+      recordRunAndStatus(event.eventId, approval, outcome)
+    );
+  }
+);
+
+const answerAndRun = Effect.fnUntraced(function* answerAndRun(
+  settings: ApprovalAnswerSettings,
+  event: ApprovalAnsweredEvent,
+  approval: PendingApproval
+) {
+  const { database } = yield* AgentStorage;
+  if (
+    event.answer === "approve" &&
+    (yield* hasExternalEffect(settings, approval))
+  ) {
+    return yield* answerThenRunOutsideTransaction(settings, event, approval);
+  }
+  return yield* database.transaction(() =>
+    answerAndRunInOneTransaction(settings, event, approval)
+  );
+});
+
+const settleLostRun = Effect.fnUntraced(function* settleLostRun(
+  event: ApprovalAnsweredEvent
+) {
+  const { database } = yield* AgentStorage;
+  const pendingApprovals = yield* PendingApprovals;
+  const approval = yield* pendingApprovals.byId(event.pendingApprovalId);
+  if (Option.isSome(approval) && approval.value.state === "approved") {
+    yield* database.transaction(() =>
+      recordRunAndStatus(event.eventId, approval.value, {
+        result: "unconfirmed",
+      })
+    );
   }
 });
 
@@ -156,7 +171,6 @@ const answerPress = Effect.fnUntraced(function* answerPress(
   settings: ApprovalAnswerSettings,
   event: ApprovalAnsweredEvent
 ) {
-  const { database } = yield* AgentStorage;
   const pendingApprovals = yield* PendingApprovals;
   const channel = yield* Channel;
   const approval = yield* pendingApprovals.byId(event.pendingApprovalId);
@@ -175,9 +189,7 @@ const answerPress = Effect.fnUntraced(function* answerPress(
   if (notice !== undefined || Option.isNone(approval)) {
     return false;
   }
-  yield* database.transaction(() =>
-    answerAndRun(settings, event, approval.value)
-  );
+  yield* answerAndRun(settings, event, approval.value);
   return yield* answeredByEvent(event);
 });
 
@@ -187,10 +199,11 @@ export const handleApprovalAnswered = Effect.fnUntraced(
     event: ApprovalAnsweredEvent
   ) {
     const inbox = yield* Inbox;
-    if (
-      (yield* answeredByEvent(event)) ||
-      (yield* answerPress(settings, event))
-    ) {
+    const alreadyAnswered = yield* answeredByEvent(event);
+    if (alreadyAnswered) {
+      yield* settleLostRun(event);
+    }
+    if (alreadyAnswered || (yield* answerPress(settings, event))) {
       yield* editApprovalMessage({
         conversationId: event.conversationId,
         pendingApprovalId: event.pendingApprovalId,

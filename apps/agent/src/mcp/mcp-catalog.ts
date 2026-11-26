@@ -2,6 +2,10 @@ import { Schema } from "effect";
 
 import { riskClasses } from "../approval/risk-class.ts";
 import type { RiskClass } from "../approval/risk-class.ts";
+import {
+  summaryFieldPattern,
+  summaryPlaceholderPattern,
+} from "./mcp-summary-template.ts";
 
 const maxHexIdLength = 64;
 const minHexIdLength = 16;
@@ -47,10 +51,19 @@ export const matchesMcpIdShape = (shape: McpIdShape, value: unknown) => {
 const catalogIdPattern = /^[a-z][a-z0-9_]{0,31}$/u;
 const toolNamePattern = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const fieldNamePattern = /^[A-Za-z][A-Za-z0-9_]{0,31}$/u;
+const maxSummaryTemplateLength = 200;
 
 const McpCatalogToolSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.check(Schema.isPattern(toolNamePattern))),
   riskClass: Schema.Literals(riskClasses),
+  summary: Schema.optionalKey(
+    Schema.String.pipe(
+      Schema.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(maxSummaryTemplateLength)
+      )
+    )
+  ),
   resultIds: Schema.optionalKey(
     Schema.Struct({
       field: Schema.String.pipe(
@@ -100,6 +113,15 @@ export const mcpCatalogProblems = (entries: readonly unknown[]) => {
         problems.push(`${catalogId} lists the tool ${tool.name} twice`);
       }
       names.add(tool.name);
+      for (const [, field] of (tool.summary ?? "").matchAll(
+        summaryPlaceholderPattern
+      )) {
+        if (field === undefined || !summaryFieldPattern.test(field)) {
+          problems.push(
+            `${catalogId} has a summary template for ${tool.name} with the invalid placeholder {${field ?? ""}}`
+          );
+        }
+      }
       if (tool.resultIds !== undefined && tool.riskClass !== "read") {
         problems.push(
           `${catalogId} declares result ids for ${tool.name}, which is not a read tool`

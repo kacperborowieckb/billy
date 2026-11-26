@@ -61,6 +61,20 @@ const draftsOfTurn = (turnEventId: string) =>
     eq(pendingApprovals.state, "draft")
   );
 
+const outcomeResultText = (outcome: ApprovalRunRecord["outcome"]) => {
+  switch (outcome.result) {
+    case "executed": {
+      return encodeFrozenInput(outcome.output ?? null);
+    }
+    case "failed": {
+      return outcome.reason;
+    }
+    default: {
+      return null;
+    }
+  }
+};
+
 const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
   const { database } = yield* AgentStorage;
   const journal = yield* Journal;
@@ -201,10 +215,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
       .update(pendingApprovals)
       .set({
         state: outcome.result,
-        result:
-          outcome.result === "executed"
-            ? encodeFrozenInput(outcome.output ?? null)
-            : outcome.reason,
+        result: outcomeResultText(outcome),
       })
       .where(
         and(

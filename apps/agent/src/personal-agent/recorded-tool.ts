@@ -56,6 +56,7 @@ export type RecordedToolDefinition<
   readonly recordedInput?: (input: Input) => JSONValue;
   readonly marksItsWorkUntrusted?: (input: Input) => boolean;
   readonly codeWrittenInput?: (input: Input) => Input;
+  readonly hasExternalEffect?: true;
 };
 
 const toolFailedFrom =
@@ -134,6 +135,9 @@ export const recordedTool = <
     ...(definition.codeWrittenInput === undefined
       ? {}
       : { codeWrittenInput: definition.codeWrittenInput }),
+    ...(definition.hasExternalEffect === true
+      ? { hasExternalEffect: true as const }
+      : {}),
     ...(definition.marksItsWorkUntrusted === undefined
       ? {}
       : {

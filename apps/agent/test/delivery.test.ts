@@ -245,6 +245,7 @@ const testChannel = Layer.succeed(Channel, {
     answer.next === "never" ? Effect.never : Effect.succeed(answer.next),
   allowedReaction: (emoji) => emoji,
   showTyping: () => Effect.void,
+  sendDocument: () => Effect.succeed({ _tag: "Failed", reason: "unused" }),
 });
 
 const testServices = Layer.mergeAll(
