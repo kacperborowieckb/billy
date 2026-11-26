@@ -14,6 +14,7 @@ import { callMcpToolToolName } from "../src/mcp/mcp-tool-names.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import {
+  fakeMcpLimits,
   fakeMcpServer,
   fakeModel,
   fakeTelegram,
@@ -236,6 +237,48 @@ describe("Approval for an MCP call that changes a service", () => {
       expect(await statesOf(ownerId)).toEqual(["pending"])
     );
     expect(fakeMcpServer.calls).toHaveLength(2);
+  });
+
+  it("shows failed when an approved call gets an error from the service", async () => {
+    const { ownerId, approval } = await askFor(9959, "failing_write", {});
+
+    await press(
+      9959,
+      `approve:${approval.pending_approval_id}`,
+      Number(approval.channel_message_id)
+    );
+
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["failed"])
+    );
+    await vi.waitFor(() =>
+      expect(fakeTelegram.edits.at(-1)?.body.text).toContain(
+        "Approved, but it failed: The service reported an error"
+      )
+    );
+  });
+
+  it("shows unconfirmed when an approved call times out", async () => {
+    fakeMcpLimits.callTimeoutMillis = 100;
+    const { ownerId, approval } = await askFor(9960, "slow_write", {
+      title: "Slow",
+    });
+
+    await press(
+      9960,
+      `approve:${approval.pending_approval_id}`,
+      Number(approval.channel_message_id)
+    );
+
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["unconfirmed"])
+    );
+    expect(fakeMcpServer.calls).toHaveLength(1);
+    await vi.waitFor(() =>
+      expect(fakeTelegram.edits.at(-1)?.body.text).toContain(
+        "Approved, but it is not confirmed that it ran"
+      )
+    );
   });
 
   it("runs the approved call once and shows unconfirmed after the Durable Object aborts during it", async () => {

@@ -94,6 +94,11 @@ export const fakeMcpTools: readonly FakeMcpTool[] = [
     },
   },
   {
+    name: "failing_write",
+    description: "Write a page that always fails",
+    inputSchema: objectSchema({}),
+  },
+  {
     name: "slow_write",
     description: "Write a page slowly",
     inputSchema: objectSchema({ title: { type: "string" } }),
@@ -157,6 +162,9 @@ export const createFakeMcpServer = () => {
       }
       case "big_dump": {
         return textResult("x".repeat(fakeMcpBigResultCharacters));
+      }
+      case "failing_write": {
+        return textResult("The page cannot be written", true);
       }
       case "slow_write": {
         await Effect.runPromise(Effect.sleep(state.slowMillis));

@@ -1,6 +1,7 @@
 import type { JSONValue } from "ai";
 import { Cause, Effect, Option, Schema } from "effect";
 
+import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import type { RiskClass } from "../approval/risk-class.ts";
 import {
   agentTool,
@@ -57,6 +58,7 @@ export type RecordedToolDefinition<
   readonly marksItsWorkUntrusted?: (input: Input) => boolean;
   readonly codeWrittenInput?: (input: Input) => Input;
   readonly hasExternalEffect?: true;
+  readonly approvedRunOutcomeOf?: (output: Output) => ApprovalRunOutcome;
 };
 
 const toolFailedFrom =
@@ -138,6 +140,9 @@ export const recordedTool = <
     ...(definition.hasExternalEffect === true
       ? { hasExternalEffect: true as const }
       : {}),
+    ...(definition.approvedRunOutcomeOf === undefined
+      ? {}
+      : { approvedRunOutcomeOf: definition.approvedRunOutcomeOf }),
     ...(definition.marksItsWorkUntrusted === undefined
       ? {}
       : {

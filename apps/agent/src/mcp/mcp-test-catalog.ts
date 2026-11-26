@@ -27,6 +27,7 @@ export const testMcpCatalogEntry = (serverUrl: string): McpCatalogEntry => ({
     },
     { name: "rename_page", riskClass: "change" },
     { name: "slow_write", riskClass: "approve" },
+    { name: "failing_write", riskClass: "approve" },
     { name: "wipe_workspace", riskClass: "blocked" },
   ],
 });

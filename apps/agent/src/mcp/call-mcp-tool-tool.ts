@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 
+import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import { blockedCallReason } from "../approval/tool-gate.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { markUntrustedContent } from "../notes/note.ts";
@@ -112,6 +113,17 @@ const outputOf = ({
   };
 };
 
+const serviceReportedErrorReason = "The service reported an error";
+
+const approvedRunOutcomeOf = (output: McpCallOutput): ApprovalRunOutcome => {
+  if (output.status === "done") {
+    return { result: "executed", output };
+  }
+  return output.status === "failed" && output.result !== undefined
+    ? { result: "failed", reason: serviceReportedErrorReason }
+    : { result: "unconfirmed" };
+};
+
 const checkCallable = (services: McpToolServices, input: CallInput) =>
   Effect.gen(function* checkCallableEffect() {
     const refusalMessage = callRefusalOf(services, input);
@@ -144,6 +156,7 @@ export const callMcpToolTool = (services: McpToolServices, eventId: string) =>
       resolve: (input) => Effect.succeed(input),
       approvalSummary: (input) => approvalSummaryOf(services, input),
       hasExternalEffect: true as const,
+      approvedRunOutcomeOf,
       failureMessage: "The call failed. Tell the Owner that it failed.",
       work: (input) =>
         Effect.gen(function* callEffect() {

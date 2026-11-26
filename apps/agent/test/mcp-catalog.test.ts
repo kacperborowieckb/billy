@@ -96,6 +96,7 @@ describe("the Risk Class of an MCP tool", () => {
     wipe_workspace: "blocked",
     rename_page: "change",
     slow_write: "approve",
+    failing_write: "approve",
     hidden_new_tool: "approve",
   };
 

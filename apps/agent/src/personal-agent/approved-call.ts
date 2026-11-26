@@ -81,10 +81,13 @@ export const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
   return yield* tool
     .executeApproved(approval.frozenInput, approval.pendingApprovalId)
     .pipe(
-      Effect.map((output): ApprovalRunOutcome => ({
-        result: "executed",
-        output,
-      })),
+      Effect.map(
+        (output): ApprovalRunOutcome =>
+          tool.approvedRunOutcomeOf?.(output) ?? {
+            result: "executed",
+            output,
+          }
+      ),
       Effect.catchTag("ToolFailed", (failure) =>
         Effect.succeed(failedRun(redactor.redact(failure.message)))
       ),

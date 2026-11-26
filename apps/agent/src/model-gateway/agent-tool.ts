@@ -2,6 +2,7 @@ import { asSchema, jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
 import { Data, Effect, Option, Result, Schema } from "effect";
 
+import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import { approvalSummaryOf } from "../approval/approval-summary.ts";
 import type {
   ApprovalSummaryOf,
@@ -36,6 +37,7 @@ export interface AgentTool extends GatedTool {
   readonly approvalSummaryOf: ApprovalSummaryOf;
   readonly approvalExpiryMillis?: number;
   readonly hasExternalEffect?: true;
+  readonly approvedRunOutcomeOf?: (output: unknown) => ApprovalRunOutcome;
   readonly executeApproved: (
     frozenInput: unknown,
     toolCallId: string
@@ -103,6 +105,7 @@ type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly marksItsWorkUntrusted?: InputCheck<Input>;
   readonly codeWrittenInput?: (input: Input) => Input;
   readonly hasExternalEffect?: true;
+  readonly approvedRunOutcomeOf?: (output: Output) => ApprovalRunOutcome;
   readonly execute: (
     input: Input,
     call: ToolCall
@@ -187,6 +190,15 @@ export const agentTool = <Input, Output>(
     ...(definition.hasExternalEffect === true
       ? { hasExternalEffect: true as const }
       : {}),
+    ...(definition.approvedRunOutcomeOf === undefined
+      ? {}
+      : {
+          approvedRunOutcomeOf: (output: unknown) =>
+            definition.approvedRunOutcomeOf?.(output as Output) ?? {
+              result: "executed" as const,
+              output,
+            },
+        }),
     approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
     ...(definition.approvalExpiryMillis === undefined
       ? {}
