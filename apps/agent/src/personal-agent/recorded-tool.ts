@@ -61,6 +61,9 @@ export type RecordedToolDefinition<
   readonly approvedRunOutcomeOf?: (output: Output) => ApprovalRunOutcome;
 };
 
+export const unconfirmedToolMessage =
+  "It is not confirmed that this call ran. Tell the Owner that you cannot confirm it, and never say that it is done.";
+
 const toolFailedFrom =
   (
     failureMessage: string | ((cause: Cause.Cause<unknown>) => string),
@@ -69,15 +72,18 @@ const toolFailedFrom =
   (cause: Cause.Cause<unknown>) =>
     Cause.findErrorOption(cause).pipe(
       Option.filter((error) => error instanceof ToolFailed),
-      Option.getOrElse(
-        () =>
-          new ToolFailed({
-            message:
-              typeof failureMessage === "string"
-                ? failureMessage
-                : failureMessage(cause),
-            ...(hasExternalEffect ? { unconfirmed: true as const } : {}),
-          })
+      Option.getOrElse(() =>
+        hasExternalEffect
+          ? new ToolFailed({
+              message: unconfirmedToolMessage,
+              unconfirmed: true,
+            })
+          : new ToolFailed({
+              message:
+                typeof failureMessage === "string"
+                  ? failureMessage
+                  : failureMessage(cause),
+            })
       )
     );
 

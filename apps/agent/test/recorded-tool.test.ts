@@ -11,7 +11,10 @@ import {
 import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
-import { recordedTool } from "../src/personal-agent/recorded-tool.ts";
+import {
+  recordedTool,
+  unconfirmedToolMessage,
+} from "../src/personal-agent/recorded-tool.ts";
 import { TurnProgress } from "../src/personal-agent/turn-progress.ts";
 import { Redactor, redactedMark } from "../src/tracing/redactor.ts";
 import { resetFakes } from "./fakes.ts";
@@ -287,29 +290,56 @@ describe("Recorded tool", () => {
   });
 });
 
+const lostRecord = (
+  progress: TurnProgress["Service"]
+): TurnProgress["Service"] => ({
+  ...progress,
+  recordingToolCall: (_call, run) =>
+    run.pipe(Effect.andThen(Effect.die("the record of the output was lost"))),
+});
+
 describe("a recorded tool with an external effect", () => {
-  it("reports an unexpected failure as unconfirmed when it runs after an Approval", async () => {
+  const toolOf = (
+    progress: TurnProgress["Service"],
+    redactor: Redactor["Service"]
+  ) =>
+    recordedTool(
+      { eventId, progress: lostRecord(progress), redactor },
+      {
+        name: "write_outside",
+        riskClass: "change",
+        resolve: Effect.succeed,
+        approvalSummary: ({ word }) => `Write "${word}"`,
+        description: "Write outside",
+        inputSchema: WordInput,
+        failureMessage,
+        hasExternalEffect: true,
+        work: ({ word }) => Effect.succeed({ kept: word }),
+      }
+    );
+
+  it("reports a lost record after the call as unconfirmed when it runs after an Approval", async () => {
     const ownerId = await addOwner(9970);
 
     const failure = await inRecordedTool(ownerId, ({ progress, redactor }) =>
-      recordedTool(
-        { eventId, progress, redactor },
-        {
-          name: "write_outside",
-          riskClass: "change",
-          resolve: Effect.succeed,
-          approvalSummary: ({ word }) => `Write "${word}"`,
-          description: "Write outside",
-          inputSchema: WordInput,
-          failureMessage,
-          hasExternalEffect: true,
-          work: () => Effect.die("the record of the output was lost"),
-        }
-      )
+      toolOf(progress, redactor)
         .executeApproved({ word: "x" }, "approval-x")
         .pipe(Effect.flip)
     );
 
     expect(failure).toMatchObject({ unconfirmed: true });
+  });
+
+  it("tells the model that it is not confirmed when the record is lost on the ordinary path", async () => {
+    const ownerId = await addOwner(9971);
+
+    const error = await inRecordedTool(ownerId, ({ progress, redactor }) =>
+      call(toolOf(progress, redactor), {
+        input: { word: "x" },
+        toolCallId: "call-x",
+      }).pipe(Effect.flip)
+    );
+
+    expect(error.message).toBe(unconfirmedToolMessage);
   });
 });
