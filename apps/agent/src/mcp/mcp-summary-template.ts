@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 export const summaryPlaceholderPattern = /\{(?<field>[^{}]*)\}/gu;
 
 export const summaryFieldPattern =
@@ -19,10 +21,10 @@ const shortened = (text: string) =>
     ? text
     : `${wellFormedPrefix(text, maxShownValueLength)}...`;
 
-export const isScalar = (value: unknown): value is string | number | boolean =>
-  typeof value === "string" ||
-  typeof value === "number" ||
-  typeof value === "boolean";
+export const isScalar = Predicate.or(
+  Predicate.isString,
+  Predicate.or(Predicate.isNumber, Predicate.isBoolean)
+);
 
 export const shownScalar = (value: string | number | boolean) =>
   typeof value === "string"
