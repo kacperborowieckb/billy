@@ -14,9 +14,13 @@ import {
   ModelMessageSchema,
 } from "../src/model-gateway/model-message-schema.ts";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
+import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
-import { compactionInstructions } from "../src/personal-agent/compaction-prompt.ts";
+import {
+  compactionInstructions,
+  summaryProseOf,
+} from "../src/personal-agent/compaction-prompt.ts";
 import {
   summaryEndLabel,
   summaryLabel,
@@ -104,6 +108,27 @@ const decodeStoredMessage = Schema.decodeUnknownSync(ModelMessageJsonSchema);
 const textOf = (row: StoredRow) => {
   const { content } = decodeStoredMessage(row.message);
   return typeof content === "string" ? content : JSON.stringify(content);
+};
+
+const summaryPartsOf = (row: StoredRow) => {
+  const { content } = decodeStoredMessage(row.message);
+  if (typeof content === "string") {
+    throw new TypeError("A stored Summary has text parts");
+  }
+  return content.map((part) => (part.type === "text" ? part.text : ""));
+};
+
+const proseOf = (row: StoredRow) =>
+  summaryProseOf(decodeStoredMessage(row.message));
+
+const currentSummaryOf = (rows: readonly StoredRow[]) => {
+  const found = rows.find(
+    (row) => row.kind === "summary" && row.compacted_at === null
+  );
+  if (found === undefined) {
+    throw new Error("No current Summary");
+  }
+  return found;
 };
 
 const ownerSays = async (userId: number, text: string, replies: number) => {
@@ -210,8 +235,8 @@ const waitForCurrentSummary = (ownerId: string, text: string) =>
       expect(
         rows
           .filter((row) => row.kind === "summary" && row.compacted_at === null)
-          .map(textOf)
-      ).toEqual([`${summaryLabel}\n${text}\n${summaryEndLabel}`]);
+          .map(proseOf)
+      ).toEqual([text]);
     },
     { timeout: 10_000 }
   );
@@ -227,6 +252,73 @@ const compactionPlannedMisses = () =>
   compactionStepPoints().map(
     (point) => point.blobs?.[modelStepBlobIndex.plannedMiss]
   );
+
+const uuidPattern = /[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/gu;
+
+const idsIn = (text: string) =>
+  [...text.matchAll(uuidPattern)].map(([id]) => id);
+
+const seedSource = {
+  eventId: "seed-event",
+  channel: "telegram",
+  conversationId: "1",
+  channelMessageId: "1",
+  trustLevel: "owner",
+} as const;
+
+const inAgent = async <A>(
+  ownerId: string,
+  effect: Effect.Effect<A, unknown, Notes | Schedules | AgentStorage>
+) =>
+  runInDurableObject(await agentOf(ownerId), (instance) =>
+    instance.runtime.runPromise(effect)
+  );
+
+const captureOpenLoop = (text: string, dueAt?: string) =>
+  Effect.gen(function* captureOpenLoopEffect() {
+    const notes = yield* Notes;
+    const { note } = yield* notes.capture({
+      text,
+      source: seedSource,
+      openLoop: {
+        kind: "task",
+        ...(dueAt === undefined ? {} : { dueAt: DateTime.makeUnsafe(dueAt) }),
+      },
+    });
+    return note.noteId;
+  });
+
+const setReminder = (text: string) =>
+  Effect.gen(function* setReminderEffect() {
+    const schedules = yield* Schedules;
+    const { schedule } = yield* schedules.set({
+      action: { _tag: "SendText", text },
+      setBy: "owner",
+      dueAt: DateTime.makeUnsafe("2099-11-27T08:00:00Z"),
+      sourceEventId: `seed-${text}`,
+    });
+    return schedule.scheduleId;
+  });
+
+interface SeededApproval {
+  readonly pendingApprovalId: string;
+  readonly position: number;
+  readonly state: string;
+  readonly expiresAt: string;
+}
+
+const insertApproval = ({
+  pendingApprovalId,
+  position,
+  state,
+  expiresAt,
+}: SeededApproval) =>
+  Effect.gen(function* insertApprovalEffect() {
+    const { database } = yield* AgentStorage;
+    yield* database.run(
+      sql`INSERT INTO pending_approvals (pending_approval_id, position, turn_event_id, tool_call_id, tool_name, frozen_input, summary, state, trust_level, created_at, expires_at) VALUES (${pendingApprovalId}, ${position}, 'seed-turn', ${`call-${pendingApprovalId}`}, 'send_text', '{}', 'Send the plan', ${state}, 'owner', '2026-01-01T00:00:00.000Z', ${expiresAt})`
+    );
+  });
 
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
@@ -274,8 +366,8 @@ describe("Compaction", () => {
     expect(kept.map(textOf).join("\n")).toContain("fourth message");
     expect(kept.map(textOf)).toContain("Fourth answer");
     const summaryRow = rows.find((row) => row.kind === "summary");
-    expect(summaryRow === undefined ? "" : textOf(summaryRow)).toBe(
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
+    expect(summaryRow === undefined ? "" : proseOf(summaryRow)).toBe(
+      "They talked about A."
     );
     expect(await compactionUsageRows(ownerId)).toEqual([
       { task: "compaction", event_id: summaryRow?.event_id },
@@ -300,12 +392,10 @@ describe("Compaction", () => {
       JSON.stringify([
         {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
-            },
-          ],
+          content: summaryPartsOf(currentSummaryOf(rows)).map((text) => ({
+            type: "text",
+            text,
+          })),
         },
         fourthInput,
         {
@@ -344,16 +434,14 @@ describe("Compaction", () => {
     );
 
     const data = compactionDataOf(call(6));
-    expect(data.earlierSummary).toBe(
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
-    );
+    expect(data.earlierSummary).toBe("They talked about A.");
     expect(JSON.stringify(data.chat)).toContain("fourth message");
     expect(JSON.stringify(data.chat)).not.toContain("third message");
     expect(JSON.stringify(data.chat)).not.toContain("fifth message");
     const current = rows.filter((row) => row.compacted_at === null);
-    expect(current.filter((row) => row.kind === "summary").map(textOf)).toEqual(
-      [`${summaryLabel}\nThey talked about A and B.\n${summaryEndLabel}`]
-    );
+    expect(
+      current.filter((row) => row.kind === "summary").map(proseOf)
+    ).toEqual(["They talked about A and B."]);
     expect(current.map(textOf).join("\n")).toContain("fifth message");
     expect(current.map(textOf).join("\n")).not.toContain("fourth message");
   });
@@ -374,7 +462,7 @@ describe("Compaction", () => {
     expect(systemTextOf(call(6).prompt)).toBe(compactionInstructions);
     expect(compactionDataOf(call(6)).summaryTarget).toBe(firstSummaryTarget);
     expect(compactionDataOf(call(6)).earlierSummary).toBe(
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
+      "They talked about A."
     );
     expect(await compactionOutputTokens(ownerId)).toEqual([
       defaultBehaviorConfig.maxSummaryTokens,
@@ -421,9 +509,7 @@ describe("Compaction", () => {
       "none",
       "none",
     ]);
-    expect(compactionDataOf(call(9)).earlierSummary).toBe(
-      `${summaryLabel}\nA and B.\n${summaryEndLabel}`
-    );
+    expect(compactionDataOf(call(9)).earlierSummary).toBe("A and B.");
     expect(await compactionOutputTokens(ownerId)).toEqual([
       defaultBehaviorConfig.maxSummaryTokens,
       defaultBehaviorConfig.maxSummaryTokens,
@@ -474,8 +560,8 @@ describe("Compaction", () => {
     expect(await compactionOutputTokens(ownerId)).toEqual([555, 300]);
     expect(new Set(usage.map((row) => row.event_id)).size).toBe(2);
     expect(compactionStepPoints()).toHaveLength(2);
-    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
+    expect(rows.filter((row) => row.kind === "summary").map(proseOf)).toEqual([
+      "They talked about A.",
     ]);
   });
 
@@ -525,8 +611,8 @@ describe("Compaction", () => {
       summaryTarget: retrySummaryTarget,
     });
     const summaryRow = rows.find((row) => row.kind === "summary");
-    expect(summaryRow === undefined ? "" : textOf(summaryRow)).toBe(
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
+    expect(summaryRow === undefined ? "" : proseOf(summaryRow)).toBe(
+      "They talked about A."
     );
     expect(await compactionUsageRows(ownerId)).toEqual([
       { task: "compaction", event_id: summaryRow?.event_id },
@@ -568,8 +654,8 @@ describe("Compaction", () => {
     const data = compactionDataOf(call(8));
     expect(JSON.stringify(data.chat)).toContain("fifth message");
     expect(JSON.stringify(data.chat)).not.toContain("sixth message");
-    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
-      `${summaryLabel}\nThey talked about A and B.\n${summaryEndLabel}`,
+    expect(rows.filter((row) => row.kind === "summary").map(proseOf)).toEqual([
+      "They talked about A and B.",
     ]);
   });
 
@@ -655,8 +741,8 @@ describe("Compaction", () => {
         (row) => row.kind === "summary" || row.compacted_at !== null
       )
     ).toEqual([]);
-    expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
-      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
+    expect(rows.filter((row) => row.kind === "summary").map(proseOf)).toEqual([
+      "They talked about A.",
     ]);
   });
 
@@ -752,6 +838,173 @@ describe("Compaction", () => {
     expect(runBlock).toContain("fourth message");
     expect(runBlock).not.toContain("first message");
     expect(runBlock).not.toContain("Water the plants");
+  });
+
+  it("lists the open items from storage after the Summary: the ids come from code, and closed, cancelled, and answered items are not listed", async () => {
+    const ownerId = await ownerInWarsaw(8818);
+    const openApprovalId = crypto.randomUUID();
+    const expiredApprovalId = crypto.randomUUID();
+    const answeredApprovalId = crypto.randomUUID();
+    const seeded = await inAgent(
+      ownerId,
+      Effect.gen(function* seedEffect() {
+        const notes = yield* Notes;
+        const schedules = yield* Schedules;
+        const dueNoteId = yield* captureOpenLoop(
+          "Call the dentist",
+          "2099-11-28T09:00:00Z"
+        );
+        const undatedNoteId = yield* captureOpenLoop("Read the lease");
+        const closedNoteId = yield* captureOpenLoop("Pay the rent");
+        yield* notes.closeOpenLoop({
+          noteId: closedNoteId,
+          eventId: "seed-close",
+          reason: "done",
+        });
+        const { note: plainNote } = yield* notes.capture({
+          text: "The Owner likes tea",
+          source: seedSource,
+        });
+        const activeScheduleId = yield* setReminder("Water the plants");
+        const cancelledScheduleId = yield* setReminder("Feed the cat");
+        yield* schedules.cancel({
+          scheduleId: cancelledScheduleId,
+          eventId: "seed-cancel",
+        });
+        yield* insertApproval({
+          pendingApprovalId: openApprovalId,
+          position: 1,
+          state: "pending",
+          expiresAt: "2099-11-27T10:00:00.000Z",
+        });
+        yield* insertApproval({
+          pendingApprovalId: expiredApprovalId,
+          position: 2,
+          state: "pending",
+          expiresAt: "2000-01-01T00:00:00.000Z",
+        });
+        yield* insertApproval({
+          pendingApprovalId: answeredApprovalId,
+          position: 3,
+          state: "rejected",
+          expiresAt: "2099-11-27T10:00:00.000Z",
+        });
+        return {
+          dueNoteId,
+          undatedNoteId,
+          closedNoteId,
+          plainNoteId: plainNote.noteId,
+          activeScheduleId,
+          cancelledScheduleId,
+        };
+      })
+    );
+    scriptModel([...fourTurnsOverTheLimit, summary("They talked about A.")]);
+    await chatFourTurns(8818);
+    const rows = await waitForSummaries(ownerId, 1);
+
+    const [prose, openItems] = summaryPartsOf(currentSummaryOf(rows));
+    expect(prose).toBe(`${summaryLabel}\nThey talked about A.`);
+    expect(openItems?.split("\n").slice(1)).toEqual([
+      "Notes with an open Open Loop (the earliest due first):",
+      `- ${seeded.dueNoteId}: due Saturday 2099-11-28, 10:00`,
+      `- ${seeded.undatedNoteId}: no due time`,
+      "Active Schedules (the earliest due first):",
+      `- ${seeded.activeScheduleId}: Reminder, set by owner, next due Friday 2099-11-27, 09:00`,
+      "Pending Approvals that wait for the Owner:",
+      `- ${openApprovalId}: send_text, expires Friday 2099-11-27, 11:00`,
+      summaryEndLabel,
+    ]);
+    expect(openItems).toMatch(
+      /^Open items when code wrote this Summary \(.+\)\. Code listed them from storage\./u
+    );
+    const storedIds = [...idsIn(prose ?? ""), ...idsIn(openItems ?? "")];
+    expect(new Set(storedIds)).toEqual(
+      new Set([
+        seeded.dueNoteId,
+        seeded.undatedNoteId,
+        seeded.activeScheduleId,
+        openApprovalId,
+      ])
+    );
+    for (const text of [
+      "Call the dentist",
+      "Water the plants",
+      "Send the plan",
+    ]) {
+      expect(openItems).not.toContain(text);
+    }
+    expect(compactionInstructions).toContain("Write no ids.");
+    expect(compactionInstructions).not.toMatch(/by (?:their )?ids?/u);
+  });
+
+  it("writes Summary after Summary from the earlier prose with no ids, and lists the open items of the time of each Compaction", async () => {
+    const ownerId = await ownerInWarsaw(8819);
+    const noteId = await inAgent(ownerId, captureOpenLoop("Call the dentist"));
+    const laterTurns = 6;
+    scriptModel([
+      ...fourTurnsOverTheLimit,
+      summary("Summary 0."),
+      ...Array.from({ length: laterTurns }, (_, turn) => [
+        reply(`Answer ${turn + 5}`, 32_000),
+        summary(`Summary ${turn + 1}.`),
+      ]).flat(),
+    ]);
+    await chatFourTurns(8819);
+    const firstRows = await waitForSummaries(ownerId, 1);
+    const firstItems = summaryPartsOf(currentSummaryOf(firstRows))[1] ?? "";
+    await inAgent(
+      ownerId,
+      Notes.pipe(
+        Effect.flatMap((notes) =>
+          notes.closeOpenLoop({ noteId, eventId: "seed-close", reason: "done" })
+        )
+      )
+    );
+    const scheduleId = await inAgent(ownerId, setReminder("Water the plants"));
+    const chatFrom = async (turn: number): Promise<void> => {
+      if (turn > laterTurns) {
+        return;
+      }
+      await ownerSays(8819, `message ${turn + 4}`, turn + 4);
+      await waitForCurrentSummary(ownerId, `Summary ${turn}.`);
+      await chatFrom(turn + 1);
+    };
+    await chatFrom(1);
+
+    const compactionCalls = Array.from({ length: laterTurns + 1 }, (_, index) =>
+      call(4 + 2 * index)
+    );
+    expect(
+      compactionCalls.map((compactionCall) =>
+        systemTextOf(compactionCall.prompt)
+      )
+    ).toEqual(
+      Array.from({ length: laterTurns + 1 }, () => compactionInstructions)
+    );
+    expect(
+      compactionCalls.map(
+        (compactionCall) => compactionDataOf(compactionCall).earlierSummary
+      )
+    ).toEqual([
+      null,
+      ...Array.from({ length: laterTurns }, (_, index) => `Summary ${index}.`),
+    ]);
+    expect(
+      compactionCalls.map(
+        (compactionCall) => compactionDataOf(compactionCall).summaryTarget
+      )
+    ).toEqual(Array.from({ length: laterTurns + 1 }, () => firstSummaryTarget));
+    expect(await refusedBlockRows(ownerId)).toEqual([]);
+
+    const rows = await conversationRows(ownerId);
+    expect(rows.filter((row) => row.kind === "summary")).toHaveLength(
+      laterTurns + 1
+    );
+    const [prose, openItems] = summaryPartsOf(currentSummaryOf(rows));
+    expect(prose).toBe(`${summaryLabel}\nSummary ${laterTurns}.`);
+    expect(idsIn(firstItems)).toEqual([noteId]);
+    expect(idsIn(openItems ?? "")).toEqual([scheduleId]);
   });
 
   it("never puts a running Turn in a block", async () => {
