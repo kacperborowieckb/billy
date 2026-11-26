@@ -6,6 +6,7 @@ import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { listOpenLoopsToolName } from "../notes/list-open-loops-tool.ts";
 import { Notes } from "../notes/notes.ts";
 import type { Note } from "../notes/notes.ts";
+import type { OpenLoopPage } from "../notes/open-loop-store.ts";
 import type { OwnerTimeZone } from "../notes/recalled-note.ts";
 import { listSchedulesToolName } from "../schedule/list-schedules-tool.ts";
 import { Schedules } from "../schedule/schedules.ts";
@@ -19,8 +20,7 @@ export const openItemsPerKind = 10;
 export interface OpenItems {
   readonly listedAt: DateTime.Utc;
   readonly timeZone: OwnerTimeZone;
-  readonly openLoops: readonly Note[];
-  readonly openLoopCount: number;
+  readonly openLoops: OpenLoopPage;
   readonly schedules: readonly Schedule[];
   readonly pendingApprovals: readonly PendingApproval[];
 }
@@ -76,7 +76,6 @@ export const openItemsText = ({
   listedAt,
   timeZone,
   openLoops,
-  openLoopCount,
   schedules,
   pendingApprovals,
 }: OpenItems) => {
@@ -84,9 +83,9 @@ export const openItemsText = ({
   const shownApprovals = pendingApprovals.slice(0, openItemsPerKind);
   const lines = [
     ...section("Notes with an open Open Loop (the earliest due first):", [
-      ...openLoops.map((note) => openLoopLine(note, timeZone)),
+      ...openLoops.notes.map((note) => openLoopLine(note, timeZone)),
       ...moreLine(
-        openLoopCount - openLoops.length,
+        openLoops.openLoopCount - openLoops.notes.length,
         `: call ${listOpenLoopsToolName}`
       ),
     ]),
@@ -115,15 +114,13 @@ export const openItemsOf = Effect.fnUntraced(function* openItemsOf(
 ) {
   const notes = yield* Notes;
   const schedules = yield* Schedules;
-  const page = yield* notes.listOpenLoops({
-    offset: 0,
-    limit: openItemsPerKind,
-  });
   return {
     listedAt: yield* DateTime.now,
     timeZone: yield* ownerTimeZone(behavior),
-    openLoops: page.notes,
-    openLoopCount: page.openLoopCount,
+    openLoops: yield* notes.listOpenLoops({
+      offset: 0,
+      limit: openItemsPerKind,
+    }),
     schedules: yield* schedules.listActive,
     pendingApprovals: yield* openApprovals,
   } satisfies OpenItems;

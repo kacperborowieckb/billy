@@ -274,31 +274,32 @@ const inAgent = async <A>(
     instance.runtime.runPromise(effect)
   );
 
-const captureOpenLoop = (text: string, dueAt?: string) =>
-  Effect.gen(function* captureOpenLoopEffect() {
-    const notes = yield* Notes;
-    const { note } = yield* notes.capture({
-      text,
-      source: seedSource,
-      openLoop: {
-        kind: "task",
-        ...(dueAt === undefined ? {} : { dueAt: DateTime.makeUnsafe(dueAt) }),
-      },
-    });
-    return note.noteId;
+const captureOpenLoop = Effect.fnUntraced(function* captureOpenLoop(
+  text: string,
+  dueAt?: string
+) {
+  const notes = yield* Notes;
+  const { note } = yield* notes.capture({
+    text,
+    source: seedSource,
+    openLoop: {
+      kind: "task",
+      ...(dueAt === undefined ? {} : { dueAt: DateTime.makeUnsafe(dueAt) }),
+    },
   });
+  return note.noteId;
+});
 
-const setReminder = (text: string) =>
-  Effect.gen(function* setReminderEffect() {
-    const schedules = yield* Schedules;
-    const { schedule } = yield* schedules.set({
-      action: { _tag: "SendText", text },
-      setBy: "owner",
-      dueAt: DateTime.makeUnsafe("2099-11-27T08:00:00Z"),
-      sourceEventId: `seed-${text}`,
-    });
-    return schedule.scheduleId;
+const setReminder = Effect.fnUntraced(function* setReminder(text: string) {
+  const schedules = yield* Schedules;
+  const { schedule } = yield* schedules.set({
+    action: { _tag: "SendText", text },
+    setBy: "owner",
+    dueAt: DateTime.makeUnsafe("2099-11-27T08:00:00Z"),
+    sourceEventId: `seed-${text}`,
   });
+  return schedule.scheduleId;
+});
 
 interface SeededApproval {
   readonly pendingApprovalId: string;
@@ -307,18 +308,17 @@ interface SeededApproval {
   readonly expiresAt: string;
 }
 
-const insertApproval = ({
+const insertApproval = Effect.fnUntraced(function* insertApproval({
   pendingApprovalId,
   position,
   state,
   expiresAt,
-}: SeededApproval) =>
-  Effect.gen(function* insertApprovalEffect() {
-    const { database } = yield* AgentStorage;
-    yield* database.run(
-      sql`INSERT INTO pending_approvals (pending_approval_id, position, turn_event_id, tool_call_id, tool_name, frozen_input, summary, state, trust_level, created_at, expires_at) VALUES (${pendingApprovalId}, ${position}, 'seed-turn', ${`call-${pendingApprovalId}`}, 'send_text', '{}', 'Send the plan', ${state}, 'owner', '2026-01-01T00:00:00.000Z', ${expiresAt})`
-    );
-  });
+}: SeededApproval) {
+  const { database } = yield* AgentStorage;
+  yield* database.run(
+    sql`INSERT INTO pending_approvals (pending_approval_id, position, turn_event_id, tool_call_id, tool_name, frozen_input, summary, state, trust_level, created_at, expires_at) VALUES (${pendingApprovalId}, ${position}, 'seed-turn', ${`call-${pendingApprovalId}`}, 'send_text', '{}', 'Send the plan', ${state}, 'owner', '2026-01-01T00:00:00.000Z', ${expiresAt})`
+  );
+});
 
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
