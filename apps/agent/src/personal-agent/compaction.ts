@@ -42,9 +42,12 @@ type SummaryAttempts =
   | { readonly _tag: "Refused" }
   | Exclude<CompactionCall, { readonly _tag: "Generated" }>;
 
+const firstSummaryTargetShare = 0.6;
+const retrySummaryTargetShare = 0.3;
+
 const summaryTargetsOf = (maxSummaryTokens: number) => [
-  maxSummaryTokens,
-  Math.floor(maxSummaryTokens / 2),
+  Math.floor(maxSummaryTokens * firstSummaryTargetShare),
+  Math.floor(maxSummaryTokens * retrySummaryTargetShare),
 ];
 
 const summaryIsAccepted = (reply: ModelReply, maxSummaryTokens: number) =>

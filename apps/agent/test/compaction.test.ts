@@ -123,6 +123,13 @@ const summary = (text: string, outputTokens = 300): ScriptedModelStep => ({
   outputTokens,
 });
 
+const firstSummaryTarget = Math.floor(
+  defaultBehaviorConfig.maxSummaryTokens * 0.6
+);
+const retrySummaryTarget = Math.floor(
+  defaultBehaviorConfig.maxSummaryTokens * 0.3
+);
+
 const overLimitSummary = summary(
   "A very long Summary.",
   defaultBehaviorConfig.maxSummaryTokens + 1
@@ -195,6 +202,19 @@ const fireOwnerSchedule = async (ownerId: string, action: ScheduleAction) => {
   await runInDurableObject(agent, (instance) => instance.fireDueSchedules());
 };
 
+const waitForCurrentSummary = (ownerId: string, text: string) =>
+  vi.waitFor(
+    async () => {
+      const rows = await conversationRows(ownerId);
+      expect(
+        rows
+          .filter((row) => row.kind === "summary" && row.compacted_at === null)
+          .map(textOf)
+      ).toEqual([`${summaryLabel}\n${text}\n${summaryEndLabel}`]);
+    },
+    { timeout: 10_000 }
+  );
+
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
     timeout: 10_000,
@@ -221,7 +241,7 @@ describe("Compaction", () => {
 
     const compactionCall = call(4);
     expect(systemTextOf(compactionCall.prompt)).toBe(
-      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens)
+      compactionInstructions(firstSummaryTarget)
     );
     expect(compactionCall.tools ?? []).toEqual([]);
     expect(compactionCall.maxOutputTokens).toBe(
@@ -326,6 +346,65 @@ describe("Compaction", () => {
     expect(current.map(textOf).join("\n")).not.toContain("fourth message");
   });
 
+  it("replaces a Summary that reached the size limit with a shorter one that is over the target", async () => {
+    const ownerId = await ownerInWarsaw(8816);
+    scriptModel([
+      ...fourTurnsOverTheLimit,
+      summary("They talked about A.", defaultBehaviorConfig.maxSummaryTokens),
+      reply("Fifth answer", 32_000),
+      summary("A and B.", firstSummaryTarget + 300),
+    ]);
+    await chatFourTurns(8816);
+    await waitForCurrentSummary(ownerId, "They talked about A.");
+    await ownerSays(8816, "fifth message", 5);
+    await waitForCurrentSummary(ownerId, "A and B.");
+
+    expect(systemTextOf(call(6).prompt)).toBe(
+      compactionInstructions(firstSummaryTarget)
+    );
+    expect(compactionDataOf(call(6)).earlierSummary).toBe(
+      `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
+    );
+    expect(await compactionOutputTokens(ownerId)).toEqual([
+      defaultBehaviorConfig.maxSummaryTokens,
+      firstSummaryTarget + 300,
+    ]);
+    expect(await refusedBlockRows(ownerId)).toEqual([]);
+  });
+
+  it("keeps compacting each new block after a Summary at the size limit, also when the first attempt is cut", async () => {
+    const ownerId = await ownerInWarsaw(8817);
+    scriptModel([
+      ...fourTurnsOverTheLimit,
+      summary("They talked about A.", defaultBehaviorConfig.maxSummaryTokens),
+      reply("Fifth answer", 32_000),
+      overLimitSummary,
+      summary("A and B.", retrySummaryTarget + 700),
+      reply("Sixth answer", 32_000),
+      summary("A, B, and C.", defaultBehaviorConfig.maxSummaryTokens),
+    ]);
+    await chatFourTurns(8817);
+    await waitForCurrentSummary(ownerId, "They talked about A.");
+    await ownerSays(8817, "fifth message", 5);
+    await waitForCurrentSummary(ownerId, "A and B.");
+    await ownerSays(8817, "sixth message", 6);
+    await waitForCurrentSummary(ownerId, "A, B, and C.");
+
+    expect(systemTextOf(call(7).prompt)).toBe(
+      compactionInstructions(retrySummaryTarget)
+    );
+    expect(compactionDataOf(call(9)).earlierSummary).toBe(
+      `${summaryLabel}\nA and B.\n${summaryEndLabel}`
+    );
+    expect(await compactionOutputTokens(ownerId)).toEqual([
+      defaultBehaviorConfig.maxSummaryTokens,
+      defaultBehaviorConfig.maxSummaryTokens,
+      retrySummaryTarget + 700,
+      defaultBehaviorConfig.maxSummaryTokens,
+    ]);
+    expect(await refusedBlockRows(ownerId)).toEqual([]);
+  });
+
   it("stops when an Owner Burst becomes due, writes nothing, answers the Turn first, records the Usage of the stopped call, and runs again at the next check", async () => {
     const ownerId = await ownerInWarsaw(8804);
     scriptModel([
@@ -412,10 +491,10 @@ describe("Compaction", () => {
     const rows = await waitForSummaries(ownerId, 1);
 
     expect(systemTextOf(call(4).prompt)).toBe(
-      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens)
+      compactionInstructions(firstSummaryTarget)
     );
     expect(systemTextOf(call(5).prompt)).toBe(
-      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens / 2)
+      compactionInstructions(retrySummaryTarget)
     );
     expect(call(5).maxOutputTokens).toBe(
       defaultBehaviorConfig.maxSummaryTokens
@@ -529,7 +608,7 @@ describe("Compaction", () => {
     expect(refusedAfterStop).toEqual([]);
     expect(await refusedBlockRows(ownerId)).toEqual([]);
     expect(systemTextOf(call(5).prompt)).toBe(
-      compactionInstructions(defaultBehaviorConfig.maxSummaryTokens / 2)
+      compactionInstructions(retrySummaryTarget)
     );
     expect(ownerTextsOf(call(6).prompt).at(-1)).toBe("fifth message");
   });
