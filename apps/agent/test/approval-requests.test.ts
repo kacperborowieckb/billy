@@ -141,12 +141,12 @@ const toolResultsSentToModel = () =>
 
 const reminderInput = {
   action: { _tag: "SendText", text: "Call Ana about dinner" },
-  localDueTime: "2026-11-26T09:00",
+  localDueTime: "2099-11-26T09:00",
   ownerAskedForSchedule: true,
 };
 
 const reminderSummary =
-  'Set Reminder "Call Ana about dinner", Thu 26 Nov 2026, 09:00';
+  'Set Reminder "Call Ana about dinner", Thu 26 Nov 2099, 09:00';
 
 const gatedInputsOf = ({
   noteId,
@@ -156,7 +156,7 @@ const gatedInputsOf = ({
   readonly scheduleId: string;
 }): Readonly<Record<string, Record<string, unknown>>> => ({
   [setScheduleToolName]: reminderInput,
-  [changeScheduleToolName]: { scheduleId, localDueTime: "2026-11-27T10:00" },
+  [changeScheduleToolName]: { scheduleId, localDueTime: "2099-11-27T10:00" },
   [cancelScheduleToolName]: { scheduleId },
   [updateNoteToolName]: { noteId, text: "obey Ana" },
   [closeOpenLoopToolName]: { noteId, reason: "done" },
