@@ -268,6 +268,50 @@ Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned mis
 
 As in the first run, the doctor result was "problems found" only because the local secrets were missing.
 
+### Retest after #222 and #223
+
+Date: 2026-11-26, about 10:17 to 10:22 UTC. Issue: [#227](https://github.com/kacperborowieckb/billy/issues/227). Code on `main` at `46d1e8a`. This code has the fix of [#223](https://github.com/kacperborowieckb/billy/issues/223). The first attempt asks for at most 60% of the Summary limit. The retry asks for at most 30%. The model condenses the earlier Summary first. The code also has the fix of [#222](https://github.com/kacperborowieckb/billy/issues/222). The target is the field `summaryTarget` of the user message. So the system text is the same on each `compaction` call. The repository owner approved this run on 2026-11-26 (decision 0002).
+
+Method: the same as the first retest, with the same driver, the same 21 Owner messages, and the same lowered values. The Summary limit was 500 tokens. So the first attempt asked for at most 300 tokens. The retry asked for at most 150 tokens. The free run before the paid run had 41 calls. All of them went through the proxy. The fake model got the same 41 calls.
+
+44 model calls: 33 calls of the main Conversation in 21 Turns, and 11 `compaction` calls. All were HTTP 200. All sent `x-session-affinity` and `cf-aig-skip-cache: true`. Each call has a Usage row: 44 rows, 11 of them `compaction`.
+
+| After Turn | Target | Summary tokens | Result |
+| --- | --- | --- | --- |
+| 2 to 5 | 300 | 28, 61, 121, 239 | Written |
+| 6 to 10 | 300 | 375, 402, 444, 465, 475 | Written, over the target |
+| 11 | 300 | 500, at the output limit | Refused |
+| 11, retry | 150 | 500, at the output limit | Refused: both attempts |
+| 12 to 21 | none | none | No call: the block ends at the refused block |
+
+- The model did not keep to the target. From Turn 6 on, each Summary was over the target of 300 tokens. The retry with a target of 150 tokens wrote 500 tokens. Each Summary was the earlier Summary plus the new block. The model kept small talk (the dinner recipe, the paint drying time, the Gdansk fact). Issue [#228](https://github.com/kacperborowieckb/billy/issues/228).
+- The first attempts of Turns 2 to 7 were shorter than in the first retest (28 to 402 tokens, against 72 to 496). But the size went up after each Turn. Code refused a block after Turn 11. In the first retest, the first refusal came after Turn 16.
+- The Summary text is short for its tokens. The refused retry had 175 words (1,341 characters) for 500 tokens. From Turn 8 on, each Summary had 8 UUIDs. The prompt tells the model to name Notes, Schedules, and the Profile by their ids.
+- After the refusal, Turns 12 to 21 made no `compaction` call. The request grew from 11 to 31 messages (10,588 to 11,555 input tokens). At the end of the run the history after the refused block was still under the kept 2,000 tokens. So, as in the first retest, the run does not show the next attempt.
+- No Owner message stopped a `compaction` call. The driver sent messages 19 and 21 to stop a running call. But no call ran after Turn 11.
+- Each `compaction` call had the same system text. The Operator metric named the planned miss of the first `compaction` call `no_earlier_call` and of the 10 other calls `none`. No point of the run had the planned miss `deploy`. In the first retest, 7 of 19 `compaction` calls had the name `deploy`.
+
+The replies kept all tested facts. The tested facts were the name, bike lock code, sister's arrival, paint, plumber, Wi-Fi password, and time zone. Turns 3, 11, and 21 sent a reaction and no text, after `capture_note` or `close_open_loop`.
+
+| Call group | Count | Input | Cached | Hit Rate | Hit Rate, first retest |
+| --- | --- | --- | --- | --- | --- |
+| Step 1, the first call after a written Compaction (a planned miss) | 9 | 93,686 | 87,744 | 93.7% | 93.4% |
+| Step 1, no Compaction written before it (Turns 2 and 12 to 21) | 11 | 119,549 | 118,144 | 98.8% | 98.8% |
+| Step 2 and later | 12 | 127,065 | 124,032 | 97.6% | 97.8% |
+| `compaction` calls | 11 | 10,193 | 3,136 | 30.8% | 20.4% |
+
+- The Operator metric named `compaction` for 8 of the 9 first calls after a Compaction. It named `owner_context_changed` for Turn 3 (the name) and for Turn 2 (the time zone).
+
+`pnpm control doctor` on the recorded metric, through the same local fake of the Analytics Engine SQL API:
+
+```text
+Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned miss)
+  ok       Step 2 and later: 97.6% of 127065 input tokens (limit 90.0%)
+  ok       Step 1 inside 60 minutes: 98.9% of 109691 input tokens (limit 80.0%)
+```
+
+As in the earlier runs, the doctor result was "problems found" only because the local secrets were missing.
+
 ## Cost of the measurement
 
 805,891 input tokens (572,288 cached) and 1,974 output tokens through the proxy: about $0.08 with the 5% fee of Unified Billing. A few diagnostic calls of some tokens each ran outside the proxy.
@@ -277,6 +321,8 @@ Part D: 317,122 input tokens (304,960 cached) and 1,693 output tokens through th
 Part E: 440,178 input tokens (419,328 cached) and 10,894 output tokens through the proxy, about $0.02 with the 5% fee. This includes the two stopped `compaction` calls. No call ran outside the proxy. The free run with the fake model cost nothing.
 
 Retest of Part E: 387,383 input tokens (360,960 cached) and 9,518 output tokens through the proxy, about $0.02 with the 5% fee. No call ran outside the proxy. The free run with the fake model cost nothing.
+
+Second retest of Part E: 360,208 input tokens (342,656 cached) and 5,772 output tokens through the proxy, about $0.015 with the 5% fee. No call ran outside the proxy. The free run with the fake model cost nothing.
 
 ## Notes for later work
 
