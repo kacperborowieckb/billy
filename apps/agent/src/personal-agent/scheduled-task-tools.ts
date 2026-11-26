@@ -12,6 +12,7 @@ import {
 } from "../schedule/list-schedules-tool.ts";
 import { scheduleToolServicesOf } from "./owner-message-tools.ts";
 import type { OwnerMessageToolServices } from "./owner-message-tools.ts";
+import { sideSessionMcpTools } from "./side-session-mcp-tools.ts";
 
 export type ScheduledTaskToolServices = Omit<
   OwnerMessageToolServices,
@@ -34,5 +35,6 @@ export const scheduledTaskTools = (
     [searchNotesToolName]: searchNotesTool(noteServices, eventId),
     [listLinkedNotesToolName]: listLinkedNotesTool(noteServices, eventId),
     [listSchedulesToolName]: listSchedulesTool(scheduleServices, eventId),
+    ...sideSessionMcpTools(eventId, services),
   };
 };

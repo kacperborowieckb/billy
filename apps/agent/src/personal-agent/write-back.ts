@@ -2,6 +2,11 @@ import type { ModelMessage, ToolCallPart, ToolResultPart } from "ai";
 import { DateTime, Effect, Option, Schema } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
+import { McpCallOutputSchema } from "../mcp/mcp-call-output.ts";
+import {
+  callMcpToolToolName,
+  findMcpToolsToolName,
+} from "../mcp/mcp-tool-names.ts";
 import { closeOpenLoopToolName } from "../notes/close-open-loop-tool.ts";
 import { listLinkedNotesToolName } from "../notes/list-linked-notes-tool.ts";
 import { listOpenLoopsToolName } from "../notes/list-open-loops-tool.ts";
@@ -70,6 +75,22 @@ const readToolNames: ReadonlySet<string> = new Set([
   listOpenLoopsToolName,
   listSchedulesToolName,
 ]);
+
+const decodeMcpCallOutput = Schema.decodeUnknownOption(McpCallOutputSchema);
+
+const connectionsReadBy = ({ call, output }: SucceededCall): string[] => {
+  if (call.toolName !== callMcpToolToolName || output.type !== "json") {
+    return [];
+  }
+  const decoded = decodeMcpCallOutput(output.value);
+  return decoded._tag === "Some" && decoded.value.status === "done"
+    ? [decoded.value.connection]
+    : [];
+};
+
+const isMcpTool = ({ call }: SucceededCall) =>
+  call.toolName === callMcpToolToolName ||
+  call.toolName === findMcpToolsToolName;
 
 const SetScheduleOutput = Schema.Struct({
   openLoopIds: Schema.Array(Schema.String.pipe(Schema.check(Schema.isUUID()))),
@@ -148,16 +169,19 @@ const runLineOf = (steps: readonly ModelMessage[]) => {
   const succeeded = succeededCallsOf(steps);
   const changes = succeeded
     .filter(
-      ({ call, output }) =>
-        !readToolNames.has(call.toolName) && changedSomething(output)
+      (succeededCall) =>
+        !readToolNames.has(succeededCall.call.toolName) &&
+        !isMcpTool(succeededCall) &&
+        changedSomething(succeededCall.output)
     )
     .map(({ call, output }) => changeTextOf(call.toolName, output));
   const sources = [
-    ...new Set(
-      succeeded
+    ...new Set([
+      ...succeeded
         .filter(({ call }) => readToolNames.has(call.toolName))
-        .map(({ call }) => call.toolName)
-    ),
+        .map(({ call }) => call.toolName),
+      ...succeeded.flatMap(connectionsReadBy),
+    ]),
   ];
   const parts = [
     ...(changes.length === 0
