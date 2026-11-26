@@ -13,6 +13,7 @@ import { judgeExchanges } from "./eval-judge.ts";
 import { evalPersonalAgentFor } from "./eval-personal-agent.ts";
 
 export { EvalPersonalAgent as PersonalAgent } from "./eval-personal-agent.ts";
+export { McpHub } from "../src/mcp/mcp-hub.ts";
 
 const readBody = <Body>(
   request: Request,

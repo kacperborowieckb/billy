@@ -2,6 +2,7 @@ import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
+import { McpConnections } from "../mcp/mcp-connections.ts";
 import { holdsUntrustedContent } from "../notes/note.ts";
 import { Profile } from "../profile/profile.ts";
 import {
@@ -53,7 +54,15 @@ const ownerContextOf = Effect.fnUntraced(function* ownerContextOf(
   behavior: BehaviorConfig
 ) {
   const profile = yield* Profile;
-  return ownerContextBlock(yield* profile.read, yield* ownerTimeZone(behavior));
+  const connections = yield* McpConnections;
+  return ownerContextBlock(
+    yield* profile.read,
+    yield* ownerTimeZone(behavior),
+    {
+      catalog: connections.catalog,
+      states: yield* connections.states,
+    }
+  );
 });
 
 const conversationRequest = Effect.fnUntraced(function* conversationRequest({

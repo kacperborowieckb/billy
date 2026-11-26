@@ -16,6 +16,7 @@ export interface GatedCall {
 export type GateDecision =
   | { readonly _tag: "Run" }
   | { readonly _tag: "RunCodeWrittenInput" }
+  | { readonly _tag: "RunMarkedUntrusted" }
   | { readonly _tag: "AskOwner" }
   | { readonly _tag: "Deny"; readonly reason: string };
 
@@ -28,6 +29,8 @@ export const untrustedChangeWithoutOwnerReason =
 const run: GateDecision = { _tag: "Run" };
 
 const runCodeWrittenInput: GateDecision = { _tag: "RunCodeWrittenInput" };
+
+const runMarkedUntrusted: GateDecision = { _tag: "RunMarkedUntrusted" };
 
 const askOwner: GateDecision = { _tag: "AskOwner" };
 
@@ -48,14 +51,20 @@ const untrustedChangeDecision = ({
     : untrustedChangeWithoutOwner;
 };
 
+const changeDecision = (call: GatedCall): GateDecision => {
+  if (call.trustLevel === "owner") {
+    return run;
+  }
+  return call.tool.marksItsWorkUntrusted(call.input)
+    ? runMarkedUntrusted
+    : untrustedChangeDecision(call);
+};
+
 const decisionOfClass: Readonly<
   Record<RiskClass, (call: GatedCall) => GateDecision>
 > = {
   read: () => run,
-  change: (call) =>
-    call.trustLevel === "owner" || call.tool.marksItsWorkUntrusted(call.input)
-      ? run
-      : untrustedChangeDecision(call),
+  change: changeDecision,
   approve: () => askOwner,
   blocked: () => ({ _tag: "Deny", reason: blockedCallReason }),
 };

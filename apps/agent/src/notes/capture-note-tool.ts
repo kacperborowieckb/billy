@@ -123,7 +123,6 @@ export const captureNoteTool = (
       name: captureNoteToolName,
       riskClass: "change",
       marksItsWorkUntrusted: ({ linkedNoteIds }) =>
-        trustLevelOfBurst(burst) === "untrusted" &&
         (linkedNoteIds ?? []).length === 0,
       resolve: resolveCapture({ notes, ownerTimeZone }, burst),
       approvalSummary: ({ text, url, openLoop, linkedNotes }) =>
@@ -168,13 +167,10 @@ export const captureNoteTool = (
               }),
         };
       },
-      work: Effect.fnUntraced(function* captureNoteEffect({
-        text,
-        url,
-        source,
-        linkedNoteIds,
-        openLoopRequest,
-      }) {
+      work: Effect.fnUntraced(function* captureNoteEffect(
+        { text, url, source, linkedNoteIds, openLoopRequest },
+        { markedUntrusted }
+      ) {
         const {
           note,
           alreadyKept,
@@ -182,7 +178,9 @@ export const captureNoteTool = (
         } = yield* notes.capture({
           text,
           url,
-          source,
+          source: markedUntrusted
+            ? { ...source, trustLevel: "untrusted" }
+            : source,
           linkedNoteIds,
           openLoop: openLoopRequest,
         });

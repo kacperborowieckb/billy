@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import { Directory } from "../directory/directory.ts";
 import { OperatorMetrics } from "../tracing/operator-metrics.ts";
-import { handleAddOwner } from "./operator-routes.ts";
+import { handleAddMcpConnection, handleAddOwner } from "./operator-routes.ts";
 import type { EdgeRouteKey } from "./routes.ts";
 import { handleTelegramUpdate } from "./telegram-webhook.ts";
 
@@ -15,6 +15,7 @@ const handlers: Record<
 > = {
   "POST /telegram/webhook": handleTelegramUpdate,
   "POST /operator/owners": handleAddOwner,
+  "POST /operator/mcp-connections": handleAddMcpConnection,
 };
 
 const isRouteKey = (key: string): key is EdgeRouteKey =>

@@ -5,9 +5,15 @@
   "compatibility_date": "2026-11-13",
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
-    "bindings": [{ "name": "PERSONAL_AGENT", "class_name": "PersonalAgent" }],
+    "bindings": [
+      { "name": "PERSONAL_AGENT", "class_name": "PersonalAgent" },
+      { "name": "MCP_HUB", "class_name": "McpHub" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PersonalAgent"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PersonalAgent"] },
+    { "tag": "v2", "new_sqlite_classes": ["McpHub"] },
+  ],
   "d1_databases": [
     {
       "binding": "DIRECTORY",
@@ -41,6 +47,7 @@
       },
     },
     "MODEL_BILLING": "unified-billing",
+    "MCP_TEST_SERVER_URL": "",
   },
   "secrets": {
     "required": [

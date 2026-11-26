@@ -90,6 +90,12 @@ export type ToolApproval<Input> =
       readonly approvalExpiryMillis?: number;
     };
 
+export interface ToolCall {
+  readonly toolCallId: string;
+  readonly modelStepKey: number;
+  readonly markedUntrusted: boolean;
+}
+
 type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly description: string;
   readonly inputSchema: FlexibleSchema<Input>;
@@ -97,7 +103,7 @@ type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly codeWrittenInput?: (input: Input) => Input;
   readonly execute: (
     input: Input,
-    call: { readonly toolCallId: string; readonly modelStepKey: number }
+    call: ToolCall
   ) => Effect.Effect<Output, ToolFailed>;
 };
 
@@ -145,7 +151,11 @@ const executeApprovedOf =
       ? Effect.fail(new ToolFailed({ message: blockedCallReason }))
       : validatedInput(definition.inputSchema, frozenInput).pipe(
           Effect.flatMap((input) =>
-            definition.execute(input, { toolCallId, modelStepKey: 0 })
+            definition.execute(input, {
+              toolCallId,
+              modelStepKey: 0,
+              markedUntrusted: false,
+            })
           )
         );
 
@@ -189,6 +199,7 @@ export const agentTool = <Input, Output>(
                   {
                     toolCallId,
                     modelStepKey: messages.length,
+                    markedUntrusted: gate(input)._tag === "RunMarkedUntrusted",
                   }
                 )
               ),

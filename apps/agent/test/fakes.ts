@@ -1,5 +1,6 @@
 import { MockLanguageModelV4 } from "ai/test";
 
+import { createFakeMcpServer } from "../control/fake-mcp-server.ts";
 import {
   ownerContextLabel,
   runBlockLabel,
@@ -337,6 +338,9 @@ export const contextBlockOf = (prompt: ModelPrompt, label: string) =>
     prompt.map(userTextOf).findLast((text) => text.startsWith(label)) ?? ""
   );
 
+export const ownerContextBlockOf = (prompt: ModelPrompt) =>
+  contextBlockOf(prompt, ownerContextLabel);
+
 export const ownerTextsOf = (prompt: ModelPrompt) =>
   prompt
     .map(userTextOf)
@@ -548,6 +552,8 @@ export const fakeBurstWait = {
 };
 
 export const resetFakes = () => {
+  fakeMcpServer.reset();
+  Object.assign(fakeMcpLimits, defaultFakeMcpLimits);
   fakeTraceRetention.days = defaultTestTraceRetentionDays;
   fakeBurstWait.quietMillis = 0;
   fakeBurstWait.maxWaitMillis = 0;
@@ -584,3 +590,16 @@ export const burstInputTexts = (...texts: readonly string[]) =>
   texts.map(
     (text, index) => `${burstMessageLabel(index + 1, texts.length)}\n${text}`
   );
+
+export const fakeMcpServerUrl = "https://mcp.test.example/mcp";
+
+export const fakeMcpServer = createFakeMcpServer();
+
+export const mcpHubWakes = { count: 0 };
+
+const defaultFakeMcpLimits = {
+  callTimeoutMillis: 30_000,
+  resultMaxCharacters: 8000,
+};
+
+export const fakeMcpLimits = { ...defaultFakeMcpLimits };

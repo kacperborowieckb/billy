@@ -1,7 +1,9 @@
 import { Schema } from "effect";
 
+import { riskClasses } from "../approval/risk-class.ts";
 import {
   approvalAnswers,
+  mcpCallStatuses,
   approvalRunResults,
   noteChanges,
   openLoopClosedReasons,
@@ -153,6 +155,13 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     pendingApprovalId: Schema.String,
     result: Schema.Literals(approvalRunResults),
     reason: Schema.optionalKey(Schema.String),
+  },
+  McpToolCalled: {
+    eventId: Schema.String,
+    catalogId: Schema.String,
+    tool: Schema.String,
+    riskClass: Schema.Literals(riskClasses),
+    status: Schema.Literals(mcpCallStatuses),
   },
   OwnerPreferenceChanged: {
     eventId: Schema.String,

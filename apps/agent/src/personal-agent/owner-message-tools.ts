@@ -2,6 +2,13 @@ import { Effect } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Journal } from "../journal/journal.ts";
+import { callMcpToolTool } from "../mcp/call-mcp-tool-tool.ts";
+import { findMcpToolsTool } from "../mcp/find-mcp-tools-tool.ts";
+import {
+  callMcpToolToolName,
+  findMcpToolsToolName,
+} from "../mcp/mcp-tool-names.ts";
+import type { McpToolServices } from "../mcp/mcp-tool-services.ts";
 import type { NoteToolServices } from "../notes/note-tool-services.ts";
 import { noteToolsFor } from "../notes/note-tools.ts";
 import { OwnerPreferences } from "../preferences/owner-preferences.ts";
@@ -62,6 +69,10 @@ export interface OwnerMessageToolServices extends Omit<
   readonly proactiveMessages: ProactiveMessages["Service"];
   readonly schedules: Schedules["Service"];
   readonly behavior: BehaviorConfig;
+  readonly mcp: Omit<
+    McpToolServices,
+    "behavior" | "journal" | "progress" | "redactor"
+  >;
 }
 
 export const scheduleToolServicesOf = (
@@ -101,6 +112,7 @@ export const ownerMessageTools = (
     proactiveMessages,
     schedules,
     behavior,
+    mcp,
     ...noteServices
   }: OwnerMessageToolServices
 ) => {
@@ -117,6 +129,13 @@ export const ownerMessageTools = (
     },
     "owner-message"
   );
+  const mcpServices: McpToolServices = {
+    ...mcp,
+    journal,
+    progress,
+    redactor,
+    behavior,
+  };
   return {
     ...noteToolsFor(
       { ...noteServices, ownerTimeZone: scheduleServices.ownerTimeZone },
@@ -177,6 +196,8 @@ export const ownerMessageTools = (
     [listSchedulesToolName]: listSchedulesTool(scheduleServices, eventId),
     [changeScheduleToolName]: changeScheduleTool(scheduleServices, eventId),
     [cancelScheduleToolName]: cancelScheduleTool(scheduleServices, eventId),
+    [findMcpToolsToolName]: findMcpToolsTool(mcpServices, eventId),
+    [callMcpToolToolName]: callMcpToolTool(mcpServices, eventId),
     [staySilentToolName]: staySilentTool,
     [reactToolName]: reactTool,
   };

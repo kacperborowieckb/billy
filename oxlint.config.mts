@@ -35,7 +35,14 @@ export default defineConfig({
               {
                 name: "agents",
                 message:
-                  "Only apps/agent/src/personal-agent imports the Agents SDK. Use its interface (decision 0003).",
+                  "Only apps/agent/src/personal-agent and the MCP Hub import the Agents SDK. Use its interface (decision 0003).",
+              },
+            ],
+            patterns: [
+              {
+                group: ["agents/*"],
+                message:
+                  "Only apps/agent/src/personal-agent and the MCP Hub import the Agents SDK. Use its interface (decision 0003).",
               },
             ],
           },
@@ -43,7 +50,11 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/agent/src/personal-agent/**/*.ts"],
+      files: [
+        "apps/agent/src/personal-agent/**/*.ts",
+        "apps/agent/src/mcp/mcp-hub.ts",
+        "apps/agent/src/mcp/lazy-mcp-client-manager.ts",
+      ],
       rules: { "no-restricted-imports": "off" },
     },
   ],

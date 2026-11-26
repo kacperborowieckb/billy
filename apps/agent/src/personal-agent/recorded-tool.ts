@@ -7,7 +7,11 @@ import {
   effectInputSchema,
   ToolFailed,
 } from "../model-gateway/agent-tool.ts";
-import type { AgentTool, ToolApproval } from "../model-gateway/agent-tool.ts";
+import type {
+  AgentTool,
+  ToolApproval,
+  ToolCall,
+} from "../model-gateway/agent-tool.ts";
 import type { Redactor } from "../tracing/redactor.ts";
 import type { TurnProgress } from "./turn-progress.ts";
 
@@ -23,14 +27,20 @@ export type RecordedToolApproval<Input, Output, Failure, Target> =
       readonly riskClassOfInput?: undefined;
       readonly resolve?: undefined;
       readonly approvalSummary?: undefined;
-      readonly work: (input: Input) => Effect.Effect<Output, Failure>;
+      readonly work: (
+        input: Input,
+        call: Pick<ToolCall, "markedUntrusted">
+      ) => Effect.Effect<Output, Failure>;
     }
   | {
       readonly riskClass: RiskClass;
       readonly riskClassOfInput?: (input: Input) => RiskClass;
       readonly resolve: (input: Input) => Effect.Effect<Target, ToolFailed>;
       readonly approvalSummary: (target: Target) => string;
-      readonly work: (target: Target) => Effect.Effect<Output, Failure>;
+      readonly work: (
+        target: Target,
+        call: Pick<ToolCall, "markedUntrusted">
+      ) => Effect.Effect<Output, Failure>;
     };
 
 export type RecordedToolDefinition<
@@ -100,11 +110,14 @@ const workOf = <
   Target,
 >(
   definition: RecordedToolDefinition<Input, Output, Failure, Target>,
-  input: Input
+  input: Input,
+  call: Pick<ToolCall, "markedUntrusted">
 ) =>
   definition.resolve === undefined
-    ? definition.work(input)
-    : definition.resolve(input).pipe(Effect.flatMap(definition.work));
+    ? definition.work(input, call)
+    : definition
+        .resolve(input)
+        .pipe(Effect.flatMap((target) => definition.work(target, call)));
 
 export const recordedTool = <
   Input extends JSONValue,
@@ -131,7 +144,10 @@ export const recordedTool = <
         }),
     inputSchema: effectInputSchema(definition.inputSchema),
     execute: Effect.fnUntraced(
-      function* recordedToolEffect(input, { toolCallId, modelStepKey }) {
+      function* recordedToolEffect(
+        input,
+        { toolCallId, modelStepKey, markedUntrusted }
+      ) {
         yield* progress.markModelStep(eventId, modelStepKey);
         const call = {
           eventId,
@@ -141,7 +157,10 @@ export const recordedTool = <
           redactor,
         };
         return yield* progress
-          .recordingToolCall(call, workOf(definition, input))
+          .recordingToolCall(
+            call,
+            workOf(definition, input, { markedUntrusted })
+          )
           .pipe(
             Effect.catchCause((cause) => {
               const failure = toolFailedFrom(definition.failureMessage)(cause);
