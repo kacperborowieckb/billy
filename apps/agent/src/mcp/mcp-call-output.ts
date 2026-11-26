@@ -1,9 +1,11 @@
 import { Schema } from "effect";
 
+import { mcpCallStatuses } from "../personal-agent/storage-values.ts";
+
 export const McpCallOutputSchema = Schema.Struct({
   connection: Schema.String,
   tool: Schema.String,
-  status: Schema.Literals(["done", "failed", "timed_out"]),
+  status: Schema.Literals(mcpCallStatuses),
   result: Schema.optionalKey(Schema.String),
   truncated: Schema.optionalKey(Schema.Literal(true)),
   notice: Schema.optionalKey(Schema.String),

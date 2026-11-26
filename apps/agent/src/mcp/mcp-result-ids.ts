@@ -11,23 +11,35 @@ export interface McpResultIds {
   readonly ids: readonly McpResultId[];
 }
 
-const valuesOfField = (value: unknown, field: string, found: unknown[]) => {
+const hasField = (item: unknown, field: string) =>
+  typeof item === "object" && item !== null && Object.hasOwn(item, field);
+
+const resultListOf = (value: unknown, field: string): unknown[] | undefined => {
   if (Array.isArray(value)) {
-    for (const item of value) {
-      valuesOfField(item, field, found);
+    if (value.some((item) => hasField(item, field))) {
+      return value;
     }
-    return;
+    for (const item of value) {
+      const inner = resultListOf(item, field);
+      if (inner !== undefined) {
+        return inner;
+      }
+    }
+    return undefined;
   }
   if (typeof value !== "object" || value === null) {
-    return;
+    return undefined;
   }
-  for (const [key, inner] of Object.entries(value)) {
-    if (key === field) {
-      found.push(inner);
-    } else {
-      valuesOfField(inner, field, found);
+  if (hasField(value, field)) {
+    return [value];
+  }
+  for (const inner of Object.values(value)) {
+    const found = resultListOf(inner, field);
+    if (found !== undefined) {
+      return found;
     }
   }
+  return undefined;
 };
 
 const parsedJson = (text: string): unknown => {
@@ -43,15 +55,17 @@ export const mcpResultIdsOf = (
   text: string,
   structured: unknown
 ): McpResultIds => {
-  const found: unknown[] = [];
-  valuesOfField(structured ?? parsedJson(text), field, found);
+  const results = resultListOf(structured ?? parsedJson(text), field) ?? [];
   return {
-    resultCount: found.length,
-    ids: found.flatMap((value, index) =>
-      matchesMcpIdShape(shape, value) &&
-      (typeof value === "string" || typeof value === "number")
+    resultCount: results.length,
+    ids: results.flatMap((item, index) => {
+      const value = hasField(item, field)
+        ? (item as Record<string, unknown>)[field]
+        : undefined;
+      return matchesMcpIdShape(shape, value) &&
+        (typeof value === "string" || typeof value === "number")
         ? [{ position: index + 1, id: value }]
-        : []
-    ),
+        : [];
+    }),
   };
 };

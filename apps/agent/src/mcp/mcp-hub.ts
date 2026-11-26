@@ -95,23 +95,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     return Option.isSome(connected) ? "connected" : "timed_out";
   }
 
-  private connectionsSql() {
-    const { sql } = this.ctx.storage;
-    sql.exec(
-      "CREATE TABLE IF NOT EXISTS mcp_hub_connections (catalog_id TEXT PRIMARY KEY)"
-    );
-    return sql;
-  }
-
   private isRecorded(catalogId: string) {
-    return (
-      this.connectionsSql()
-        .exec(
-          "SELECT catalog_id FROM mcp_hub_connections WHERE catalog_id = ?",
-          catalogId
-        )
-        .toArray().length > 0
-    );
+    return this.ctx.storage
+      .get<true>(`connection:${catalogId}`)
+      .then((recorded) => recorded === true);
   }
 
   async addConnection(
@@ -133,10 +120,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       ) {
         throw new Error("The MCP server did not connect in time");
       }
-      this.connectionsSql().exec(
-        "INSERT OR IGNORE INTO mcp_hub_connections (catalog_id) VALUES (?)",
-        catalogId
-      );
+      await this.ctx.storage.put(`connection:${catalogId}`, true);
       await agent.receiveMcpToolCatalog(
         catalogId,
         this.manager.listTools({ serverId: catalogId }).map(toolCopyOf)
@@ -151,7 +135,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   async callTool(request: McpCallRequest): Promise<McpCallOutcome> {
     const entry = mcpEntryOf(this.catalog, request.catalogId);
-    if (entry === undefined || !this.isRecorded(request.catalogId)) {
+    if (entry === undefined || !(await this.isRecorded(request.catalogId))) {
       return { _tag: "Failed", reason: "not_connected" };
     }
     try {
@@ -178,7 +162,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       return {
         _tag: "Result",
         isError: result.value.isError === true,
-        text: resultTextOf(result.value.content),
+        text: resultTextOf(
+          result.value.content,
+          result.value.structuredContent
+        ),
         structured: result.value.structuredContent ?? null,
       };
     } catch {

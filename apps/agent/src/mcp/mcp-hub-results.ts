@@ -12,9 +12,11 @@ const isTextPart = (
   "text" in part &&
   typeof part.text === "string";
 
-export const resultTextOf = (content: unknown): string => {
-  if (!Array.isArray(content)) {
-    return "";
+export const resultTextOf = (content: unknown, structured: unknown): string => {
+  if (!Array.isArray(content) || content.length === 0) {
+    return structured === undefined || structured === null
+      ? ""
+      : JSON.stringify(structured).slice(0, maxTransferredResultCharacters);
   }
   return content
     .map((part: unknown) =>

@@ -6,6 +6,7 @@ import {
   mcpCatalogProblems,
   mcpToolRiskClass,
 } from "../src/mcp/mcp-catalog.ts";
+import { mcpResultIdsOf } from "../src/mcp/mcp-result-ids.ts";
 import {
   productionMcpCatalog,
   testMcpCatalogEntry,
@@ -123,5 +124,21 @@ describe("the Risk Class of an MCP tool", () => {
     expect(
       mcpToolRiskClass(entry, "create_page", { readOnlyHint: true } as never)
     ).toBe("approve");
+  });
+});
+
+describe("the ids of an MCP result", () => {
+  const shape = { field: "id", shape: { _tag: "Uuid" } } as const;
+  const uuid = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+
+  it("keeps the position of each result, also when an earlier result has no valid id", () => {
+    const text = JSON.stringify({
+      results: [{ title: "a" }, { id: uuid, meta: { id: "nested" } }],
+    });
+
+    expect(mcpResultIdsOf(shape, text, null)).toEqual({
+      resultCount: 2,
+      ids: [{ position: 2, id: uuid }],
+    });
   });
 });
