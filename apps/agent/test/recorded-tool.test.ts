@@ -298,31 +298,31 @@ const lostRecord = (
     run.pipe(Effect.andThen(Effect.die("the record of the output was lost"))),
 });
 
-describe("a recorded tool with an external effect", () => {
-  const toolOf = (
-    progress: TurnProgress["Service"],
-    redactor: Redactor["Service"]
-  ) =>
-    recordedTool(
-      { eventId, progress: lostRecord(progress), redactor },
-      {
-        name: "write_outside",
-        riskClass: "change",
-        resolve: Effect.succeed,
-        approvalSummary: ({ word }) => `Write "${word}"`,
-        description: "Write outside",
-        inputSchema: WordInput,
-        failureMessage,
-        hasExternalEffect: true,
-        work: ({ word }) => Effect.succeed({ kept: word }),
-      }
-    );
+const lostRecordToolOf = (
+  progress: TurnProgress["Service"],
+  redactor: Redactor["Service"]
+) =>
+  recordedTool(
+    { eventId, progress: lostRecord(progress), redactor },
+    {
+      name: "write_outside",
+      riskClass: "change",
+      resolve: Effect.succeed,
+      approvalSummary: ({ word }) => `Write "${word}"`,
+      description: "Write outside",
+      inputSchema: WordInput,
+      failureMessage,
+      hasExternalEffect: true,
+      work: ({ word }) => Effect.succeed({ kept: word }),
+    }
+  );
 
+describe("a recorded tool with an external effect", () => {
   it("reports a lost record after the call as unconfirmed when it runs after an Approval", async () => {
     const ownerId = await addOwner(9970);
 
     const failure = await inRecordedTool(ownerId, ({ progress, redactor }) =>
-      toolOf(progress, redactor)
+      lostRecordToolOf(progress, redactor)
         .executeApproved({ word: "x" }, "approval-x")
         .pipe(Effect.flip)
     );
@@ -334,7 +334,7 @@ describe("a recorded tool with an external effect", () => {
     const ownerId = await addOwner(9971);
 
     const error = await inRecordedTool(ownerId, ({ progress, redactor }) =>
-      call(toolOf(progress, redactor), {
+      call(lostRecordToolOf(progress, redactor), {
         input: { word: "x" },
         toolCallId: "call-x",
       }).pipe(Effect.flip)
