@@ -41,6 +41,8 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   readonly lifecycle = Lifecycle.install(this).use(this.manager);
 
+  private readonly setups = new Map<string, Promise<McpAddConnectionOutcome>>();
+
   private readonly connecting = new Map<string, Promise<void>>();
 
   private async registerAndConnect({
@@ -101,7 +103,19 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       .then((recorded) => recorded === true);
   }
 
-  async addConnection(
+  addConnection(
+    catalogId: string,
+    connectTimeoutMillis: number
+  ): Promise<McpAddConnectionOutcome> {
+    const previous = this.setups.get(catalogId) ?? Promise.resolve();
+    const setup = previous.then(() =>
+      this.setUpConnection(catalogId, connectTimeoutMillis)
+    );
+    this.setups.set(catalogId, setup);
+    return setup;
+  }
+
+  private async setUpConnection(
     catalogId: string,
     connectTimeoutMillis: number
   ): Promise<McpAddConnectionOutcome> {
@@ -128,6 +142,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       await this.ctx.storage.put(`connection:${catalogId}`, true);
       return { outcome: "added" };
     } catch {
+      await this.ctx.storage.delete(`connection:${catalogId}`);
       await agent.receiveMcpConnectionState(catalogId, "failed");
       return { outcome: "failed" };
     }
