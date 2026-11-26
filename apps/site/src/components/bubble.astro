@@ -59,11 +59,15 @@ const sender = from === "billy" ? "Billy" : "You";
   }
 
   .bubble--floating {
-    box-shadow: var(--shadow-soft);
+    box-shadow: var(--shadow-float);
   }
 
+  /* A hairline edge keeps a white card crisp on a pale sky, in both themes. */
   .bubble--billy.bubble--floating {
     background: var(--color-surface-raised);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      var(--shadow-float);
   }
 
   .bubble--billy.bubble--first {

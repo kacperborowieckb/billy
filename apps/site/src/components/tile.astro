@@ -29,7 +29,9 @@ const { icon, title, detail, class: className } = Astro.props;
     padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
     border-radius: var(--radius-md);
     background: var(--color-surface-raised);
-    box-shadow: var(--shadow-soft);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      var(--shadow-float);
     text-align: start;
   }
 

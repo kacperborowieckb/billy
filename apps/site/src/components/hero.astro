@@ -1,8 +1,8 @@
 ---
-// The hero: the headline in the middle of Billy's sky, small conversations
-// around it in two mirrored pairs, and Billy on his dam below. "Tell Billy."
-// lands, a beat, then "He'll do it all."; each pair then fades in once. The
-// sun (or moon) switches day and night.
+// The hero: the headline in the middle of Billy's sky, one small conversation
+// either side of it, and Billy on his dam below. "Tell Billy." lands, a beat,
+// then "He'll do it all."; the pair then fades in once. The sun (or moon)
+// switches day and night.
 import { buttonVariants } from "@/components/ui/button";
 
 import { world } from "../art";
@@ -75,12 +75,12 @@ const words = [
     <p class="lede rise" style="--d: 1600ms">Notes, Reminders, follow-ups, research, replies, bookings. Whatever you would hand to a great assistant, text it to Billy, and he takes it from there.</p>
     <div class="actions rise" style="--d: 1720ms">
       <a class={buttonVariants({ size: "lg" })} href="#self-host">Get Billy</a>
-      <a class={buttonVariants({ variant: "link", size: "lg", className: "px-3" })} href="#how">See how it works</a>
+      <a class={buttonVariants({ variant: "link", size: "lg", className: "more px-3" })} href="#how">See how it works<span class="arrow" aria-hidden="true">→</span></a>
     </div>
   </section>
 
-  <!-- Four everyday conversations in two mirrored pairs: one pair beside the
-       headline, one beside Billy. Each has something to try. -->
+  <!-- Two everyday conversations, mirrored either side of the headline. Each
+       has something to try. -->
   <div class="vignettes">
     <div class="column column--left">
       <Vignette place="tl" tilt={-1} pair={0} keep label="Example: finding gift ideas in your Notes">
@@ -100,31 +100,10 @@ const words = [
         </template>
       </Vignette>
 
-      <Vignette place="bl" tilt={1} pair={1} label="Example: a follow-up Billy starts">
-        <VignetteAnswer>
-          Tom still hasn't sent the flat contract. Should I nudge him?
-          <span class="chips" data-choices>
-            <button type="button" class="chip" aria-pressed="false" data-say="nudge"><svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"></path></svg>Nudge Tom</button>
-            <button type="button" class="chip" aria-pressed="false" data-say="wait"><svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"></path></svg>Wait a day</button>
-          </span>
-        </VignetteAnswer>
-        <template data-reply="nudge">
-          <VignetteAnswer>
-            Done. I'll message Tom at 9:00 tomorrow.
-            <Confirmation icon="reminder" compact>Nudge Tom · Thu 9:00</Confirmation>
-          </VignetteAnswer>
-        </template>
-        <template data-reply="wait">
-          <VignetteAnswer>
-            Okay. I'll check again on Friday.
-            <Confirmation icon="reminder" compact>Check on Tom · Fri 10:00</Confirmation>
-          </VignetteAnswer>
-        </template>
-      </Vignette>
     </div>
 
     <div class="column column--right">
-      <Vignette place="tr" tilt={1} pair={0} label="Example: your morning Brief">
+      <Vignette place="tr" tilt={1} pair={0} keep label="Example: your morning Brief">
         <VignetteAnswer>
           Good morning. Three things today:
           <span class="tasks">
@@ -144,23 +123,6 @@ const words = [
         </template>
       </Vignette>
 
-      <Vignette place="br" tilt={-1} pair={1} keep label="Example: a Reminder for a trip">
-        <VignetteAsk>Remind me to renew my passport before Lisbon</VignetteAsk>
-        <VignetteAnswer>
-          It runs out five weeks before you fly. I'll remind you Monday at 9:00.
-          <Confirmation icon="reminder" compact><span class="swap" data-swap>Renew passport · Mon 9:00</span></Confirmation>
-          <span class="chips" data-choices>
-            <button type="button" class="chip" aria-pressed="false" data-say="sunday" data-swap-to="Renew passport · Sun 10:00"><svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"></path></svg>Make it Sunday</button>
-            <button type="button" class="chip" aria-pressed="false" data-say="undo"><svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"></path></svg>Undo</button>
-          </span>
-        </VignetteAnswer>
-        <template data-reply="sunday">
-          <VignetteAnswer>Moved to Sunday at 10:00.</VignetteAnswer>
-        </template>
-        <template data-reply="undo">
-          <VignetteAnswer>Removed. I won't remind you about the passport.</VignetteAnswer>
-        </template>
-      </Vignette>
     </div>
   </div>
 
@@ -170,11 +132,13 @@ const words = [
   </template>
 
   <div class="valley">
+    <div class="hills hills-far hills-light" aria-hidden="true"></div>
+    <div class="haze" aria-hidden="true"></div>
     <div class="hills hills-light" aria-hidden="true"></div>
     <div class="water water-flow" aria-hidden="true"></div>
-    <img class="px log log--left" src={world.log} alt="" width="320" height="88" />
-    <img class="px log log--right" src={world.log} alt="" width="320" height="88" />
-    <img class="px log log--top" src={world.log} alt="" width="320" height="88" />
+    <img class="px log log--left" src={world.log} alt="" width="240" height="66" />
+    <img class="px log log--right" src={world.log} alt="" width="240" height="66" />
+    <img class="px log log--top" src={world.log} alt="" width="240" height="66" />
 
     <Billy class="billy" outfit="forest" />
 
@@ -189,7 +153,12 @@ const words = [
     --masthead: 64px;
     position: relative;
     overflow: hidden;
-    background: var(--color-sky);
+    /* Paler at the top, where it meets the header, and fullest at the
+       horizon: the sky has depth instead of one flat band. */
+    background: linear-gradient(
+      color-mix(in srgb, var(--color-sky) 45%, var(--color-surface)),
+      var(--color-sky) 520px
+    );
   }
 
   /* The sun sits between the headline and the right-hand conversations,
@@ -226,15 +195,13 @@ const words = [
     margin-block-start: var(--space-2);
   }
 
-  /* Two mirrored pairs in two columns, the same distance from the center
-     line: the left column hangs by its right edge, the right one by its left
-     edge. The upper chat of each column keeps a fixed slot, so the lower pair
-     stays level and a chat that grows after a tap never runs into the next. */
+  /* One chat either side, the same distance from the center line: the left
+     hangs by its right edge, the right by its left edge. */
   .column {
     --gap-from-center: 380px;
     position: absolute;
     z-index: 1;
-    inset-block-start: 236px;
+    inset-block-start: 268px;
     display: flex;
     flex-direction: column;
     inline-size: 280px;
@@ -246,16 +213,6 @@ const words = [
 
   .column--right {
     inset-inline-start: calc(50% + var(--gap-from-center));
-  }
-
-  .vignettes :global(.vignette--tl),
-  .vignettes :global(.vignette--tr) {
-    min-block-size: var(--upper-slot, 412px);
-  }
-
-  /* The Brief is short, so the passport chat below it sits a little higher. */
-  .vignettes :global(.vignette--tr) {
-    min-block-size: calc(var(--upper-slot, 412px) - 72px);
   }
 
   .chips {
@@ -484,8 +441,8 @@ const words = [
 
   .valley {
     position: relative;
-    block-size: 600px;
-    margin-block-start: calc(-1 * var(--space-5));
+    block-size: 440px;
+    margin-block-start: var(--space-6);
   }
 
   .hills,
@@ -496,9 +453,27 @@ const words = [
 
   .hills {
     inset-block-end: 56px;
-    block-size: 240px;
+    block-size: 200px;
     background: url("@repo/mascot/assets/world/hills.svg") repeat-x center bottom / auto 100%;
     image-rendering: pixelated;
+  }
+
+  /* A farther ridge, smaller and fading into the sky, then a band of haze
+     before the near hills: atmospheric depth from the same artwork. */
+  .hills-far {
+    inset-block-end: 120px;
+    block-size: 150px;
+    background-position: 37% bottom;
+    opacity: 0.4;
+  }
+
+  .haze {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 56px;
+    block-size: 220px;
+    background: linear-gradient(transparent, color-mix(in srgb, var(--color-sky) 70%, transparent) 70%, transparent);
+    pointer-events: none;
   }
 
   .water {
@@ -518,41 +493,56 @@ const words = [
     filter: var(--scenery-light);
   }
 
+  /* The dam: logs at 6px a cell (240px for 40 cells), Billy at his
+     native 256px, so neither is resampled to an uneven size. */
   .log--left {
-    inset-block-end: 24px;
-    inset-inline-start: calc(50% - 300px);
+    inset-block-end: 22px;
+    inset-inline-start: calc(50% - 225px);
   }
 
   .log--right {
-    inset-block-end: 24px;
-    inset-inline-start: calc(50% - 20px);
+    inset-block-end: 22px;
+    inset-inline-start: calc(50% - 15px);
   }
 
   .log--top {
-    inset-block-end: 104px;
-    inset-inline-start: calc(50% - 170px);
+    inset-block-end: 82px;
+    inset-inline-start: calc(50% - 128px);
   }
 
   .valley :global(.billy) {
-    --mascot-size: 384px;
-    inset-block-end: 172px;
+    --mascot-size: 256px;
+    z-index: 1;
+    inset-block-end: 135px;
     /* Shifted so his head, not the whole sprite with its tail, is centered. */
-    inset-inline-start: calc(50% - 230px);
+    inset-inline-start: calc(50% - 147px);
   }
 
   .sparkle--a {
-    inset-block-start: 150px;
-    inset-inline-start: calc(50% - 280px);
+    inset-block-start: 120px;
+    inset-inline-start: calc(50% - 230px);
   }
 
   .sparkle--b {
-    inset-block-start: 90px;
-    inset-inline-start: calc(50% + 200px);
+    inset-block-start: 60px;
+    inset-inline-start: calc(50% + 150px);
   }
 
   .sparkle--c {
-    inset-block-start: 210px;
-    inset-inline-start: calc(50% + 250px);
+    inset-block-start: 160px;
+    inset-inline-start: calc(50% + 200px);
+  }
+
+  /* The secondary link: its arrow steps forward on hover. */
+  .more .arrow {
+    margin-inline-start: var(--space-1);
+    transition: translate var(--duration-quick) var(--easing-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .more:hover .arrow {
+      translate: 3px 0;
+    }
   }
 
   .word {
@@ -650,7 +640,6 @@ const words = [
 
     .column {
       --gap-from-center: 300px;
-      --upper-slot: 452px;
       inline-size: 224px;
     }
   }
@@ -670,14 +659,6 @@ const words = [
       display: contents;
     }
 
-    .vignettes :global(.vignette--tl),
-    .vignettes :global(.vignette--tr) {
-      min-block-size: 0;
-    }
-
-    .vignettes :global(.vignette:not(.vignette--keep)) {
-      display: none;
-    }
   }
 
   @media (max-width: 900px) {
@@ -692,13 +673,7 @@ const words = [
     }
 
     .valley {
-      block-size: 450px;
-    }
-
-    .valley :global(.billy) {
-      --mascot-size: 256px;
-      inset-block-end: 179px;
-      inset-inline-start: calc(50% - 147px);
+      block-size: 380px;
     }
 
     .sparkle {

@@ -52,11 +52,13 @@ const headingId = `${id ?? eyebrow.toLowerCase().replaceAll(" ", "-")}-title`;
     color: var(--color-ink-muted);
   }
 
+  /* Points sit on hairlines, a quiet list instead of stacked blocks. */
   .copy :global(ul) {
     display: grid;
-    gap: var(--space-4);
+    align-self: stretch;
     margin: var(--space-2) 0 0;
     padding: 0;
+    border-block-start: 1px solid var(--color-line);
     list-style: none;
   }
 
@@ -64,7 +66,9 @@ const headingId = `${id ?? eyebrow.toLowerCase().replaceAll(" ", "-")}-title`;
     display: grid;
     grid-template-columns: auto 1fr;
     align-items: start;
-    gap: var(--space-3);
+    gap: var(--space-4);
+    padding-block: var(--space-4);
+    border-block-end: 1px solid var(--color-line);
   }
 
   .copy :global(li strong) {
@@ -82,6 +86,9 @@ const headingId = `${id ?? eyebrow.toLowerCase().replaceAll(" ", "-")}-title`;
     overflow: hidden;
     min-block-size: 520px;
     border-radius: calc(var(--radius-lg) * 2);
+    /* A hairline inside the edge, so the panel reads as a window onto
+       Billy's world rather than a flat block of color. */
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 6%, transparent);
   }
 
   .panel--sky {
