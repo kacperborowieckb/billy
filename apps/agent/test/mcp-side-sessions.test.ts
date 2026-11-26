@@ -325,14 +325,24 @@ describe(
   "the Write-back of a Side Session that read server text",
   multiTurnTimeout,
   () => {
-    it("names the Connection for a call that returned an error text and for a tool search", async () => {
+    it("names the Connection for a call that returned an error text", async () => {
       const ownerId = await ownerWithConnection(9960);
+      scriptModel([callOf("failing_read"), { say: "Nothing to report" }]);
+
+      await runBrief(ownerId);
+
+      const [writeBack] = await writeBacksOf(ownerId);
+      expect(writeBack?.kind).toBe("write_back_stub");
+      expect(writeBack?.message).toContain("(read: Test server)");
+    });
+
+    it("names the Connection for a tool search and not the tool", async () => {
+      const ownerId = await ownerWithConnection(9961);
       scriptModel([
         {
           callTool: findMcpToolsToolName,
           input: { connection: testMcpCatalogId, query: "search" },
         },
-        callOf("failing_read"),
         { say: "Nothing to report" },
       ]);
 
