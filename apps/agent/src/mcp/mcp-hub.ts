@@ -108,8 +108,9 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     connectTimeoutMillis: number
   ): Promise<McpAddConnectionOutcome> {
     const previous = this.setups.get(catalogId) ?? Promise.resolve();
-    const run = () => this.setUpConnection(catalogId, connectTimeoutMillis);
-    const setup = previous.then(run, run);
+    const setup = previous
+      .catch(() => "earlier setup rejected")
+      .then(() => this.setUpConnection(catalogId, connectTimeoutMillis));
     this.setups.set(catalogId, setup);
     return setup;
   }
