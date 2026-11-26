@@ -16,3 +16,8 @@ export interface ApprovalRunRecord {
   readonly pendingApprovalId: string;
   readonly outcome: ApprovalRunOutcome;
 }
+
+export const asUnknownOutcome =
+  <Output>(outcomeOf: (output: Output) => ApprovalRunOutcome) =>
+  (output: unknown) =>
+    outcomeOf(output as Output);

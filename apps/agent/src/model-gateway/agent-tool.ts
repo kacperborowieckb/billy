@@ -2,6 +2,7 @@ import { asSchema, jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
 import { Data, Effect, Option, Result, Schema } from "effect";
 
+import { asUnknownOutcome } from "../approval/approval-answering.ts";
 import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import { approvalSummaryOf } from "../approval/approval-summary.ts";
 import type {
@@ -193,11 +194,9 @@ export const agentTool = <Input, Output>(
     ...(definition.approvedRunOutcomeOf === undefined
       ? {}
       : {
-          approvedRunOutcomeOf: (output: unknown) =>
-            definition.approvedRunOutcomeOf?.(output as Output) ?? {
-              result: "executed" as const,
-              output,
-            },
+          approvedRunOutcomeOf: asUnknownOutcome(
+            definition.approvedRunOutcomeOf
+          ),
         }),
     approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
     ...(definition.approvalExpiryMillis === undefined

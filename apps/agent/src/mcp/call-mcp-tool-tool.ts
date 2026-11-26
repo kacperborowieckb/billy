@@ -124,17 +124,19 @@ const approvedRunOutcomeOf = (output: McpCallOutput): ApprovalRunOutcome => {
     : { result: "unconfirmed" };
 };
 
-const checkCallable = (services: McpToolServices, input: CallInput) =>
-  Effect.gen(function* checkCallableEffect() {
-    const refusalMessage = callRefusalOf(services, input);
-    if (refusalMessage !== undefined) {
-      return yield* refusal(refusalMessage);
-    }
-    if (mcpCallRiskClass(services, input) === "blocked") {
-      return yield* refusal(blockedCallReason);
-    }
-    return yield* entryOrFail(services.catalog, input.connection);
-  });
+const checkCallable = Effect.fnUntraced(function* checkCallable(
+  services: McpToolServices,
+  input: CallInput
+) {
+  const refusalMessage = callRefusalOf(services, input);
+  if (refusalMessage !== undefined) {
+    return yield* refusal(refusalMessage);
+  }
+  if (mcpCallRiskClass(services, input) === "blocked") {
+    return yield* refusal(blockedCallReason);
+  }
+  return yield* entryOrFail(services.catalog, input.connection);
+});
 
 const approvalSummaryOf = (services: McpToolServices, input: CallInput) => {
   const entry = mcpEntryOf(services.catalog, input.connection);
