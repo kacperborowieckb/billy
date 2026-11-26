@@ -174,6 +174,7 @@ const call = (index: number): ModelCall => {
 const decodeCompactionData = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
+      summaryTarget: Schema.Number,
       earlierSummary: Schema.NullOr(Schema.String),
       chat: Schema.Array(ModelMessageSchema),
     })
@@ -215,6 +216,18 @@ const waitForCurrentSummary = (ownerId: string, text: string) =>
     { timeout: 10_000 }
   );
 
+const modelStepBlobIndex = { plannedMiss: 1, task: 5 } as const;
+
+const compactionStepPoints = () =>
+  fakeMetrics.modelStepDataPoints.filter(
+    (point) => point.blobs?.[modelStepBlobIndex.task] === "compaction"
+  );
+
+const compactionPlannedMisses = () =>
+  compactionStepPoints().map(
+    (point) => point.blobs?.[modelStepBlobIndex.plannedMiss]
+  );
+
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
     timeout: 10_000,
@@ -240,14 +253,13 @@ describe("Compaction", () => {
     const rows = await waitForSummaries(ownerId, 1);
 
     const compactionCall = call(4);
-    expect(systemTextOf(compactionCall.prompt)).toBe(
-      compactionInstructions(firstSummaryTarget)
-    );
+    expect(systemTextOf(compactionCall.prompt)).toBe(compactionInstructions);
     expect(compactionCall.tools ?? []).toEqual([]);
     expect(compactionCall.maxOutputTokens).toBe(
       defaultBehaviorConfig.maxSummaryTokens
     );
     const data = compactionDataOf(compactionCall);
+    expect(data.summaryTarget).toBe(firstSummaryTarget);
     expect(data.earlierSummary).toBeNull();
     expect(JSON.stringify(data.chat)).toContain("first message");
     expect(JSON.stringify(data.chat)).toContain("Third answer");
@@ -359,9 +371,8 @@ describe("Compaction", () => {
     await ownerSays(8816, "fifth message", 5);
     await waitForCurrentSummary(ownerId, "A and B.");
 
-    expect(systemTextOf(call(6).prompt)).toBe(
-      compactionInstructions(firstSummaryTarget)
-    );
+    expect(systemTextOf(call(6).prompt)).toBe(compactionInstructions);
+    expect(compactionDataOf(call(6)).summaryTarget).toBe(firstSummaryTarget);
     expect(compactionDataOf(call(6)).earlierSummary).toBe(
       `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
     );
@@ -390,9 +401,26 @@ describe("Compaction", () => {
     await ownerSays(8817, "sixth message", 6);
     await waitForCurrentSummary(ownerId, "A, B, and C.");
 
-    expect(systemTextOf(call(7).prompt)).toBe(
-      compactionInstructions(retrySummaryTarget)
-    );
+    expect(
+      [call(6), call(7), call(9)].map((compactionCall) =>
+        systemTextOf(compactionCall.prompt)
+      )
+    ).toEqual([
+      compactionInstructions,
+      compactionInstructions,
+      compactionInstructions,
+    ]);
+    expect(
+      [call(6), call(7), call(9)].map(
+        (compactionCall) => compactionDataOf(compactionCall).summaryTarget
+      )
+    ).toEqual([firstSummaryTarget, retrySummaryTarget, firstSummaryTarget]);
+    expect(compactionPlannedMisses()).toEqual([
+      "no_earlier_call",
+      "none",
+      "none",
+      "none",
+    ]);
     expect(compactionDataOf(call(9)).earlierSummary).toBe(
       `${summaryLabel}\nA and B.\n${summaryEndLabel}`
     );
@@ -445,11 +473,7 @@ describe("Compaction", () => {
     expect(call(4).abortSignal?.aborted).not.toBe(true);
     expect(await compactionOutputTokens(ownerId)).toEqual([555, 300]);
     expect(new Set(usage.map((row) => row.event_id)).size).toBe(2);
-    expect(
-      fakeMetrics.modelStepDataPoints.filter(
-        (point) => point.blobs?.[5] === "compaction"
-      )
-    ).toHaveLength(2);
+    expect(compactionStepPoints()).toHaveLength(2);
     expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
       `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
     ]);
@@ -490,16 +514,16 @@ describe("Compaction", () => {
     await chatFourTurns(8806);
     const rows = await waitForSummaries(ownerId, 1);
 
-    expect(systemTextOf(call(4).prompt)).toBe(
-      compactionInstructions(firstSummaryTarget)
-    );
-    expect(systemTextOf(call(5).prompt)).toBe(
-      compactionInstructions(retrySummaryTarget)
-    );
+    expect(systemTextOf(call(4).prompt)).toBe(compactionInstructions);
+    expect(systemTextOf(call(5).prompt)).toBe(compactionInstructions);
     expect(call(5).maxOutputTokens).toBe(
       defaultBehaviorConfig.maxSummaryTokens
     );
-    expect(compactionDataOf(call(5))).toEqual(compactionDataOf(call(4)));
+    expect(compactionDataOf(call(4)).summaryTarget).toBe(firstSummaryTarget);
+    expect(compactionDataOf(call(5))).toEqual({
+      ...compactionDataOf(call(4)),
+      summaryTarget: retrySummaryTarget,
+    });
     const summaryRow = rows.find((row) => row.kind === "summary");
     expect(summaryRow === undefined ? "" : textOf(summaryRow)).toBe(
       `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`
@@ -607,9 +631,8 @@ describe("Compaction", () => {
 
     expect(refusedAfterStop).toEqual([]);
     expect(await refusedBlockRows(ownerId)).toEqual([]);
-    expect(systemTextOf(call(5).prompt)).toBe(
-      compactionInstructions(retrySummaryTarget)
-    );
+    expect(systemTextOf(call(5).prompt)).toBe(compactionInstructions);
+    expect(compactionDataOf(call(5)).summaryTarget).toBe(retrySummaryTarget);
     expect(ownerTextsOf(call(6).prompt).at(-1)).toBe("fifth message");
   });
 

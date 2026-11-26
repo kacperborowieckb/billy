@@ -90,16 +90,21 @@ const compactionCall = Effect.fnUntraced(function* compactionCall({
 }: SummaryRequest) {
   const gateway = yield* ModelGateway;
   const inbox = yield* Inbox;
-  const system = compactionInstructions(summaryTarget);
   const recordSteps = (
     reply: Parameters<typeof recordCompactionSteps>[0]["reply"]
-  ) => recordCompactionSteps({ ownerId, compactionId, system, reply });
+  ) =>
+    recordCompactionSteps({
+      ownerId,
+      compactionId,
+      system: compactionInstructions,
+      reply,
+    });
   const generated = gateway
     .generate({
       task: "compaction",
       eventId: compactionId,
-      system,
-      messages: [compactionInput(block)],
+      system: compactionInstructions,
+      messages: [compactionInput(block, summaryTarget)],
       trust: fixedTurnTrust("owner"),
       asksOwnerForApproval: false,
       stepLimit: 1,
