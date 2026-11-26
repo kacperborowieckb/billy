@@ -332,9 +332,9 @@ Method: the same as the earlier retests, with the same driver, the same 21 Owner
 
 - No block was refused. No attempt reached the output limit of 500 tokens. Each finish reason was `stop`, so no check made a retry.
 - The prose went over the target of 300 tokens on 5 of 20 calls (310 to 372 tokens). From Turn 13 on, the model condensed the earlier Summary. The prose stayed between 273 and 364 tokens. In the retest after #222 and #223, the Summary grew to 500 tokens after Turn 11.
-- No prose had an id. The longest prose had 259 words (1,432 characters).
+- No prose had an id. The longest prose had 255 words (1,406 characters).
 - Code wrote at least 17 Compactions. Each one left exactly one Summary in the next request. No later request had the Owner messages of its block. No block had a running Turn.
-- Owner messages 19 and 21 stopped the calls after Turns 18 and 20. Code wrote nothing for them. The next check sent the same block again. So the paid run also tests the Usage row of a stopped call: 20 `compaction` calls have 20 Usage rows.
+- Owner messages 19 and 21 stopped the calls after Turns 18 and 20. Code wrote nothing for them. The next check sent the same block again. The paid run also tests the Usage row of a stopped call. All 20 `compaction` calls have a Usage row.
 - The request had at most 16 messages (9,733 to 11,236 input tokens). In the retest after #222 and #223 it grew to 31 messages.
 
 The open-items list of each of the 17 written Summaries had the right ids. A script compared the ids with the tool results before each `compaction` call:
@@ -373,7 +373,7 @@ As in the earlier runs, the doctor result was "problems found" only because the 
 
 The four runs of Part E:
 
-| Run | Code | Compaction calls | Refused blocks | Largest Summary (tokens) | Calls with the planned miss `deploy` | Step 2 and later Hit Rate |
+| Run | Code | Compaction calls | Refused blocks | Largest model output (tokens) | Calls with the planned miss `deploy` | Step 2 and later Hit Rate |
 | --- | --- | --- | --- | --- | --- | --- |
 | First run (#215) | `620bbfc` | 20 | 9 refused calls | 569 | not reported | 97.8% |
 | Retest after #216 and #217 (#221) | `1de3c21` | 19 | 1, after Turn 16 | 500 | 7 | 97.8% |
