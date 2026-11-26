@@ -312,6 +312,74 @@ Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned mis
 
 As in the earlier runs, the doctor result was "problems found" only because the local secrets were missing.
 
+### Retest after #228
+
+Date: 2026-11-26, about 12:21 to 12:26 UTC. Issue: [#231](https://github.com/kacperborowieckb/billy/issues/231). Code on `main` at `bc71780`. This code has the fix of [#228](https://github.com/kacperborowieckb/billy/issues/228) (decision [0035](../decisions/0035-summary-open-items.md)). The model writes only prose with no ids. Code adds a list of the open items with their ids after the prose. The Summary limit applies only to the model output. The repository owner approved this run on 2026-11-26 (decision 0002).
+
+Method: the same as the earlier retests, with the same driver, the same 21 Owner messages, and the same lowered values. So the first attempt asked for at most 300 tokens of prose, and the retry for at most 150. The free run before the paid run had 41 calls. All of them went through the proxy. The fake model got the same 41 calls. Each of the 41 calls has a Usage row.
+
+55 model calls: 35 calls of the main Conversation in 21 Turns, and 20 `compaction` calls. All were HTTP 200. All sent `x-session-affinity` and `cf-aig-skip-cache: true`. Each call has a Usage row: 55 rows, 20 of them `compaction`.
+
+| After Turn | Target | Prose tokens | Result |
+| --- | --- | --- | --- |
+| 2 to 10 | 300 | 28, 50, 65, 112, 144, 170, 201, 244, 298 | Written |
+| 11 to 13 | 300 | 349, 372, 310 | Written, over the target |
+| 14 to 17 | 300 | 276, 289, 277, 273 | Written |
+| 18 | 300 | 278 | Stopped by an Owner message |
+| 19 | 300 | 299 | Written |
+| 20 | 300 | 364 | Stopped by an Owner message |
+| 21 | 300 | 334 | Last call of the run, no later request |
+
+- No block was refused. No attempt reached the output limit of 500 tokens. Each finish reason was `stop`, so no check made a retry.
+- The prose went over the target of 300 tokens on 5 of 20 calls (310 to 372 tokens). From Turn 13 on, the model condensed the earlier Summary. The prose stayed between 273 and 364 tokens. In the retest after #222 and #223, the Summary grew to 500 tokens after Turn 11.
+- No prose had an id. The longest prose had 259 words (1,432 characters).
+- Code wrote at least 17 Compactions. Each one left exactly one Summary in the next request. No later request had the Owner messages of its block. No block had a running Turn.
+- Owner messages 19 and 21 stopped the calls after Turns 18 and 20. Code wrote nothing for them. The next check sent the same block again. So the paid run also tests the Usage row of a stopped call: 20 `compaction` calls have 20 Usage rows.
+- The request had at most 16 messages (9,733 to 11,236 input tokens). In the retest after #222 and #223 it grew to 31 messages.
+
+The open-items list of each of the 17 written Summaries had the right ids. A script compared the ids with the tool results before each `compaction` call:
+
+| From the Summary after Turn | Open items in the list |
+| --- | --- |
+| 2 | The Brief Schedule, which `set_time_zone` made in Turn 1 |
+| 4 | Also the plumber Note, with an Open Loop due Sunday 18:00 |
+| 7 | Also the paint Note, with an Open Loop due Saturday 12:00, and its check-in Schedule for Saturday 10:30 |
+
+- Turn 21 closed the plumber Open Loop. No request came after the last `compaction` call, so the run does not show the list after the close.
+
+All 20 `compaction` calls had the same system text. The Operator metric named the planned miss of the first `compaction` call `no_earlier_call`, and of the 19 other calls `none`. No point of the run had the planned miss `deploy`.
+
+The replies kept all tested facts. The tested facts were the name, bike lock code, sister's arrival, paint, plumber, Wi-Fi password, and time zone. Turns 11 and 21 sent a reaction and no text, after `capture_note` or `close_open_loop`.
+
+| Call group | Count | Input | Cached | Hit Rate | Hit Rate, retest after #222 and #223 |
+| --- | --- | --- | --- | --- | --- |
+| Step 1, the first call after a written Compaction (a planned miss) | 17 | 178,356 | 166,784 | 93.5% | 93.7% |
+| Step 1, no Compaction written before it (Turns 2, 19, and 21) | 3 | 31,945 | 31,424 | 98.4% | 98.8% |
+| Step 2 and later | 14 | 148,429 | 145,408 | 98.0% | 97.6% |
+| `compaction` calls | 20 | 16,975 | 9,088 | 53.5% | 30.8% |
+
+- Each first call after a Compaction had a Hit Rate of 89.2% to 95.9%. The Operator metric named `compaction` for 16 of these 17 calls. It named `owner_context_changed` for Turn 2 (the time zone) and for Turn 3 (the name).
+- Turn 1 was cold (24.3%). In the earlier runs, Turn 1 was warm (98.8%). A probable cause: the fix of #228 changed the system text, and no earlier call had sent the new prefix.
+
+`pnpm control doctor` on the recorded metric, through the same local fake of the Analytics Engine SQL API:
+
+```text
+Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned miss)
+  ok       Step 2 and later: 98.0% of 148429 input tokens (limit 90.0%)
+  ok       Step 1 inside 60 minutes: 98.8% of 22078 input tokens (limit 80.0%)
+```
+
+As in the earlier runs, the doctor result was "problems found" only because the local secrets were missing.
+
+The four runs of Part E:
+
+| Run | Code | Compaction calls | Refused blocks | Largest Summary (tokens) | Calls with the planned miss `deploy` | Step 2 and later Hit Rate |
+| --- | --- | --- | --- | --- | --- | --- |
+| First run (#215) | `620bbfc` | 20 | 9 refused calls | 569 | not reported | 97.8% |
+| Retest after #216 and #217 (#221) | `1de3c21` | 19 | 1, after Turn 16 | 500 | 7 | 97.8% |
+| Retest after #222 and #223 (#227) | `46d1e8a` | 11 | 1, after Turn 11 | 500 | 0 | 97.6% |
+| Retest after #228 (#231) | `bc71780` | 20 | 0 | 372 | 0 | 98.0% |
+
 ## Cost of the measurement
 
 805,891 input tokens (572,288 cached) and 1,974 output tokens through the proxy: about $0.08 with the 5% fee of Unified Billing. A few diagnostic calls of some tokens each ran outside the proxy.
@@ -323,6 +391,8 @@ Part E: 440,178 input tokens (419,328 cached) and 10,894 output tokens through t
 Retest of Part E: 387,383 input tokens (360,960 cached) and 9,518 output tokens through the proxy, about $0.02 with the 5% fee. No call ran outside the proxy. The free run with the fake model cost nothing.
 
 Second retest of Part E: 360,208 input tokens (342,656 cached) and 5,772 output tokens through the proxy, about $0.015 with the 5% fee. No call ran outside the proxy. The free run with the fake model cost nothing.
+
+Third retest of Part E: 385,438 input tokens (355,072 cached) and 6,374 output tokens through the proxy, about $0.02 with the 5% fee. No call ran outside the proxy. The free run with the fake model cost nothing.
 
 ## Notes for later work
 
