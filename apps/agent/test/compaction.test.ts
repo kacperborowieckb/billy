@@ -216,6 +216,18 @@ const waitForCurrentSummary = (ownerId: string, text: string) =>
     { timeout: 10_000 }
   );
 
+const modelStepBlobIndex = { plannedMiss: 1, task: 5 } as const;
+
+const compactionStepPoints = () =>
+  fakeMetrics.modelStepDataPoints.filter(
+    (point) => point.blobs?.[modelStepBlobIndex.task] === "compaction"
+  );
+
+const compactionPlannedMisses = () =>
+  compactionStepPoints().map(
+    (point) => point.blobs?.[modelStepBlobIndex.plannedMiss]
+  );
+
 const waitForModelCalls = (count: number) =>
   vi.waitFor(() => expect(fakeModel.doGenerateCalls).toHaveLength(count), {
     timeout: 10_000,
@@ -403,11 +415,12 @@ describe("Compaction", () => {
         (compactionCall) => compactionDataOf(compactionCall).summaryTarget
       )
     ).toEqual([firstSummaryTarget, retrySummaryTarget, firstSummaryTarget]);
-    expect(
-      fakeMetrics.modelStepDataPoints
-        .filter((point) => point.blobs?.[5] === "compaction")
-        .map((point) => point.blobs?.[1])
-    ).toEqual(["no_earlier_call", "none", "none", "none"]);
+    expect(compactionPlannedMisses()).toEqual([
+      "no_earlier_call",
+      "none",
+      "none",
+      "none",
+    ]);
     expect(compactionDataOf(call(9)).earlierSummary).toBe(
       `${summaryLabel}\nA and B.\n${summaryEndLabel}`
     );
@@ -460,11 +473,7 @@ describe("Compaction", () => {
     expect(call(4).abortSignal?.aborted).not.toBe(true);
     expect(await compactionOutputTokens(ownerId)).toEqual([555, 300]);
     expect(new Set(usage.map((row) => row.event_id)).size).toBe(2);
-    expect(
-      fakeMetrics.modelStepDataPoints.filter(
-        (point) => point.blobs?.[5] === "compaction"
-      )
-    ).toHaveLength(2);
+    expect(compactionStepPoints()).toHaveLength(2);
     expect(rows.filter((row) => row.kind === "summary").map(textOf)).toEqual([
       `${summaryLabel}\nThey talked about A.\n${summaryEndLabel}`,
     ]);
