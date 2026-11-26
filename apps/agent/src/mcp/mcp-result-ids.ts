@@ -11,6 +11,7 @@ export interface McpResultId {
 export interface McpResultIds {
   readonly resultCount: number;
   readonly ids: readonly McpResultId[];
+  readonly omittedIds: number;
 }
 
 const hasField = (item: unknown, field: string) =>
@@ -59,6 +60,7 @@ export const mcpResultIdsOf = (
   const results = resultListOf(parsedJson(text), field) ?? [];
   return {
     resultCount: results.length,
+    omittedIds: Math.max(0, results.length - maxStubIds),
     ids: results.slice(0, maxStubIds).flatMap((item, index) => {
       const value = hasField(item, field)
         ? (item as Record<string, unknown>)[field]

@@ -10,6 +10,7 @@ export const McpCallOutputSchema = Schema.Struct({
   truncated: Schema.optionalKey(Schema.Literal(true)),
   notice: Schema.optionalKey(Schema.String),
   resultCount: Schema.optionalKey(Schema.Int),
+  omittedIds: Schema.optionalKey(Schema.Int),
   resultIds: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
@@ -40,5 +41,9 @@ export const mcpCallStubOf = (output: McpCallOutput) => {
     ids.length === 0
       ? ""
       : ` Ids: ${ids.map(({ position, id }) => `${position}: ${id}`).join(", ")}.`;
-  return `[${name}: ${output.resultCount} ${plural(output.resultCount)}, removed from the history.${idsText} Call the tool again to read one]`;
+  const omittedText =
+    output.omittedIds === undefined
+      ? ""
+      : ` ${output.omittedIds} more ids not kept.`;
+  return `[${name}: ${output.resultCount} ${plural(output.resultCount)}, removed from the history.${idsText}${omittedText} Call the tool again to read one]`;
 };

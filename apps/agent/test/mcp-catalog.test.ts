@@ -138,6 +138,7 @@ describe("the ids of an MCP result", () => {
 
     expect(mcpResultIdsOf(shape, text)).toEqual({
       resultCount: 2,
+      omittedIds: 0,
       ids: [{ position: 2, id: uuid }],
     });
   });
@@ -147,11 +148,12 @@ describe("the ids of an MCP result", () => {
       results: Array.from({ length: 80 }, () => ({ id: uuid })),
     });
 
-    const { resultCount, ids } = mcpResultIdsOf(shape, text);
+    const { resultCount, ids, omittedIds } = mcpResultIdsOf(shape, text);
 
     expect(resultCount).toBe(80);
     expect(ids).toHaveLength(50);
     expect(ids.at(-1)?.position).toBe(50);
+    expect(omittedIds).toBe(30);
   });
 
   it("takes the order of the text that the model reads", () => {
@@ -159,5 +161,9 @@ describe("the ids of an MCP result", () => {
     const text = JSON.stringify({ results: [{ id: uuid }, { id: other }] });
 
     expect(mcpResultIdsOf(shape, text).ids[0]?.id).toBe(uuid);
+  });
+
+  it("keeps no positional id when the text is not JSON", () => {
+    expect(mcpResultIdsOf(shape, `Page ${uuid}`).ids).toEqual([]);
   });
 });

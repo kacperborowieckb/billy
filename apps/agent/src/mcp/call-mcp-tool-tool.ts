@@ -62,8 +62,12 @@ const resultIdsOutput = (
   if (idShape === undefined) {
     return {};
   }
-  const { resultCount, ids } = mcpResultIdsOf(idShape, text);
-  return { resultCount, resultIds: ids };
+  const { resultCount, ids, omittedIds } = mcpResultIdsOf(idShape, text);
+  return {
+    resultCount,
+    resultIds: ids,
+    ...(omittedIds === 0 ? {} : { omittedIds }),
+  };
 };
 
 const statusOf = (outcome: McpCallOutcome): McpCallStatus => {
