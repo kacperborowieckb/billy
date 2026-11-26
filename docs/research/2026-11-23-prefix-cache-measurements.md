@@ -219,6 +219,55 @@ Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned mis
 
 The doctor result was "problems found" only because the local secrets were missing. The run had no local values file, which is what the method requires.
 
+### Retest after #216 and #217
+
+Date: 2026-11-25, about 21:53 to 21:59 UTC. Issue: [#221](https://github.com/kacperborowieckb/billy/issues/221). Code on `main` at `1de3c21`. This code has the fix of [#216](https://github.com/kacperborowieckb/billy/issues/216): an output limit, one retry with a half target, and a skip of a refused block. It also has the fix of [#217](https://github.com/kacperborowieckb/billy/issues/217): a Usage row for a stopped call. The repository owner approved this run on 2026-11-25 (decision 0002).
+
+Method: the same as the first run of Part E, with the same driver, the same 21 Owner messages, and the same lowered values. The proxy also recorded the finish reason of each call. The free run before the paid run had 41 calls. All of them went through the proxy.
+
+54 model calls: 35 calls of the main Conversation in 21 Turns, and 19 `compaction` calls. All were HTTP 200. All sent `x-session-affinity` and `cf-aig-skip-cache: true`. Each call has a Usage row: 54 rows, 19 of them `compaction`.
+
+| After Turn | Summary tokens, first attempt | Summary tokens, retry (target 250) | Result |
+| --- | --- | --- | --- |
+| 2 to 7 | 72, 129, 173, 346, 411, 496 | none | Written |
+| 8 | 500, at the output limit | 433 | Written |
+| 9, 10 | 488, 459 | none | Written |
+| 11 | 500, at the output limit | 437 | Written |
+| 12 to 14 | 427, 461, 478 | none | Written |
+| 15 | 500, at the output limit | 487 | Written |
+| 16 | 500, at the output limit | 500, at the output limit | Refused: both attempts |
+| 17 to 21 | none | none | No call: the block ends at the refused block |
+
+- Each `compaction` request sent an output limit of 500 tokens. No Summary was over 500 tokens. In the first run, 11 Summaries were 536 to 569 tokens.
+- Code wrote 14 Compactions. The first run wrote 9. Each check made at most two calls. Each written Compaction left exactly one Summary in the next request. No later request had the Owner messages of its block. No block had a running Turn.
+- From Turn 7 on, each Summary was 427 to 500 tokens. The retry with a target of 250 tokens wrote 433 to 500 tokens, so the half target did not make the Summary much shorter. Issue [#223](https://github.com/kacperborowieckb/billy/issues/223).
+- After Turn 16 code refused both attempts. Code recorded the refused block. The next blocks ended at the same Turn, so Turns 17 to 21 made no `compaction` call. The request grew from 8 to 28 messages (10,496 to 12,029 input tokens). The history after the refused block was about 1,500 tokens at the end of the run, less than the kept 2,000 tokens. So the run does not show the next attempt. In the first run, each Turn from Turn 14 on made one refused call. There, the request grew from 15 to 45 messages.
+- No Owner message stopped a `compaction` call in the paid run. The driver sent messages 19 and 21 to stop a running call, but no call ran after Turn 16. So the paid run does not test the Usage row of a stopped call. The free run tests it. There, Owner messages stopped the calls after Turns 18 and 20. Each of its 41 calls has a Usage row. The free run of the first Part E run had 39 rows for 41 calls.
+- The Operator metric named 7 of the 19 `compaction` calls `deploy`: each retry, and each first attempt after a retry. The system text contains the Summary target, so it changes between these calls. No deploy occurred. Issue [#222](https://github.com/kacperborowieckb/billy/issues/222).
+
+All replies used the early facts. The replies kept all tested facts. As in the first run, the agent got the facts from Notes (`search_notes`), the Profile, and the time zone setting. The last written Summary (after Turn 15) named all the early facts, also the Wi-Fi password.
+
+| Call group | Count | Input | Cached | Hit Rate | Hit Rate, first run |
+| --- | --- | --- | --- | --- | --- |
+| Step 1, the first call after a written Compaction (a planned miss) | 14 | 144,789 | 135,232 | 93.4% | 92.8% |
+| Step 1, no Compaction written before it (Turns 2 and 17 to 21) | 6 | 66,887 | 66,112 | 98.8% | 98.9% |
+| Step 2 and later | 14 | 149,997 | 146,752 | 97.8% | 97.8% |
+| `compaction` calls | 19 | 15,995 | 3,264 | 20.4% | 61.9% |
+
+- Each first call after a Compaction had a Hit Rate of 90.8% to 95.9%. The Operator metric named `compaction` for 13 of these 14 calls. It named `owner_context_changed` for Turn 3 (the Profile fact).
+- Turn 1 was warm again (98.8%).
+- The `compaction` calls hit less than in the first run. In the first run, code sent the same refused block again in each Turn. The provider read these repeated requests from the cache. In this run each request has a new Summary and a new block, so most calls read only 192 tokens from the cache. Each `compaction` call has fewer than 1,200 input tokens, so the cost is small.
+
+`pnpm control doctor` on the recorded metric, through the same local fake of the Analytics Engine SQL API:
+
+```text
+Prefix cache Hit Rate (Operator metric, last 24 hours, calls with no planned miss)
+  ok       Step 2 and later: 97.8% of 149997 input tokens (limit 90.0%)
+  ok       Step 1 inside 60 minutes: 98.9% of 57029 input tokens (limit 80.0%)
+```
+
+As in the first run, the doctor result was "problems found" only because the local secrets were missing.
+
 ## Cost of the measurement
 
 805,891 input tokens (572,288 cached) and 1,974 output tokens through the proxy: about $0.08 with the 5% fee of Unified Billing. A few diagnostic calls of some tokens each ran outside the proxy.
@@ -226,6 +275,8 @@ The doctor result was "problems found" only because the local secrets were missi
 Part D: 317,122 input tokens (304,960 cached) and 1,693 output tokens through the proxy: about $0.01 with the 5% fee. Outside the proxy, one check of the token used 7 input tokens. A test of the driver at about 08:20 to 08:21 UTC was meant to use a fake model. But a local values file was present and set the real gateway URL and token. So the Worker called the real gateway for 6 Owner messages, with no record and no stop. Estimated cost: less than $0.05. The run of Part D had no local values file.
 
 Part E: 440,178 input tokens (419,328 cached) and 10,894 output tokens through the proxy, about $0.02 with the 5% fee. This includes the two stopped `compaction` calls. No call ran outside the proxy. The free run with the fake model cost nothing.
+
+Retest of Part E: 387,383 input tokens (360,960 cached) and 9,518 output tokens through the proxy, about $0.02 with the 5% fee. No call ran outside the proxy. The free run with the fake model cost nothing.
 
 ## Notes for later work
 
