@@ -222,10 +222,10 @@ export const compactWhenOverLimit = Effect.fnUntraced(
       yield* conversation.recordRefusedBlock(block.value.lastCompactedSequence);
       return "SummaryRefused" satisfies CompactionResult;
     }
+    const openItems = openItemsText(yield* openItemsOf(behavior));
     if (yield* inbox.burstIsDue(burstWaitOf(behavior))) {
       return "StoppedByBurst" satisfies CompactionResult;
     }
-    const openItems = openItemsText(yield* openItemsOf(behavior));
     yield* conversation.replaceWithSummary({
       compactionId,
       lastCompactedSequence: block.value.lastCompactedSequence,

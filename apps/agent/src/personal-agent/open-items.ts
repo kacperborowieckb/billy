@@ -17,6 +17,8 @@ import { ownerTimeZone } from "../time/owner-current-time.ts";
 
 export const openItemsPerKind = 10;
 
+export const openLoopIdsPerSchedule = 3;
+
 export interface OpenItems {
   readonly listedAt: DateTime.Utc;
   readonly timeZone: OwnerTimeZone;
@@ -44,6 +46,14 @@ const openLoopLine = (note: Note, timeZone: OwnerTimeZone) => {
     : `- ${note.noteId}: due ${timeText(dueAt, timeZone)}`;
 };
 
+const openLoopIdsText = (openLoopIds: readonly string[]) => {
+  const more = openLoopIds.length - openLoopIdsPerSchedule;
+  return [
+    `Open Loops ${openLoopIds.slice(0, openLoopIdsPerSchedule).join(" ")}`,
+    ...(more > 0 ? [`and ${more} more`] : []),
+  ].join(" ");
+};
+
 const scheduleLine = (schedule: Schedule, timeZone: OwnerTimeZone) =>
   [
     `- ${schedule.scheduleId}: ${schedule.action._tag === "SendText" ? "Reminder" : "Scheduled Task"}`,
@@ -60,7 +70,7 @@ const scheduleLine = (schedule: Schedule, timeZone: OwnerTimeZone) =>
       : [`repeats ${recurrenceText(schedule.repeat.rule)}`]),
     ...(schedule.openLoopIds.length === 0
       ? []
-      : [`Open Loops ${schedule.openLoopIds.join(" ")}`]),
+      : [openLoopIdsText(schedule.openLoopIds)]),
   ].join(", ");
 
 const pendingApprovalLine = (

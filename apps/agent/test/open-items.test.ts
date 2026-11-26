@@ -6,6 +6,7 @@ import type { Note } from "../src/notes/notes.ts";
 import {
   openItemsPerKind,
   openItemsText,
+  openLoopIdsPerSchedule,
 } from "../src/personal-agent/open-items.ts";
 import type { OpenItems } from "../src/personal-agent/open-items.ts";
 import type { Schedule } from "../src/schedule/schedules.ts";
@@ -114,6 +115,22 @@ describe("The open items after a Summary", () => {
     expect(lines.filter((line) => line.startsWith("- "))).toHaveLength(
       3 * openItemsPerKind + 3
     );
+  });
+
+  it(`names at most ${openLoopIdsPerSchedule} Open Loops of a Schedule and counts the others`, () => {
+    const openLoopIds = Array.from(
+      { length: openLoopIdsPerSchedule + 4 },
+      (_, index) => `note-${index}`
+    );
+    const text = openItemsText({
+      ...nothingOpen,
+      schedules: [{ ...runPromptSchedule("schedule-1"), openLoopIds }],
+    });
+
+    expect(text).toContain(
+      `Open Loops ${openLoopIds.slice(0, openLoopIdsPerSchedule).join(" ")} and 4 more`
+    );
+    expect(text).not.toContain(`note-${openLoopIdsPerSchedule}`);
   });
 
   it("writes UTC times when the time zone of the Owner is not known", () => {

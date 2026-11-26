@@ -12,7 +12,7 @@ Ticket [#228](https://github.com/kacperborowieckb/billy/issues/228) of [#182](ht
 - **Code writes the open items.** At each Compaction, code reads the open items from storage. These are the Notes with an open Open Loop, the active Schedules, and the open Pending Approvals.
 - **One row, two parts.** The Summary row is one user message with two text parts. The first part is the model prose. The second part is the list of open items. The request layout of 0033 does not change.
 - **Only code-written fields.** Each line of the list holds an id and fields that code writes. Examples are due times, repeat rules, tool names, and expiry times. The list holds no text of a Note, a Schedule, or a Pending Approval. So it adds no Untrusted Content, and the trust rule of 0033 for the Summary stays true.
-- **A fixed maximum.** The list shows at most 10 items of each kind. A line gives the count of the others and names the tool that lists them.
+- **A fixed maximum.** The list shows at most 10 items of each kind. A line gives the count of the others and names the tool that lists them. A Schedule line names at most 3 of its Open Loops and gives the count of the others.
 - **The next Compaction reads only the prose.** The field `earlierSummary` holds the old prose, not the old list. So ids do not grow the Summary from one Compaction to the next.
 - **The limit applies to the prose.** `maxSummaryTokens` is the output limit of the model call. Code checks only the model output against it. The size of the list follows the open items, not the number of Compactions.
 - **The Profile is not in the list.** The Owner Context Block of each request holds the Profile with its entry ids.
