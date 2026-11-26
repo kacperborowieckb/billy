@@ -7,10 +7,12 @@ import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import type { TurnProgress } from "../personal-agent/turn-progress.ts";
 import type { Redactor } from "../tracing/redactor.ts";
+import { mcpArgumentProblemOf } from "./mcp-arguments.ts";
 import { mcpEntryOf, mcpToolRiskClass } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpHubPort } from "./mcp-hub-contract.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
+import { findMcpToolsToolName } from "./mcp-tool-names.ts";
 
 export interface McpToolServices {
   readonly catalog: McpCatalog;
@@ -66,15 +68,54 @@ export const stateOrFail = (
     : Effect.succeed(state);
 };
 
+const copyOf = (
+  copies: McpToolServices["copies"],
+  catalogId: string,
+  toolName: string
+) => copies.get(catalogId)?.find((tool) => tool.name === toolName);
+
 export const annotationsOf = (
   copies: McpToolServices["copies"],
   catalogId: string,
   toolName: string
-) => copies.get(catalogId)?.find((tool) => tool.name === toolName)?.annotations;
+) => copyOf(copies, catalogId, toolName)?.annotations;
+
+interface McpCallInput {
+  readonly connection: string;
+  readonly tool: string;
+  readonly arguments?: Readonly<Record<string, unknown>> | undefined;
+}
+
+type CallServices = Pick<McpToolServices, "catalog" | "copies" | "states">;
+
+export const callRefusalOf = (
+  services: CallServices,
+  input: McpCallInput
+): string | undefined => {
+  const entry = mcpEntryOf(services.catalog, input.connection);
+  if (entry === undefined) {
+    return `There is no MCP Connection with the id ${JSON.stringify(input.connection)}. The known ids are: ${knownConnectionNames(services.catalog) || "none"}.`;
+  }
+  const state = services.states.get(entry.catalogId);
+  if (state === undefined) {
+    return `${entry.displayName} is not connected. Tell the Owner that it is not connected.`;
+  }
+  if (state !== "ready") {
+    return `${entry.displayName} is ${stateText[state]}. Tell the Owner.`;
+  }
+  const copy = copyOf(services.copies, input.connection, input.tool);
+  if (copy === undefined) {
+    return `${entry.displayName} has no tool named ${JSON.stringify(input.tool)}. Use ${findMcpToolsToolName}.`;
+  }
+  const problem = mcpArgumentProblemOf(copy.inputSchema, input.arguments ?? {});
+  return problem === undefined
+    ? undefined
+    : `The arguments do not match the input schema of ${input.tool}, so the call was refused: ${problem}. Fix the arguments and try again.`;
+};
 
 export const mcpCallRiskClass = (
-  services: Pick<McpToolServices, "catalog" | "copies">,
-  input: { readonly connection: string; readonly tool: string }
+  services: CallServices,
+  input: McpCallInput
 ): RiskClass => {
   const entry = mcpEntryOf(services.catalog, input.connection);
   const annotations = annotationsOf(
@@ -82,10 +123,12 @@ export const mcpCallRiskClass = (
     input.connection,
     input.tool
   );
-  if (entry === undefined || annotations === undefined) {
+  if (
+    entry === undefined ||
+    annotations === undefined ||
+    callRefusalOf(services, input) !== undefined
+  ) {
     return "read";
   }
-  return mcpToolRiskClass(entry, input.tool, annotations) === "read"
-    ? "read"
-    : "blocked";
+  return mcpToolRiskClass(entry, input.tool, annotations);
 };

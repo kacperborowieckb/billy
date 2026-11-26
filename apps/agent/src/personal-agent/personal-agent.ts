@@ -29,6 +29,8 @@ import {
   runTraceRetentionWhenDue,
 } from "../tracing/trace-retention.ts";
 import { showTypingOnce } from "./acknowledge.ts";
+import { showApprovalDetails } from "./approval-details.ts";
+import type { ApprovalDetailsPress } from "./approval-details.ts";
 import { burstWaitOf } from "./burst-wait.ts";
 import { fireDueSchedulesThen } from "./due-schedule-events.ts";
 import { expireDueApprovals } from "./expire-due-approvals.ts";
@@ -101,6 +103,14 @@ export class PersonalAgent extends Agent<Env> {
       );
     }
     return "stored";
+  }
+
+  async showApprovalDetails(press: ApprovalDetailsPress): Promise<void> {
+    await this.runtime.runPromise(
+      showApprovalDetails(press).pipe(
+        Effect.provide(this.turnServices(this.env, this.ownerId))
+      )
+    );
   }
 
   async receiveMcpToolCatalog(

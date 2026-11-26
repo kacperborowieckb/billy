@@ -1,7 +1,10 @@
 import { Option, Schema } from "effect";
 
 import type { ApprovalAnswered, OwnerMessage } from "../../event.ts";
-import { approvalPressDataOf } from "./approval-keyboard.ts";
+import {
+  approvalPressDataOf,
+  detailsPressDataOf,
+} from "./approval-keyboard.ts";
 
 const ForwardOriginSchema = Schema.Union([
   Schema.Struct({
@@ -155,6 +158,37 @@ export const approvalPressFrom = (
           pendingApprovalId: data.pendingApprovalId,
           answer: data.answer,
         },
+      });
+    })
+  );
+
+export interface TelegramDetailsPress {
+  readonly senderId: number;
+  readonly pressId: string;
+  readonly conversationId: string;
+  readonly pendingApprovalId: string;
+}
+
+export const detailsPressFrom = (
+  body: unknown
+): Option.Option<TelegramDetailsPress> =>
+  Schema.decodeUnknownOption(TelegramUpdateSchema)(body).pipe(
+    Option.flatMap(({ callback_query: press }) => {
+      const pendingApprovalId =
+        press?.data === undefined ? undefined : detailsPressDataOf(press.data);
+      if (
+        press?.message === undefined ||
+        pendingApprovalId === undefined ||
+        press.from.is_bot ||
+        press.message.chat.type !== "private"
+      ) {
+        return Option.none();
+      }
+      return Option.some({
+        senderId: press.from.id,
+        pressId: press.id,
+        conversationId: String(press.message.chat.id),
+        pendingApprovalId,
       });
     })
   );

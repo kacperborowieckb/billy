@@ -2,6 +2,8 @@ import { asSchema, jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
 import { Data, Effect, Option, Result, Schema } from "effect";
 
+import { asUnknownOutcome } from "../approval/approval-answering.ts";
+import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import { approvalSummaryOf } from "../approval/approval-summary.ts";
 import type {
   ApprovalSummaryOf,
@@ -18,6 +20,7 @@ import type { GateDecision, GatedTool } from "../approval/tool-gate.ts";
 
 export class ToolFailed extends Data.TaggedError("ToolFailed")<{
   readonly message: string;
+  readonly unconfirmed?: true;
 }> {}
 
 export const unexpectedToolFailureMessage = "The tool failed unexpectedly";
@@ -35,6 +38,8 @@ export interface AgentTool extends GatedTool {
   readonly inputJsonSchema: InputJsonSchema;
   readonly approvalSummaryOf: ApprovalSummaryOf;
   readonly approvalExpiryMillis?: number;
+  readonly hasExternalEffect?: true;
+  readonly approvedRunOutcomeOf?: (output: unknown) => ApprovalRunOutcome;
   readonly executeApproved: (
     frozenInput: unknown,
     toolCallId: string
@@ -101,6 +106,8 @@ type AgentToolDefinition<Input, Output> = ToolApproval<Input> & {
   readonly inputSchema: FlexibleSchema<Input>;
   readonly marksItsWorkUntrusted?: InputCheck<Input>;
   readonly codeWrittenInput?: (input: Input) => Input;
+  readonly hasExternalEffect?: true;
+  readonly approvedRunOutcomeOf?: (output: Output) => ApprovalRunOutcome;
   readonly execute: (
     input: Input,
     call: ToolCall
@@ -182,6 +189,16 @@ export const agentTool = <Input, Output>(
     ...classified,
     marksItsWorkUntrusted: inputCheckOf(definition.marksItsWorkUntrusted),
     hasCodeWrittenInput: definition.codeWrittenInput !== undefined,
+    ...(definition.hasExternalEffect === true
+      ? { hasExternalEffect: true as const }
+      : {}),
+    ...(definition.approvedRunOutcomeOf === undefined
+      ? {}
+      : {
+          approvedRunOutcomeOf: asUnknownOutcome(
+            definition.approvedRunOutcomeOf
+          ),
+        }),
     approvalSummaryOf: approvalSummaryOf(definition.approvalSummary),
     ...(definition.approvalExpiryMillis === undefined
       ? {}

@@ -2,8 +2,10 @@ import { Clock, Effect, Option } from "effect";
 
 import {
   approvalPressFrom,
+  detailsPressFrom,
   textMessageFrom,
 } from "../channels/telegram/update.ts";
+import type { TelegramDetailsPress } from "../channels/telegram/update.ts";
 import { telegramIdentity } from "../directory/channel-identity.ts";
 import { Directory } from "../directory/directory.ts";
 import type { Event } from "../event.ts";
@@ -17,17 +19,35 @@ const telegramSecretHeader = "X-Telegram-Bot-Api-Secret-Token";
 
 const accepted = () => new Response(null, { status: 200 });
 
+type TelegramInput =
+  | { readonly _tag: "Event"; readonly event: Event }
+  | { readonly _tag: "Details"; readonly press: TelegramDetailsPress };
+
 interface TelegramEvent {
   readonly senderId: number;
-  readonly event: Event;
+  readonly input: TelegramInput;
 }
 
 const telegramEventFrom = (body: unknown): Option.Option<TelegramEvent> =>
   textMessageFrom(body).pipe(
-    Option.map(({ senderId, message }) => ({ senderId, event: message })),
+    Option.map(({ senderId, message }): TelegramEvent => ({
+      senderId,
+      input: { _tag: "Event", event: message },
+    })),
     Option.orElse(() =>
       approvalPressFrom(body).pipe(
-        Option.map(({ senderId, answered }) => ({ senderId, event: answered }))
+        Option.map(({ senderId, answered }): TelegramEvent => ({
+          senderId,
+          input: { _tag: "Event", event: answered },
+        }))
+      )
+    ),
+    Option.orElse(() =>
+      detailsPressFrom(body).pipe(
+        Option.map((press): TelegramEvent => ({
+          senderId: press.senderId,
+          input: { _tag: "Details", press },
+        }))
       )
     )
   );
@@ -83,8 +103,17 @@ export const handleTelegramUpdate = (request: Request, env: Env) =>
     const personalAgent = yield* Effect.tryPromise(() =>
       personalAgentFor(env.PERSONAL_AGENT, owner.value.ownerId)
     );
-    yield* Effect.tryPromise(() =>
-      personalAgent.receive(telegramEvent.value.event)
-    );
+    const { input } = telegramEvent.value;
+    yield* Effect.tryPromise(async () => {
+      if (input._tag === "Event") {
+        await personalAgent.receive(input.event);
+        return;
+      }
+      await personalAgent.showApprovalDetails({
+        pressId: input.press.pressId,
+        conversationId: input.press.conversationId,
+        pendingApprovalId: input.press.pendingApprovalId,
+      });
+    });
     return accepted();
   });

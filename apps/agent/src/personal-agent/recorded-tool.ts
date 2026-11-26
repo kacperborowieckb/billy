@@ -1,6 +1,7 @@
 import type { JSONValue } from "ai";
 import { Cause, Effect, Option, Schema } from "effect";
 
+import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import type { RiskClass } from "../approval/risk-class.ts";
 import {
   agentTool,
@@ -56,21 +57,33 @@ export type RecordedToolDefinition<
   readonly recordedInput?: (input: Input) => JSONValue;
   readonly marksItsWorkUntrusted?: (input: Input) => boolean;
   readonly codeWrittenInput?: (input: Input) => Input;
+  readonly hasExternalEffect?: true;
+  readonly approvedRunOutcomeOf?: (output: Output) => ApprovalRunOutcome;
 };
 
+export const unconfirmedToolMessage =
+  "It is not confirmed that this call ran. Tell the Owner that you cannot confirm it, and never say that it is done.";
+
 const toolFailedFrom =
-  (failureMessage: string | ((cause: Cause.Cause<unknown>) => string)) =>
+  (
+    failureMessage: string | ((cause: Cause.Cause<unknown>) => string),
+    hasExternalEffect: boolean
+  ) =>
   (cause: Cause.Cause<unknown>) =>
     Cause.findErrorOption(cause).pipe(
       Option.filter((error) => error instanceof ToolFailed),
-      Option.getOrElse(
-        () =>
-          new ToolFailed({
-            message:
-              typeof failureMessage === "string"
-                ? failureMessage
-                : failureMessage(cause),
-          })
+      Option.getOrElse(() =>
+        hasExternalEffect
+          ? new ToolFailed({
+              message: unconfirmedToolMessage,
+              unconfirmed: true,
+            })
+          : new ToolFailed({
+              message:
+                typeof failureMessage === "string"
+                  ? failureMessage
+                  : failureMessage(cause),
+            })
       )
     );
 
@@ -134,6 +147,12 @@ export const recordedTool = <
     ...(definition.codeWrittenInput === undefined
       ? {}
       : { codeWrittenInput: definition.codeWrittenInput }),
+    ...(definition.hasExternalEffect === true
+      ? { hasExternalEffect: true as const }
+      : {}),
+    ...(definition.approvedRunOutcomeOf === undefined
+      ? {}
+      : { approvedRunOutcomeOf: definition.approvedRunOutcomeOf }),
     ...(definition.marksItsWorkUntrusted === undefined
       ? {}
       : {
@@ -163,7 +182,10 @@ export const recordedTool = <
           )
           .pipe(
             Effect.catchCause((cause) => {
-              const failure = toolFailedFrom(definition.failureMessage)(cause);
+              const failure = toolFailedFrom(
+                definition.failureMessage,
+                definition.hasExternalEffect === true
+              )(cause);
               return progress
                 .recordFailedToolCall(call, failure.message)
                 .pipe(Effect.andThen(Effect.fail(failure)));
@@ -171,7 +193,12 @@ export const recordedTool = <
           );
       },
       Effect.catchCause((cause) =>
-        Effect.fail(toolFailedFrom(definition.failureMessage)(cause))
+        Effect.fail(
+          toolFailedFrom(
+            definition.failureMessage,
+            definition.hasExternalEffect === true
+          )(cause)
+        )
       )
     ),
   });

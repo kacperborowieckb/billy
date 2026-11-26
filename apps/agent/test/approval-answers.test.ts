@@ -443,6 +443,10 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
               text: "Reject 2",
               callback_data: `reject:${word?.pending_approval_id}`,
             },
+            {
+              text: "Details 2",
+              callback_data: `details:${word?.pending_approval_id}`,
+            },
           ],
         ],
       },

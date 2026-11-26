@@ -291,6 +291,10 @@ describe("Pending Approvals expire", { timeout: 40_000 }, () => {
               text: "Reject 1",
               callback_data: `reject:${reminder?.pending_approval_id}`,
             },
+            {
+              text: "Details 1",
+              callback_data: `details:${reminder?.pending_approval_id}`,
+            },
           ],
         ],
       },

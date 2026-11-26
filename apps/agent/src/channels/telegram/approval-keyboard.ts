@@ -15,6 +15,9 @@ export const approvalCallbackData = (
   pendingApprovalId: string
 ) => `${answer}:${pendingApprovalId}`;
 
+export const detailsCallbackData = (pendingApprovalId: string) =>
+  `details:${pendingApprovalId}`;
+
 const headerOf = (approvals: readonly ApprovalRequest[]) =>
   approvals.length > 1
     ? "These wait for your Approval:"
@@ -41,6 +44,10 @@ const rowOf = (
     {
       text: label("Reject"),
       callback_data: approvalCallbackData("reject", pendingApprovalId),
+    },
+    {
+      text: label("Details"),
+      callback_data: detailsCallbackData(pendingApprovalId),
     },
   ];
 };
@@ -100,6 +107,11 @@ const callbackDataPattern = new RegExp(
   `^(${approvalAnswers.join("|")}):([A-Za-z0-9_-]{12})$`,
   "u"
 );
+
+const detailsPattern = /^details:(?<id>[A-Za-z0-9_-]{12})$/u;
+
+export const detailsPressDataOf = (data: string) =>
+  detailsPattern.exec(data)?.groups?.["id"];
 
 export interface ApprovalPressData {
   readonly answer: ApprovalAnswer;

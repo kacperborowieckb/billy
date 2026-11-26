@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.92",
+    "@cfworker/json-schema": "4.1.6",
     "@effect/sql-d1": "4.1.4",
     "@effect/sql-sqlite-do": "4.1.4",
     "agents": "0.33.0",

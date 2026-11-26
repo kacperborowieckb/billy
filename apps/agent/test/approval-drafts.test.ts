@@ -65,6 +65,7 @@ describe("A draft Pending Approval", () => {
       [
         { text: "Approve 3", callback_data: "approve:id-2" },
         { text: "Reject 3", callback_data: "reject:id-2" },
+        { text: "Details 3", callback_data: "details:id-2" },
       ],
     ]);
   });

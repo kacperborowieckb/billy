@@ -4,6 +4,7 @@ import type {
   ApprovalMessageEdit,
   ApprovalPressAnswer,
   Delivery,
+  OutgoingDocument,
 } from "../channel.ts";
 import { editedApprovalBlockOf } from "./approval-keyboard.ts";
 import { failed, telegramTextLimit } from "./telegram-send.ts";
@@ -85,3 +86,63 @@ export const answerPress =
         )
       )
     ).pipe(Effect.ignore);
+
+const SendDocumentResponseSchema = Schema.Union([
+  Schema.Struct({
+    ok: Schema.Literal(true),
+    result: Schema.Struct({ message_id: Schema.Int }),
+  }),
+  Schema.Struct({
+    ok: Schema.Literal(false),
+    description: Schema.optionalKey(Schema.String),
+  }),
+]);
+
+const documentRequest = (
+  config: TelegramConfig,
+  document: OutgoingDocument
+) => {
+  const form = new FormData();
+  form.set("chat_id", document.conversationId);
+  form.set(
+    "document",
+    new Blob([document.text], { type: "text/plain" }),
+    document.filename
+  );
+  return new Request(`${config.apiUrl}/bot${config.botToken}/sendDocument`, {
+    method: "POST",
+    body: form,
+  });
+};
+
+const documentDeliveryFrom = (response: Response) =>
+  Effect.tryPromise(() => response.json()).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(SendDocumentResponseSchema)),
+    Effect.map((answer): Delivery =>
+      answer.ok
+        ? {
+            _tag: "Confirmed",
+            channelMessageId: String(answer.result.message_id),
+          }
+        : failed(
+            `Telegram refused the file (${response.status}): ${answer.description ?? "no description"}`
+          )
+    ),
+    Effect.orElseSucceed(() =>
+      failed(`Telegram answered ${response.status} without a result`)
+    )
+  );
+
+export const sendDocument =
+  (config: TelegramConfig) => (document: OutgoingDocument) =>
+    Effect.tryPromise((signal) =>
+      (config.fetch ?? fetch)(
+        new Request(documentRequest(config, document), { signal })
+      )
+    ).pipe(
+      Effect.matchEffect({
+        onFailure: () =>
+          Effect.succeed(failed("Telegram could not be reached")),
+        onSuccess: documentDeliveryFrom,
+      })
+    );

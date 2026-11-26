@@ -353,7 +353,7 @@ describe("the Risk Class of an MCP call", () => {
     ["create_page", { title: "New" }],
     ["archive_page", { id: "1" }],
     ["wipe_workspace", {}],
-  ])("never runs %s", async (tool, args) => {
+  ])("does not run %s without Approval", async (tool, args) => {
     await ownerWithConnection(9920 + tool.length);
     scriptModel([callOf(tool, args), { say: "Could not do it" }]);
 

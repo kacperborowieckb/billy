@@ -243,6 +243,7 @@ describe("Approval for a forwarded message", () => {
         [
           { text: "Approve", callback_data: `approve:${id}` },
           { text: "Reject", callback_data: `reject:${id}` },
+          { text: "Details", callback_data: `details:${id}` },
         ],
       ],
     });
@@ -421,6 +422,10 @@ describe("Approval for a forwarded message", () => {
         {
           text: `Reject ${index + 1}`,
           callback_data: `reject:${approval.pending_approval_id}`,
+        },
+        {
+          text: `Details ${index + 1}`,
+          callback_data: `details:${approval.pending_approval_id}`,
         },
       ])
     );

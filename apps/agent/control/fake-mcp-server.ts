@@ -77,6 +77,30 @@ export const fakeMcpTools: readonly FakeMcpTool[] = [
   {
     name: "create_page",
     description: "Create a page",
+    inputSchema: {
+      type: "object",
+      properties: { title: { type: "string" } },
+      required: ["title"],
+    },
+  },
+  {
+    name: "rename_page",
+    description: "Rename a page",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string" }, title: { type: "string" } },
+      required: ["id", "title"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "failing_write",
+    description: "Write a page that always fails",
+    inputSchema: objectSchema({}),
+  },
+  {
+    name: "slow_write",
+    description: "Write a page slowly",
     inputSchema: objectSchema({ title: { type: "string" } }),
   },
   {
@@ -139,6 +163,13 @@ export const createFakeMcpServer = () => {
       case "big_dump": {
         return textResult("x".repeat(fakeMcpBigResultCharacters));
       }
+      case "failing_write": {
+        return textResult("The page cannot be written", true);
+      }
+      case "slow_write": {
+        await Effect.runPromise(Effect.sleep(state.slowMillis));
+        return textResult("written late");
+      }
       case "slow_read": {
         await Effect.runPromise(Effect.sleep(state.slowMillis));
         return textResult("late");
@@ -200,6 +231,9 @@ export const createFakeMcpServer = () => {
     get requests() {
       return state.requests;
     },
+    listHiddenTools: () => {
+      state.hiddenTools = true;
+    },
     slowReadTakes: (millis: number) => {
       state.slowMillis = millis;
     },
@@ -207,6 +241,7 @@ export const createFakeMcpServer = () => {
       calls.length = 0;
       state.requests = 0;
       state.slowMillis = 60_000;
+      state.hiddenTools = false;
     },
   };
 };
