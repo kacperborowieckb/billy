@@ -1,6 +1,6 @@
-import { DateTime, Effect, Option } from "effect";
+import { Effect, Option } from "effect";
 
-import { lateNoticeOf } from "../approval/approval-status.ts";
+import { alreadyAnsweredNotice } from "../approval/approval-status.ts";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { Channel } from "../channels/channel.ts";
 import { Redactor } from "../tracing/redactor.ts";
@@ -21,14 +21,13 @@ export const showApprovalDetails = Effect.fnUntraced(
     const channel = yield* Channel;
     const redactor = yield* Redactor;
     const approval = yield* pendingApprovals.byId(press.pendingApprovalId);
-    const notice = lateNoticeOf(approval, yield* DateTime.now);
     yield* channel
       .answerPress({
         pressId: press.pressId,
-        ...(notice === undefined ? {} : { notice }),
+        ...(Option.isNone(approval) ? { notice: alreadyAnsweredNotice } : {}),
       })
       .pipe(Effect.timeoutOption(channelAnswerTimeoutMillis));
-    if (notice !== undefined || Option.isNone(approval)) {
+    if (Option.isNone(approval)) {
       return;
     }
     yield* channel.sendDocument({
