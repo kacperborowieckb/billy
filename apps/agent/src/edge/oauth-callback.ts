@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import type { McpCallbackOutcome } from "../mcp/mcp-hub-contract.ts";
 import {
@@ -8,17 +8,22 @@ import {
   page,
 } from "./pages.ts";
 
-const routingIdPattern = /^[\da-f]{64}$/u;
+const parameter = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1), Schema.isMaxLength(2048))
+);
 
-const parameterLimit = 2048;
+const CallbackQuerySchema = Schema.Struct({
+  state: Schema.String.pipe(
+    Schema.check(Schema.isPattern(/^[\da-f]{64}\.[\w-]{1,256}$/u))
+  ),
+  code: Schema.optionalKey(parameter),
+  iss: Schema.optionalKey(parameter),
+  error: Schema.optionalKey(parameter),
+});
 
-const bounded = (value: string | null) =>
-  value === null || value.length > parameterLimit ? undefined : value;
+const decodeCallbackQuery = Schema.decodeUnknownOption(CallbackQuerySchema);
 
 const hubOf = (env: Env, routingId: string) => {
-  if (!routingIdPattern.test(routingId)) {
-    return Option.none();
-  }
   try {
     return Option.some(env.MCP_HUB.get(env.MCP_HUB.idFromString(routingId)));
   } catch {
@@ -53,14 +58,15 @@ const pageFor = (outcome: McpCallbackOutcome) => {
 
 export const handleOAuthCallback = Effect.fnUntraced(
   function* handleOAuthCallback(request: Request, env: Env) {
-    const query = new URL(request.url).searchParams;
-    const state = bounded(query.get("state")) ?? "";
-    const separator = state.indexOf(".");
-    const nonce = state.slice(separator + 1);
-    const hub =
-      separator === -1 || nonce.length === 0
-        ? Option.none()
-        : hubOf(env, state.slice(0, separator));
+    const query = decodeCallbackQuery(
+      Object.fromEntries(new URL(request.url).searchParams)
+    );
+    if (Option.isNone(query)) {
+      return connectRefusedPage();
+    }
+    const { state, code, iss, error } = query.value;
+    const [routingId = "", nonce = ""] = state.split(".");
+    const hub = hubOf(env, routingId);
     if (Option.isNone(hub)) {
       return connectRefusedPage();
     }
@@ -68,9 +74,9 @@ export const handleOAuthCallback = Effect.fnUntraced(
       async () =>
         await hub.value.completeOAuth({
           nonce,
-          code: bounded(query.get("code")),
-          iss: bounded(query.get("iss")),
-          error: bounded(query.get("error")),
+          code,
+          iss,
+          error,
         })
     ).pipe(Effect.option);
     return Option.isNone(outcome) ? notAvailablePage() : pageFor(outcome.value);

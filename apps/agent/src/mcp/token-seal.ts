@@ -1,9 +1,9 @@
+import { Option, Schema } from "effect";
+
 import { base64UrlOf, bytesOfBase64 } from "./base64-url.ts";
 
-const keyBytes = 32;
 const nonceBytes = 12;
 const sealedVersion = "v1";
-const keyIdPattern = /^[\w-]{1,32}$/u;
 
 export class SealFailedError extends Error {
   override readonly name = "SealFailedError";
@@ -28,20 +28,29 @@ const importKey = (text: string) =>
     ["encrypt", "decrypt"]
   );
 
+const SealKeyEntrySchema = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^[\w-]{1,32}:[A-Za-z\d+/]{43}=$/u))
+);
+
+const SealedRecordSchema = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^v1\.[\w-]{1,32}\.[\w-]+\.[\w-]+$/u))
+);
+
+const decodeKeyEntry = Schema.decodeUnknownOption(SealKeyEntrySchema);
+const decodeSealedRecord = Schema.decodeUnknownOption(SealedRecordSchema);
+
 const parseKeyEntry = async (entry: string): Promise<SealKey> => {
-  const separator = entry.indexOf(":");
-  const id = entry.slice(0, separator);
-  const material = entry.slice(separator + 1);
-  if (
-    separator === -1 ||
-    !keyIdPattern.test(id) ||
-    bytesOfBase64(material).byteLength !== keyBytes
-  ) {
+  const checked = decodeKeyEntry(entry);
+  if (Option.isNone(checked)) {
     throw new SealFailedError(
       "A sealing key must be <key id>:<base64 of 32 bytes>"
     );
   }
-  return { id, key: await importKey(material) };
+  const separator = checked.value.indexOf(":");
+  return {
+    id: checked.value.slice(0, separator),
+    key: await importKey(checked.value.slice(separator + 1)),
+  };
 };
 
 export const parseSealKeyring = async (
@@ -56,10 +65,11 @@ export const parseSealKeyring = async (
   if (current === undefined) {
     throw new SealFailedError("The sealing key list is empty");
   }
-  return {
-    current,
-    byId: new Map(keys.map(({ id, key }) => [id, key])),
-  };
+  const byId = new Map(keys.map(({ id, key }) => [id, key]));
+  if (byId.size !== keys.length) {
+    throw new SealFailedError("A sealing key id is listed twice");
+  }
+  return { current, byId };
 };
 
 const encoder = new TextEncoder();
@@ -100,14 +110,9 @@ export const open = async (
   sealed: string,
   context: string
 ) => {
-  const [version, keyId, nonce, encrypted] = sealed.split(".");
-  const key = keyId === undefined ? undefined : keyring.byId.get(keyId);
-  if (
-    version !== sealedVersion ||
-    key === undefined ||
-    nonce === undefined ||
-    encrypted === undefined
-  ) {
+  const [, keyId = "", nonce = "", encrypted = ""] = sealed.split(".");
+  const key = keyring.byId.get(keyId);
+  if (Option.isNone(decodeSealedRecord(sealed)) || key === undefined) {
     throw new SealFailedError("The sealed record cannot be opened");
   }
   try {

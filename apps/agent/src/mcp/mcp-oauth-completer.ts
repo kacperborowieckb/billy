@@ -33,6 +33,9 @@ export interface McpOAuthCompleterDependencies {
   readonly markFailed: (ownerId: string, catalogId: string) => Promise<void>;
 }
 
+const hasText = (value: string | undefined): value is string =>
+  value !== undefined && value.length > 0;
+
 const issuerAgrees = (pending: PendingOAuth, iss: string | undefined) =>
   iss === undefined ? !pending.issuerIsRequired : iss === pending.issuer;
 
@@ -81,24 +84,25 @@ export class McpOAuthCompleter {
     if (entry === undefined || !issuerAgrees(pending, returned.iss)) {
       return { outcome: "not_started" };
     }
-    if (returned.error === undefined && returned.code === undefined) {
+    const { code, error } = returned;
+    if (!hasText(code) && !hasText(error)) {
       return { outcome: "not_started" };
     }
     await storage.delete(key);
     const serverName = entry.displayName;
-    if (returned.error !== undefined || returned.code === undefined) {
+    if (hasText(error) || !hasText(code)) {
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "denied", serverName };
     }
-    const accountLabel = await this.exchange(entry, pending, returned);
-    if (accountLabel === "failed") {
+    const exchanged = await this.exchange(entry, pending, returned);
+    if (exchanged._tag === "Failed") {
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "failed", serverName };
     }
     const connected = await this.dependencies.connect(
       entry,
       pending.ownerId,
-      accountLabel.label
+      exchanged.label
     );
     if (connected === "failed") {
       return { outcome: "failed", serverName };
@@ -117,7 +121,10 @@ export class McpOAuthCompleter {
     entry: McpCatalogEntry,
     pending: PendingOAuth,
     returned: McpOAuthCallback
-  ): Promise<"failed" | { readonly label: string | undefined }> {
+  ): Promise<
+    | { readonly _tag: "Failed" }
+    | { readonly _tag: "Exchanged"; readonly label: string | undefined }
+  > {
     try {
       const credentials = await this.dependencies.credentials(pending.ownerId);
       const exchanged = await exchangeCode({
@@ -139,9 +146,9 @@ export class McpOAuthCompleter {
           redirectUrl: pending.redirectUrl,
         })
       );
-      return { label: exchanged.accountLabel };
+      return { _tag: "Exchanged", label: exchanged.accountLabel };
     } catch {
-      return "failed";
+      return { _tag: "Failed" };
     }
   }
 }

@@ -311,6 +311,21 @@ describe("a callback that must change nothing", () => {
     await expectNothingChanged(ownerId);
   });
 
+  it.each([["code"], ["error"]])(
+    "refuses an empty %s and keeps the request",
+    async (name) => {
+      const telegramUserId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(telegramUserId);
+      const { state } = await startedConsent(telegramUserId, ownerId);
+
+      const response = await callbackWith({ [name]: "", state, iss: issuer });
+
+      expect(response.status).toBe(403);
+      await expectNothingChanged(ownerId);
+      expect(await pendingOAuthCountOf(ownerId)).toBe(1);
+    }
+  );
+
   it("refuses a callback with no code and no error", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9978);
     const { state } = await startedConsent(9978, ownerId);
@@ -478,6 +493,20 @@ describe("the sealed token store", () => {
         );
       }
     );
+  });
+});
+
+describe("the sealing key list", () => {
+  it.each([
+    [
+      "a key id that is listed twice",
+      `a:${"A".repeat(43)}=,a:${"B".repeat(43)}=`,
+    ],
+    ["a key of the wrong length", `a:${"A".repeat(20)}=`],
+    ["an entry with no key id", `:${"A".repeat(43)}=`],
+    ["an empty list", " , "],
+  ])("refuses %s", async (_name, secret) => {
+    await expect(parseSealKeyring(secret)).rejects.toThrow();
   });
 });
 
