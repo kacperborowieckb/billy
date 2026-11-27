@@ -4,28 +4,10 @@
 // can also be drawn at once, finished, so the page reads whole before (or
 // without) any motion.
 import { billy } from "../art";
+import { lastGroup, pick, plain } from "./markup";
 import type { Step } from "./markup";
 import { frame, inSequence, wait } from "./timing";
 import { isReduced } from "./watch";
-
-const plain = (html: string) => {
-  const box = document.createElement("div");
-  box.innerHTML = html;
-  return box.textContent ?? "";
-};
-
-const pick = (chip: Element | undefined) => {
-  chip?.classList.add("is-picked");
-  for (const other of chip?.parentElement?.children ?? []) {
-    if (other !== chip) {
-      other.classList.add("is-dim");
-    }
-  }
-};
-
-// The quick replies in the newest message that has any.
-const lastGroup = (thread: HTMLElement) =>
-  [...thread.querySelectorAll(".chat-chips")].pop();
 
 export const createChat = (thread: HTMLElement, avatar = true) => {
   const screen = thread.parentElement;
@@ -270,6 +252,12 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
     /** Stop playing: typing dots go, and the thread shows again. */
     stop() {
       run += 1;
+      // The thread's slide-up animations stop with it.
+      for (const child of thread.children) {
+        for (const animation of child.getAnimations()) {
+          animation.cancel();
+        }
+      }
       for (const dots of thread.querySelectorAll(".chat-dots")) {
         dots.closest(".chat-row")?.remove();
       }

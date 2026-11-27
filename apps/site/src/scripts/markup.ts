@@ -1,6 +1,7 @@
 // The pieces of a chat message, as HTML: confirmation cards, task lists and
 // quick replies (styled in src/styles/chat.css). Shared by the stories and
-// the cards that build them; safe to import where there is no window.
+// the cards that build them; safe to import where there is no window (the
+// DOM helpers at the end touch the document only when called).
 import { icons } from "../art";
 import type { IconName } from "../art";
 
@@ -44,3 +45,24 @@ export const brief = () =>
     task("Dentist", "17:30"),
     task("Call mum", "18:00")
   );
+
+// DOM helpers for the chat player (src/scripts/chat.ts).
+
+export const plain = (html: string) => {
+  const box = document.createElement("div");
+  box.innerHTML = html;
+  return box.textContent ?? "";
+};
+
+export const pick = (chip: Element | undefined) => {
+  chip?.classList.add("is-picked");
+  for (const other of chip?.parentElement?.children ?? []) {
+    if (other !== chip) {
+      other.classList.add("is-dim");
+    }
+  }
+};
+
+// The quick replies in the newest message that has any.
+export const lastGroup = (thread: HTMLElement) =>
+  [...thread.querySelectorAll(".chat-chips")].pop();
