@@ -74,6 +74,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   private readonly connector = new McpServerConnector({
     manager: this.manager,
+    storage: this.ctx.storage,
     start: () => this.lifecycle.start(),
     send: (input, init) => this.send(input, init),
     allowedOrigins: this.allowedOrigins,
@@ -85,8 +86,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     catalog: this.catalog,
     entryQueue: this.entryQueue,
     ledger: this.ledger,
-    isLive: (catalogId) =>
-      this.manager.mcpConnections[catalogId]?.connectionState === "ready",
+    isLive: (catalogId) => this.connector.isLive(catalogId),
     copiesOf: (catalogId) => this.connector.toolCopiesOf(catalogId),
     refreshTools: (catalogId, ownerId, connectTimeoutMillis) => {
       const entry = mcpEntryOf(this.catalog, catalogId);

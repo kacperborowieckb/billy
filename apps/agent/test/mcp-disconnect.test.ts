@@ -108,6 +108,18 @@ const approvalStatesOf = async (ownerId: string) =>
       .map((row) => row.state)
   );
 
+const sdkServerIdsOf = (ownerId: string) =>
+  runInDurableObject(hubOf(ownerId), (_instance, { storage }) => {
+    try {
+      return storage.sql
+        .exec<{ id: string }>("SELECT id FROM cf_agents_mcp_servers")
+        .toArray()
+        .map((row) => row.id);
+    } catch {
+      return [];
+    }
+  });
+
 const expectAgentForgot = async (ownerId: string) => {
   expect(await statesOf(ownerId)).toEqual([]);
 };
@@ -117,7 +129,10 @@ const expectNothingLeft = async (ownerId: string) => {
   const keys = await hubKeysOf(ownerId);
   expect(
     keys.filter(
-      (key) => key.includes(testMcpCatalogId) && !key.startsWith("removing:")
+      (key) =>
+        key.includes(testMcpCatalogId) &&
+        !key.startsWith("removing:") &&
+        !key.startsWith("sdk-servers:")
     )
   ).toEqual([]);
   expect(keys.filter((key) => /^(?:oauth|settled):/u.test(key))).toEqual([]);
@@ -447,6 +462,30 @@ describe("one state machine for each catalog entry", () => {
       expect(await storedTokensOf(ownerId)).toBeDefined();
       const states = await statesOf(ownerId);
       expect(states.map(({ state: stored }) => stored)).toEqual(["ready"]);
+    },
+    slowTest
+  );
+
+  it(
+    "registers each connect under its own SDK id and leaves no old id behind",
+    async () => {
+      const { ownerId, telegramUserId } = await connectedOwner();
+      await vi.waitFor(async () =>
+        expect(await sdkServerIdsOf(ownerId)).toEqual(["test_server:0"])
+      );
+      await disconnectOf(ownerId);
+      await hubOf(ownerId).acknowledgeRemoval(testMcpCatalogId);
+      const { state } = await startedConsent(
+        telegramUserId,
+        ownerId,
+        nowSeconds() - 43
+      );
+      expect(await statusOf(goodCallback(state))).toBe(200);
+
+      expect(await tagOf(searchOf(ownerId))).toBe("Result");
+      await vi.waitFor(async () =>
+        expect(await sdkServerIdsOf(ownerId)).toEqual(["test_server:1"])
+      );
     },
     slowTest
   );
@@ -842,6 +881,7 @@ describe("removing an Owner", () => {
       await hubOf(ownerId).removeOwnerStorage();
 
       expect(await hubKeysOf(ownerId)).toEqual([]);
+      expect(await sdkServerIdsOf(ownerId)).toEqual([]);
       const refused = await postConsent(
         await loginOf(telegramUserId, ownerId, {
           authDate: nowSeconds() - 83,

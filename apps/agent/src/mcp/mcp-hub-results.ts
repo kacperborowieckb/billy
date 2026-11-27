@@ -51,3 +51,14 @@ export const toolCopyOf = (tool: ServerTool): McpToolCopy => ({
       : { readOnlyHint: tool.annotations.readOnlyHint }),
   },
 });
+
+export const resultOutcomeOf = (result: {
+  readonly isError?: boolean | undefined;
+  readonly content?: unknown;
+  readonly structuredContent?: unknown;
+}) => ({
+  _tag: "Result" as const,
+  isError: result.isError === true,
+  text: resultTextOf(result.content, result.structuredContent),
+  structured: result.structuredContent ?? null,
+});
