@@ -26,6 +26,25 @@ export const receiveMcpToolCatalog = (
         yield* connections.replaceTools(catalogId, copy);
       }).pipe(Effect.orDie);
 
+export const changeMcpConnectionState = Effect.fnUntraced(
+  function* changeMcpConnectionState(
+    catalogId: string,
+    state: McpConnectionState
+  ) {
+    const connections = yield* McpConnections;
+    if ((yield* connections.stateOf(catalogId)) === state) {
+      return;
+    }
+    yield* connections.setState(catalogId, state);
+    yield* (yield* Journal).append({
+      _tag: "McpConnectionStateChanged",
+      eventId: `mcp-connection-state:${catalogId}:${crypto.randomUUID()}`,
+      catalogId,
+      state,
+    });
+  }
+);
+
 export const receiveMcpConnectionState = (
   catalog: McpCatalog,
   catalogId: string,
@@ -37,8 +56,13 @@ export const receiveMcpConnectionState = (
         const checked = yield* Schema.decodeUnknownEffect(
           McpConnectionStateSchema
         )(state);
-        const connections = yield* McpConnections;
-        yield* connections.setState(catalogId, checked);
+        yield* AgentStorage.pipe(
+          Effect.flatMap(({ database }) =>
+            database.transaction(() =>
+              changeMcpConnectionState(catalogId, checked)
+            )
+          )
+        );
       }).pipe(Effect.orDie);
 
 export const connectedMessageOf = (
@@ -88,11 +112,11 @@ export const receiveMcpConnected = Effect.fnUntraced(
     const isFirstTime = yield* database.transaction(() =>
       Effect.gen(function* recordCompletion() {
         if ((yield* journal.readForEvent(eventId)).length > 0) {
-          yield* connections.setState(catalogId, "ready");
+          yield* changeMcpConnectionState(catalogId, "ready");
           return false;
         }
         yield* connections.replaceTools(catalogId, tools);
-        yield* connections.setState(catalogId, "ready");
+        yield* changeMcpConnectionState(catalogId, "ready");
         yield* journal.append({
           _tag: "McpConnectionAdded",
           eventId,

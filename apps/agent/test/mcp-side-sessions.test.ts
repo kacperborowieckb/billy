@@ -375,15 +375,79 @@ describe(
         { say: "Without Notion" },
       ]);
 
-      await runBrief(ownerId);
+      await makeBriefDue(ownerId);
+      await fire(ownerId, 3);
 
       expect(fakeMcpServer.calls).toEqual([]);
       expect(JSON.stringify(toolOutputOf(callMcpToolToolName))).toContain(
         "in need of a new sign-in"
       );
       expect(fakeTelegram.sent[1]?.body.text).toBe("Without Notion");
+      expect(fakeTelegram.sent[2]?.body.text).toBe("Reconnect Test server");
+
       const writeBacks = await writeBacksOf(ownerId);
       expect(writeBacks.map((row) => row.kind)).toEqual(["write_back"]);
+    });
+  }
+);
+
+const markNeedsSignIn = (ownerId: string) =>
+  inAgent(
+    ownerId,
+    McpConnections.pipe(
+      Effect.flatMap((connections) =>
+        connections.setState(testMcpCatalogId, "needs_sign_in")
+      )
+    )
+  );
+
+const reconnectButtonsOf = () =>
+  fakeTelegram.sent.filter(({ body }) => body.text === "Reconnect Test server");
+
+const fireDue = async (ownerId: string) => {
+  await runInDurableObject(await agentOf(ownerId), (instance) =>
+    instance.fireDueSchedules()
+  );
+  await vi.waitFor(() => expect(reconnectButtonsOf()).toHaveLength(1), {
+    timeout: 10_000,
+  });
+};
+
+describe(
+  "a Connection that needs sign-in in a Side Session",
+  multiTurnTimeout,
+  () => {
+    it("adds one reconnect button to the Brief message even when the model reads nothing", async () => {
+      const ownerId = await ownerWithConnection(9981);
+      await markNeedsSignIn(ownerId);
+      scriptModel([{ say: "Your day, without the pages" }]);
+
+      await makeBriefDue(ownerId);
+      await fireDue(ownerId);
+
+      expect(fakeTelegram.sent[1]?.body.text).toBe(
+        "Your day, without the pages"
+      );
+      expect(fakeMcpServer.calls).toEqual([]);
+      expect(reconnectButtonsOf()[0]?.body.reply_markup).toBeDefined();
+    });
+
+    it("adds one reconnect button to a Scheduled Task message, once, when the model also calls the Connection", async () => {
+      const ownerId = await ownerWithConnection(9982);
+      await markNeedsSignIn(ownerId);
+      scriptModel([
+        { ...callOf("search", { query: "pages" }), times: 2 },
+        { say: "I could not read the pages, so this is not done" },
+      ]);
+
+      await dueSchedule(ownerId, { _tag: "RunPrompt", prompt: taskPrompt });
+      await fireDue(ownerId);
+
+      expect(fakeMcpServer.calls).toEqual([]);
+      expect(JSON.stringify(toolOutputOf(callMcpToolToolName))).toContain(
+        "Never say that it is done"
+      );
+      expect(reconnectButtonsOf()).toHaveLength(1);
     });
   }
 );

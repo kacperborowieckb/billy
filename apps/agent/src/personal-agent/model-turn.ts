@@ -8,7 +8,10 @@ import { Redactor } from "../tracing/redactor.ts";
 import { tracedRequestOf } from "../tracing/traced-request.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
-import { sendConnectButtons } from "./connect-buttons.ts";
+import {
+  requestReconnectButtons,
+  sendConnectButtons,
+} from "./connect-buttons.ts";
 import { staySilent } from "./delivery.ts";
 import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
 import { recordModelSteps } from "./model-step-metrics.ts";
@@ -51,6 +54,7 @@ export const runModelTurn = <Failure, Requirements>({
     const stepsUsed = yield* progress.usedStepCount(eventId);
     const preparation =
       kind.prepare === undefined ? unpreparedTurn : yield* kind.prepare;
+    yield* requestReconnectButtons(kind.task, eventId);
     const earlier = yield* progress.completedFor(eventId);
     const stepsLeft = behavior.maxToolSteps - stepsUsed;
     if (stepsLeft <= 0) {

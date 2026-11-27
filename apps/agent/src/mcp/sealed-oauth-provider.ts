@@ -60,21 +60,11 @@ export class SealedOAuthProvider implements AgentMcpOAuthProvider {
   }
 
   tokens() {
-    return this.credentials.tokens(this.catalogId);
+    return Promise.resolve(undefined);
   }
 
-  saveTokens(tokens: Parameters<AgentMcpOAuthProvider["saveTokens"]>[0]) {
-    return this.credentials.saveTokens(this.catalogId, {
-      access_token: tokens.access_token,
-      token_type: tokens.token_type,
-      ...(tokens.refresh_token === undefined
-        ? {}
-        : { refresh_token: tokens.refresh_token }),
-      ...(tokens.expires_in === undefined
-        ? {}
-        : { expires_in: tokens.expires_in }),
-      ...(tokens.scope === undefined ? {} : { scope: tokens.scope }),
-    });
+  saveTokens() {
+    return Promise.resolve();
   }
 
   redirectToAuthorization() {

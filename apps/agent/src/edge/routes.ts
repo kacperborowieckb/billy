@@ -21,6 +21,13 @@ export const edgeRoutes = [
       "Adds an MCP Connection for an Owner from the MCP Catalog through the Owner's MCP Hub. Only the test-only catalog entry exists now.",
   },
   {
+    method: "POST",
+    path: "/operator/mcp-connections/refresh",
+    access: "Operator token as Authorization: Bearer",
+    purpose:
+      "Asks the Owner's MCP Hub to fetch the tool list of a connected MCP server again and to send the new tool catalog copy to the Personal Agent. The answer also holds the sanitized last error of the MCP Connection (phase, reason, HTTP status, time).",
+  },
+  {
     method: "GET",
     path: "/mcp/connect",
     access:

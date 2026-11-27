@@ -4,7 +4,11 @@ import { Directory } from "../directory/directory.ts";
 import { OperatorMetrics } from "../tracing/operator-metrics.ts";
 import { handleClientMetadata, handleMcpConnect } from "./mcp-connect.ts";
 import { handleOAuthCallback } from "./oauth-callback.ts";
-import { handleAddMcpConnection, handleAddOwner } from "./operator-routes.ts";
+import {
+  handleAddMcpConnection,
+  handleAddOwner,
+  handleRefreshMcpConnection,
+} from "./operator-routes.ts";
 import type { EdgeRouteKey } from "./routes.ts";
 import { handleTelegramUpdate } from "./telegram-webhook.ts";
 
@@ -18,6 +22,7 @@ const handlers: Record<
   "POST /telegram/webhook": handleTelegramUpdate,
   "POST /operator/owners": handleAddOwner,
   "POST /operator/mcp-connections": handleAddMcpConnection,
+  "POST /operator/mcp-connections/refresh": handleRefreshMcpConnection,
   "GET /mcp/connect": handleMcpConnect,
   "POST /mcp/connect": handleMcpConnect,
   "GET /oauth/callback": handleOAuthCallback,

@@ -89,3 +89,34 @@ export const handleAddMcpConnection = (request: Request, env: Env) =>
       }
     }
   });
+
+export const handleRefreshMcpConnection = (request: Request, env: Env) =>
+  Effect.gen(function* handleRefreshMcpConnectionEffect() {
+    if (!matchesSecret(bearerToken(request), env.OPERATOR_TOKEN)) {
+      return new Response(null, { status: 401 });
+    }
+    const body = yield* Effect.tryPromise(() => request.json<unknown>()).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(AddMcpConnectionRequestSchema)),
+      Effect.option
+    );
+    if (body._tag === "None") {
+      return json(400, {
+        error: "Send a JSON body with an ownerId and a catalogId.",
+      });
+    }
+    const hub = env.MCP_HUB.getByName(body.value.ownerId);
+    const answer = yield* Effect.tryPromise(async () => ({
+      refreshed: await hub.refreshToolCatalog(
+        body.value.catalogId,
+        defaultBehaviorConfig.mcpConnectTimeoutMillis
+      ),
+      lastError: await hub.lastError(body.value.catalogId),
+    })).pipe(Effect.option);
+    if (answer._tag === "None") {
+      return json(502, { error: "The MCP Hub did not answer." });
+    }
+    return json(200, {
+      outcome: answer.value.refreshed.outcome,
+      lastError: answer.value.lastError ?? null,
+    });
+  });

@@ -39,6 +39,9 @@ export const stateText: Readonly<Record<McpConnectionState, string>> = {
   needs_sign_in: "in need of a new sign-in by the Owner",
 };
 
+export const reconnectInstruction =
+  "The task that needed it is not done. Code adds a Reconnect button to your message. Tell the Owner that the task is not done and that they can tap the button to sign in again. Never say that it is done.";
+
 export const connectionDescription =
   "The catalog id of the MCP Connection, as listed in the Owner Context Block.";
 
@@ -103,7 +106,7 @@ export const callRefusalOf = (
     return `${entry.displayName} is not connected. Tell the Owner that it is not connected.`;
   }
   if (state !== "ready") {
-    return `${entry.displayName} is ${stateText[state]}. Tell the Owner.`;
+    return `${entry.displayName} is ${stateText[state]}. ${reconnectInstruction}`;
   }
   const copy = copyOf(services.copies, input.connection, input.tool);
   if (copy === undefined) {

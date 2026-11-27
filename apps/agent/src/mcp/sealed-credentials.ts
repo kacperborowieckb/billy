@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { DateTime, Schema } from "effect";
 
 import { open, seal, sealingContextOf } from "./token-seal.ts";
 import type { SealKeyring } from "./token-seal.ts";
@@ -9,6 +9,7 @@ export const StoredTokensSchema = Schema.Struct({
   refresh_token: Schema.optionalKey(Schema.String),
   expires_in: Schema.optionalKey(Schema.Number),
   scope: Schema.optionalKey(Schema.String),
+  expires_at_millis: Schema.optionalKey(Schema.Number),
 });
 
 export type StoredTokens = typeof StoredTokensSchema.Type;
@@ -18,6 +19,7 @@ export const StoredClientSchema = Schema.Struct({
   client_secret: Schema.optionalKey(Schema.String),
   client_auth_method: Schema.optionalKey(Schema.Literals(["basic", "post"])),
   redirectUrl: Schema.String,
+  tokenEndpoint: Schema.String,
 });
 
 export type StoredClient = typeof StoredClientSchema.Type;
@@ -29,6 +31,18 @@ const encodeTokens = Schema.encodeSync(TokensJsonSchema);
 const decodeTokens = Schema.decodeUnknownSync(TokensJsonSchema);
 const encodeClient = Schema.encodeSync(ClientJsonSchema);
 const decodeClient = Schema.decodeUnknownSync(ClientJsonSchema);
+
+const withExpiry = (tokens: StoredTokens): StoredTokens => {
+  const { expires_at_millis: _stale, ...rest } = tokens;
+  return tokens.expires_in === undefined
+    ? rest
+    : {
+        ...rest,
+        expires_at_millis:
+          DateTime.toEpochMillis(DateTime.nowUnsafe()) +
+          tokens.expires_in * 1000,
+      };
+};
 
 const tokensKey = (catalogId: string) => `tokens:${catalogId}`;
 const clientKey = (catalogId: string) => `client:${catalogId}`;
@@ -94,7 +108,7 @@ export class SealedCredentials {
     return {
       [tokensKey(catalogId)]: await seal(
         this.keyring,
-        encodeTokens(tokens),
+        encodeTokens(withExpiry(tokens)),
         this.contextOf(catalogId, "tokens")
       ),
       [clientKey(catalogId)]: await seal(
@@ -130,14 +144,20 @@ export class SealedCredentials {
       tokensKey(catalogId),
       await seal(
         this.keyring,
-        encodeTokens({
-          ...tokens,
-          ...(refreshToken === undefined
-            ? {}
-            : { refresh_token: refreshToken }),
-        }),
+        encodeTokens(
+          withExpiry({
+            ...tokens,
+            ...(refreshToken === undefined
+              ? {}
+              : { refresh_token: refreshToken }),
+          })
+        ),
         this.contextOf(catalogId, "tokens")
       )
     );
+  }
+
+  forgetTokens(catalogId: string) {
+    return this.storage.delete(tokensKey(catalogId));
   }
 }

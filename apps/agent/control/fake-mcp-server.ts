@@ -60,6 +60,13 @@ export const createFakeMcpServer = () => {
     slowMillis: 60_000,
     hiddenTools: false,
     unavailable: false,
+    demandsMoreScope: false,
+    refusesTokens: false,
+    toolCalls: 0,
+    responseHold: Promise.resolve(undefined) as Promise<undefined>,
+    notifications: undefined as
+      | ReadableStreamDefaultController<Uint8Array>
+      | undefined,
   };
 
   const answerToolCall = async (message: JsonRpcMessage) => {
@@ -116,22 +123,50 @@ export const createFakeMcpServer = () => {
       return new Response(null, { status: 503 });
     }
     authorizations.push(request.headers.get("Authorization"));
-    if (
-      oauth.requiresToken &&
-      request.headers.get("Authorization") !==
-        `Bearer ${oauth.currentAccessToken()}`
-    ) {
+    const rejected =
+      state.refusesTokens ||
+      (oauth.requiresToken &&
+        request.headers.get("Authorization") !==
+          `Bearer ${oauth.currentAccessToken()}`);
+    const isToolCall =
+      request.method === "POST" &&
+      ((await request.clone().json()) as JsonRpcMessage).method ===
+        "tools/call";
+    if (isToolCall) {
+      state.toolCalls += 1;
+      await state.responseHold;
+    }
+    if (rejected) {
       return new Response(null, { status: 401 });
+    }
+    if (request.method === "GET") {
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            state.notifications = controller;
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } }
+      );
     }
     if (request.method !== "POST") {
       return new Response(null, { status: 405 });
     }
     const message = (await request.json()) as JsonRpcMessage;
+    if (message.method === "tools/call" && state.demandsMoreScope) {
+      return new Response(null, {
+        status: 403,
+        headers: {
+          "WWW-Authenticate":
+            'Bearer error="insufficient_scope", scope="write"',
+        },
+      });
+    }
     switch (message.method) {
       case "initialize": {
         return result(message.id, {
           protocolVersion: message.params?.protocolVersion,
-          capabilities: { tools: { listChanged: false } },
+          capabilities: { tools: { listChanged: true } },
           serverInfo: { name: "fake-mcp-server", version: "1.0.0" },
         });
       }
@@ -168,6 +203,30 @@ export const createFakeMcpServer = () => {
     get requests() {
       return state.requests;
     },
+    refuseAllTokens: (refused: boolean) => {
+      state.refusesTokens = refused;
+    },
+    holdToolCalls: () => {
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      state.responseHold = promise;
+      return () => resolve(undefined);
+    },
+    get toolCallRequests() {
+      return state.toolCalls;
+    },
+    get hasNotificationStream() {
+      return state.notifications !== undefined;
+    },
+    demandMoreScope: (demanded: boolean) => {
+      state.demandsMoreScope = demanded;
+    },
+    notifyToolsListChanged: () => {
+      state.notifications?.enqueue(
+        new TextEncoder().encode(
+          `event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", method: "notifications/tools/list_changed" })}\n\n`
+        )
+      );
+    },
     beUnavailable: (unavailable: boolean) => {
       state.unavailable = unavailable;
     },
@@ -184,6 +243,16 @@ export const createFakeMcpServer = () => {
       state.slowMillis = 60_000;
       state.hiddenTools = false;
       state.unavailable = false;
+      state.demandsMoreScope = false;
+      state.refusesTokens = false;
+      state.toolCalls = 0;
+      state.responseHold = Promise.resolve(undefined);
+      try {
+        state.notifications?.close();
+      } catch {
+        state.notifications = undefined;
+      }
+      state.notifications = undefined;
       oauth.reset();
     },
   };
