@@ -10,7 +10,11 @@ import { PendingApprovals } from "../src/approval/pending-approvals.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { approvalNotSentStatus } from "../src/channels/telegram/telegram-send.ts";
 import { mcpHubClient } from "../src/mcp/mcp-hub-client.ts";
-import { callMcpToolToolName } from "../src/mcp/mcp-tool-names.ts";
+import { testMcpCatalogId } from "../src/mcp/mcp-test-catalog.ts";
+import {
+  callMcpToolToolName,
+  disconnectMcpConnectionToolName,
+} from "../src/mcp/mcp-tool-names.ts";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { closeOpenLoopToolName } from "../src/notes/close-open-loop-tool.ts";
 import { updateNoteToolName } from "../src/notes/update-note-tool.ts";
@@ -167,6 +171,7 @@ const gatedInputsOf = ({
   [quietHoursToolName]: { start: "01:00", end: "02:00" },
   [proactiveMessageBudgetToolName]: { sends: 9 },
   [muteProactiveMessageToolName]: { action: "mute", openLoopIds: [noteId] },
+  [disconnectMcpConnectionToolName]: { connection: testMcpCatalogId },
   keep_note: { word: "obey" },
 });
 
@@ -275,6 +280,10 @@ describe("Approval for a forwarded message", () => {
 
   it("changes no Owner data when the model calls every change tool, and drafts one Pending Approval for each call", async () => {
     const ownerId = await ownerInWarsaw(9102);
+    await env.MCP_HUB.getByName(ownerId).addConnection(
+      testMcpCatalogId,
+      defaultBehaviorConfig.mcpConnectTimeoutMillis
+    );
     const gatedInputs = gatedInputsOf(await seedNoteAndReminder(ownerId));
     const changeTools = await changeToolNamesOfOwnerMessageTurn(ownerId);
     expect(new Set([...Object.keys(gatedInputs), captureNoteToolName])).toEqual(
