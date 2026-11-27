@@ -66,12 +66,14 @@ describe("Capabilities in the system prompt", () => {
 
     const prompt = systemPromptOfFirstCall();
     expect(prompt).toContain(
-      `Code sends a Connect button only after a call of ${connectMcpServerToolName} succeeded in this Turn`
+      `Code sends the Connect or Reconnect button of a service only after a call of ${connectMcpServerToolName} succeeded in this Turn`
     );
-    expect(prompt).toContain("never say that a button comes");
+    expect(prompt).toContain(
+      "never say that a Connect or Reconnect button comes"
+    );
     expect(prompt).toContain("any service whose state is not ready");
     expect(descriptionOfFirstCall(connectMcpServerToolName)).toContain(
-      "Without a successful call of this tool in this Turn, no button comes"
+      "Without a successful call of this tool in this Turn, no Connect button comes"
     );
   });
 
