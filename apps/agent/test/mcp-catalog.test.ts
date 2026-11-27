@@ -326,7 +326,7 @@ describe("the Notion entry of the MCP Catalog", () => {
         ],
         allow_deleting_content: true,
       },
-      line: 'Notion: update page "page-1": "update_content", text "b" and 1 more, all matches: true and 1 more, may delete content: true',
+      line: 'Notion: update page "page-1": "update_content", text "b" and 1 more, all matches: true, may delete content: true',
     },
     {
       tool: "notion-update-data-source",
@@ -354,7 +354,16 @@ describe("the Notion entry of the MCP Catalog", () => {
           { summary: "Review", attendees: [{ email: "eve@example.com" }] },
         ],
       },
-      line: 'Notion: create calendar event "Standup" and 1 more with "eve@example.com" and 1 more',
+      line: 'Notion: create calendar event "Standup" and 1 more with "eve@example.com"',
+    },
+    {
+      tool: "notion-update-page",
+      args: {
+        page_id: "page-1",
+        command: "replace_content",
+        new_str: "Keep {page_id} and [this]",
+      },
+      line: 'Notion: update page "page-1": "replace_content", text "Keep {page_id} and [this]"',
     },
     {
       tool: "notion-update-page",

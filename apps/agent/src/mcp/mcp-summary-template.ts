@@ -54,39 +54,58 @@ const valuesAt = (
 const withOthers = (shown: string, count: number) =>
   count > 1 ? `${shown} and ${count - 1} more` : shown;
 
-const filledPlaceholder = (placeholder: string, args: unknown) => {
-  const found = summaryPathsOf(placeholder).map((path) =>
-    valuesAt(args, path.split("."))
-  );
+type CountedValues = (values: readonly unknown[]) => number;
+
+const everyListItem: CountedValues = (values) => values.length;
+
+const givenValuesOnly: CountedValues = (values) =>
+  values.filter((value) => value !== undefined).length;
+
+const foundValuesOf = (placeholder: string, args: unknown) =>
+  summaryPathsOf(placeholder).map((path) => valuesAt(args, path.split(".")));
+
+const filledPlaceholder = (
+  placeholder: string,
+  args: unknown,
+  countOf: CountedValues
+) => {
+  const found = foundValuesOf(placeholder, args);
   for (const values of found) {
     const scalars = values.filter(isScalar);
     const shown = scalars.find((value) => value === true) ?? scalars[0];
     if (shown !== undefined) {
-      return withOthers(shownScalar(shown), values.length);
+      return withOthers(shownScalar(shown), countOf(values));
     }
   }
-  return withOthers(
-    unknownValue,
-    Math.max(0, ...found.map((values) => values.length))
-  );
+  return withOthers(unknownValue, Math.max(0, ...found.map(countOf)));
 };
 
 const isGiven = (placeholder: string, args: unknown) =>
-  summaryPathsOf(placeholder).some((path) =>
-    valuesAt(args, path.split(".")).some((value) => value !== undefined)
+  foundValuesOf(placeholder, args).some(
+    (values) => givenValuesOnly(values) > 0
   );
 
-const withoutAbsentParts = (template: string, args: unknown) =>
-  template.replaceAll(summaryOptionalPartPattern, (_match, part: string) =>
-    [...part.matchAll(summaryPlaceholderPattern)].some(([, placeholder]) =>
-      isGiven(placeholder ?? "", args)
-    )
-      ? part
-      : ""
-  );
+const filledOptionalPart = (part: string, args: unknown) =>
+  [...part.matchAll(summaryPlaceholderPattern)].some(([, placeholder]) =>
+    isGiven(placeholder ?? "", args)
+  )
+    ? part.replaceAll(
+        summaryPlaceholderPattern,
+        (_match, placeholder: string) =>
+          filledPlaceholder(placeholder, args, givenValuesOnly)
+      )
+    : "";
+
+const optionalPartOrPlaceholderPattern = new RegExp(
+  `${summaryOptionalPartPattern.source}|${summaryPlaceholderPattern.source}`,
+  "gu"
+);
 
 export const filledSummaryTemplate = (template: string, args: unknown) =>
-  withoutAbsentParts(template, args).replaceAll(
-    summaryPlaceholderPattern,
-    (_match, placeholder: string) => filledPlaceholder(placeholder, args)
+  template.replaceAll(
+    optionalPartOrPlaceholderPattern,
+    (_match, part: string | undefined, placeholder: string) =>
+      part === undefined
+        ? filledPlaceholder(placeholder, args, everyListItem)
+        : filledOptionalPart(part, args)
   );
