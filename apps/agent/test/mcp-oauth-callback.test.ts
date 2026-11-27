@@ -659,8 +659,11 @@ describe("a replay of a good callback", () => {
     await vi.waitFor(() =>
       expect(fakeMcpServer.oauth.heldMetadataRequests).toBeGreaterThan(0)
     );
-    releaseDiscovery();
     const completed = await goodCallback(first);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    releaseDiscovery();
     const started = await secondStart;
 
     expect(completed.status).toBe(200);
