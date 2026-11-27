@@ -113,8 +113,9 @@ export class McpOAuthStarter {
       const discovery = await this.discover(entry, request);
       const ownerId = this.dependencies.ownerId();
       const credentials = await this.dependencies.credentials(ownerId);
-      if (!(await this.useUpProof(request.proofId))) {
-        return { outcome: "proof_used" };
+      const proof = await this.useUpProof(entry.catalogId, request.proofId);
+      if (proof !== "fresh") {
+        return { outcome: proof };
       }
       const started = await startOAuth({
         send: this.dependencies.send,
@@ -159,14 +160,22 @@ export class McpOAuthStarter {
     }
   }
 
-  private async useUpProof(proofId: string) {
-    const { storage } = this.dependencies;
+  private useUpProof(catalogId: string, proofId: string) {
+    const { storage, entryQueue, isBeingRemoved } = this.dependencies;
     const key = `${usedProofKeyPrefix}${proofId}`;
-    if ((await storage.get<number>(key)) !== undefined) {
-      return false;
-    }
-    await storage.put<number>(key, nowMillis() + usedProofLifetimeMillis);
-    return true;
+    return entryQueue.run(
+      catalogId,
+      async (): Promise<"fresh" | "proof_used" | "unavailable"> => {
+        if (await isBeingRemoved(catalogId)) {
+          return "unavailable";
+        }
+        if ((await storage.get<number>(key)) !== undefined) {
+          return "proof_used";
+        }
+        await storage.put<number>(key, nowMillis() + usedProofLifetimeMillis);
+        return "fresh";
+      }
+    );
   }
 
   private async forgetExpired() {

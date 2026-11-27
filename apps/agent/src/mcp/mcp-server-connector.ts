@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Option } from "effect";
 
 import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import type { AdmittedCall } from "./mcp-admitted-call.ts";
@@ -190,16 +190,10 @@ export class McpServerConnector {
     await this.dependencies.manager.closeConnection(catalogId);
   }
 
-  async closeWhileQueueHeld(catalogId: string, deadlineMillis: number) {
-    await this.whileQueueHeld(catalogId, async () => {
-      try {
-        await within(this.closer.closeIfOpen(catalogId), deadlineMillis);
-      } catch {
-        await Effect.runPromise(
-          Effect.logWarning("The MCP connection did not close cleanly")
-        );
-      }
-    });
+  closeWhileQueueHeld(catalogId: string, deadlineMillis: number) {
+    return this.whileQueueHeld(catalogId, () =>
+      this.closer.closeWithin(catalogId, deadlineMillis)
+    );
   }
 
   async forget(catalogId: string, deadlineMillis: number) {

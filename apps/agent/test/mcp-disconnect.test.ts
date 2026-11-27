@@ -809,6 +809,30 @@ describe("a removal that is not acknowledged", () => {
   );
 });
 
+describe("removing an Owner while a start is running", () => {
+  it(
+    "leaves no hub storage key when the start resumes after the removal",
+    async () => {
+      const userId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(userId);
+      const release = oauth.holdMetadataRequests();
+      const starting = postConsent(
+        await loginOf(userId, ownerId, { authDate: nowSeconds() - 97 })
+      );
+      await vi.waitFor(() =>
+        expect(oauth.heldMetadataRequests).toBeGreaterThan(0)
+      );
+
+      await hubOf(ownerId).removeOwnerStorage();
+      release();
+
+      expect(await statusOf(starting)).not.toBe(303);
+      expect(await hubKeysOf(ownerId)).toEqual([]);
+    },
+    slowTest
+  );
+});
+
 describe("removing an Owner", () => {
   it(
     "deletes the whole hub storage",

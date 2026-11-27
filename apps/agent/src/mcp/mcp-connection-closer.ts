@@ -1,4 +1,7 @@
+import { Effect, Option } from "effect";
+
 import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
+import { within } from "./mcp-within.ts";
 
 export class McpConnectionCloser {
   private readonly manager: LazyMcpClientManager;
@@ -11,6 +14,19 @@ export class McpConnectionCloser {
 
   isClosing(catalogId: string) {
     return this.closing.has(catalogId);
+  }
+
+  async closeWithin(catalogId: string, deadlineMillis: number) {
+    try {
+      const closed = await within(this.closeIfOpen(catalogId), deadlineMillis);
+      if (Option.isNone(closed)) {
+        this.closing.delete(catalogId);
+      }
+    } catch {
+      await Effect.runPromise(
+        Effect.logWarning("The MCP connection did not close cleanly")
+      );
+    }
   }
 
   closeIfOpen(catalogId: string) {

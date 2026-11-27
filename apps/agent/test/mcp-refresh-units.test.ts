@@ -283,25 +283,64 @@ describe("the connector of a Connection that is removed", () => {
     expect(registerServer).not.toHaveBeenCalled();
   });
 
-  it("does not register a reconnect while an earlier close of the same Connection is pending", async () => {
+  it("does not register a reconnect while an earlier close of the same Connection is within its deadline", async () => {
     const registerServer = vi.fn();
+    const closeEnds = Promise.withResolvers<undefined>();
     const connector = connectorOver(
       {
         mcpConnections: { c: {} },
         registerServer,
-        closeConnection: () => Promise.withResolvers<undefined>().promise,
+        closeConnection: () => closeEnds.promise,
       },
       () => Promise.resolve({} as never)
     );
-    await connector.forget("c", 20);
+    const closing = connector.closeWhileQueueHeld("c", 5000);
 
     const outcome = await connector.callTool(entry as never, "owner", {
       request,
       epoch: connector.epochOf("c"),
     });
+    closeEnds.resolve(undefined);
+    await closing;
 
     expect(outcome).toEqual({ _tag: "Failed", reason: "failed" });
     expect(registerServer).not.toHaveBeenCalled();
+  });
+
+  it("lets a reconnect work as a first connect after the deadline of a close that never settles, and a late settle does not close it", async () => {
+    const lateClose = Promise.withResolvers<undefined>();
+    const registerServer = vi.fn();
+    const closeConnection = vi.fn(() => lateClose.promise);
+    const manager: Record<string, unknown> = {
+      mcpConnections: { c: {} },
+      registerServer,
+      closeConnection,
+      connectToServer: () => Promise.resolve({ state: "connected" }),
+      discoverIfConnected: () => Promise.resolve({ success: true }),
+      callTool: () => Promise.resolve({ content: [], isError: false }),
+    };
+    const connector = connectorOver(manager, () =>
+      Promise.resolve({} as never)
+    );
+    await connector.forget("c", 20);
+    manager["mcpConnections"] = {};
+
+    const outcome = await connector.callTool(entry as never, "owner", {
+      request,
+      epoch: connector.epochOf("c"),
+    });
+    manager["mcpConnections"] = { c: { connectionState: "ready" } };
+    lateClose.resolve(undefined);
+    await lateClose.promise;
+    const second = await connector.callTool(entry as never, "owner", {
+      request,
+      epoch: connector.epochOf("c"),
+    });
+
+    expect(outcome._tag).toBe("Result");
+    expect(second._tag).toBe("Result");
+    expect(registerServer).toHaveBeenCalledTimes(1);
+    expect(closeConnection).toHaveBeenCalledTimes(1);
   });
 
   it("gives up a close that never ends when the deadline comes", async () => {
