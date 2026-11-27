@@ -105,7 +105,10 @@ export class McpConnectionSetup {
     if (entry === undefined) {
       return { outcome: "unknown_catalog_entry" };
     }
-    if ((await ledger.stateOf(catalogId)) === "needs_sign_in") {
+    if (
+      (await ledger.stateOf(catalogId)) === "needs_sign_in" ||
+      (await ledger.isBeingRemoved(catalogId))
+    ) {
       return { outcome: "failed" };
     }
     const fresh = await health.refreshWhileQueueHeld(entry, ownerId());

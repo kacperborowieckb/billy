@@ -619,6 +619,20 @@ describe("an OAuth start that was running", () => {
   );
 
   it(
+    "makes the Operator add fail while the Personal Agent removal is not acknowledged",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      await disconnectOf(ownerId);
+
+      const added = await hubOf(ownerId).addConnection(testMcpCatalogId, 5000);
+
+      expect(added).toEqual({ outcome: "failed" });
+      expect(await storedTokensOf(ownerId)).toBeUndefined();
+    },
+    slowTest
+  );
+
+  it(
     "is refused while the Personal Agent removal is not acknowledged",
     async () => {
       const { ownerId, telegramUserId } = await connectedOwner();
