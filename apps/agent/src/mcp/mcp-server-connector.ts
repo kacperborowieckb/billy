@@ -88,6 +88,10 @@ export class McpServerConnector {
     return Option.isSome(connected) ? "connected" : "timed_out";
   }
 
+  async close(catalogId: string) {
+    await this.dependencies.manager.closeConnection(catalogId);
+  }
+
   toolCopiesOf(catalogId: string) {
     return this.dependencies.manager
       .listTools({ serverId: catalogId })

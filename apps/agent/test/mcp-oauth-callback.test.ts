@@ -556,6 +556,22 @@ describe("a replay of a good callback", () => {
     expect(await addedEntryCountOf(ownerId)).toBe(1);
   });
 
+  it("does not deliver the completion of an earlier attempt after a later attempt exchanged its code", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9968);
+    const { state: first } = await startedConsent(9968, ownerId);
+    const second = await secondConsent(9968, ownerId);
+    fakeMcpServer.beUnavailable(true);
+    await goodCallback(first);
+    fakeMcpServer.beUnavailable(false);
+
+    await Promise.all([goodCallback(second), goodCallback(first)]);
+
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+  });
+
   it("serializes two completions of one entry so only one exchanges a code", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9987);
     const { state: first } = await startedConsent(9987, ownerId);

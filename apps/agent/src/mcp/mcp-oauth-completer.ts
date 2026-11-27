@@ -126,19 +126,19 @@ export class McpOAuthCompleter {
       return { outcome: "not_started" };
     }
     const serverName = entry.displayName;
-    const latest = await storage.get(latestExchangeKey(entry.catalogId));
-    if (latest !== nonce) {
-      return { outcome: "not_started" };
-    }
-    const connected = await this.entryQueue.run(entry.catalogId, () =>
-      this.dependencies.connect({
+    return this.entryQueue.run(entry.catalogId, async () => {
+      const latest = await storage.get(latestExchangeKey(entry.catalogId));
+      if (latest !== nonce) {
+        return { outcome: "not_started" };
+      }
+      const connected = await this.dependencies.connect({
         entry,
         ownerId: settled.ownerId,
         completionId: nonce,
         accountLabel: settled.accountLabel,
-      })
-    );
-    return { outcome: connected, serverName };
+      });
+      return { outcome: connected, serverName };
+    });
   }
 
   private async run(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {

@@ -128,6 +128,14 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     await agent.receiveMcpConnectionState(catalogId, state);
   }
 
+  private async closeQuietly(catalogId: string) {
+    try {
+      await this.connector.close(catalogId);
+    } catch {
+      return;
+    }
+  }
+
   private async connectAfterConsent({
     entry,
     ownerId,
@@ -155,6 +163,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       return "connected";
     } catch {
       await this.ctx.storage.delete(connectionRecordKey(entry.catalogId));
+      await this.closeQuietly(entry.catalogId);
       await this.tellState(ownerId, entry.catalogId, "failed");
       return "failed";
     }
