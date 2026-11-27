@@ -24,7 +24,7 @@ export const connectMcpServerTool = (
     {
       name: connectMcpServerToolName,
       description:
-        "Offer the Owner a Connect button for a supported service. It changes nothing. Code sends the button after your reply, and the Owner signs in at the service. Never write a link yourself. Tell the Owner to tap the button.",
+        "Offer the Owner a Connect button for a supported service that is not ready. It changes nothing. Code sends the button after your reply, and the Owner signs in at the service. Without a successful call of this tool in this Turn, no button comes, so call it each time the Owner asks to connect, also after an earlier button. Never write a link yourself. After the call, tell the Owner to tap the button.",
       inputSchema: ConnectMcpServerInput,
       riskClass: "read",
       failureMessage: "The Connect button could not be prepared.",

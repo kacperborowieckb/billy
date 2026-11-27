@@ -41,7 +41,7 @@ export const edgeRoutes = [
     access:
       "The same Telegram login data, in the form that the consent page sends",
     purpose:
-      "Asks the Owner's MCP Hub to start OAuth with PKCE and redirects to the authorization server.",
+      "Asks the Owner's MCP Hub to start OAuth with PKCE and answers with a page that goes on to the authorization server.",
   },
   {
     method: "GET",

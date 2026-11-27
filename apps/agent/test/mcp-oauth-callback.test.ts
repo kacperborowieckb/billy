@@ -22,6 +22,7 @@ import {
   nowSeconds,
   pendingOAuthCountOf,
   postConsent,
+  startedAuthorizationOf,
 } from "./mcp-connect-requests.ts";
 import {
   addOwner,
@@ -52,8 +53,7 @@ const ownerWhoWroteToTheAgent = async (telegramUserId: number) => {
 
 const startedConsent = async (telegramUserId: number, ownerId: string) => {
   const response = await postConsent(await loginOf(telegramUserId, ownerId));
-  expect(response.status).toBe(303);
-  const location = new URL(response.headers.get("Location") ?? "");
+  const location = await startedAuthorizationOf(response);
   const state = location.searchParams.get("state") ?? "";
   return { location, state, nonce: state.split(".")[1] ?? "" };
 };
@@ -266,8 +266,7 @@ const secondConsent = async (telegramUserId: number, ownerId: string) => {
   const response = await postConsent(
     await loginOf(telegramUserId, ownerId, { authDate: nowSeconds() - 5 })
   );
-  expect(response.status).toBe(303);
-  const location = new URL(response.headers.get("Location") ?? "");
+  const location = await startedAuthorizationOf(response);
   return location.searchParams.get("state") ?? "";
 };
 

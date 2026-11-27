@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { connectMcpServerToolName } from "../src/mcp/mcp-tool-names.ts";
 import { reactToolName } from "../src/personal-agent/react-tool.ts";
 import { staySilentToolName } from "../src/personal-agent/stay-silent-tool.ts";
 import { fakeModel, fakeTelegram, fakeTool, resetFakes } from "./fakes.ts";
@@ -18,6 +19,13 @@ const toolNamesOfFirstCall = () =>
   (firstCall()?.tools ?? [])
     .map((tool) => tool.name)
     .filter((name) => name !== fakeTool.name);
+
+const descriptionOfFirstCall = (toolName: string) => {
+  const tool = (firstCall()?.tools ?? []).find(
+    (candidate) => candidate.name === toolName
+  );
+  return tool?.type === "function" ? tool.description : "";
+};
 
 beforeEach(() => {
   resetFakes();
@@ -45,6 +53,26 @@ describe("Capabilities in the system prompt", () => {
       "a tool that the catalog does not list, and a tool that the server marks destructive wait for the Owner to approve them"
     );
     expect(prompt).not.toContain("Only reading tools run now");
+  });
+
+  it("tells the model that only a call of connect_mcp_server sends the Connect button", async () => {
+    await addOwner(8306);
+    await telegramWebhook(
+      textUpdate({ fromUserId: 8306, text: "connect the test server" })
+    );
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1), {
+      timeout: 10_000,
+    });
+
+    const prompt = systemPromptOfFirstCall();
+    expect(prompt).toContain(
+      `Code sends a Connect button only after a call of ${connectMcpServerToolName} succeeded in this Turn`
+    );
+    expect(prompt).toContain("never say that a button comes");
+    expect(prompt).toContain("any service whose state is not ready");
+    expect(descriptionOfFirstCall(connectMcpServerToolName)).toContain(
+      "Without a successful call of this tool in this Turn, no button comes"
+    );
   });
 
   it("offers stay_silent and react in an Owner message Turn, also for an untrusted Event", async () => {

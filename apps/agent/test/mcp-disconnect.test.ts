@@ -17,7 +17,12 @@ import {
   resetFakes,
   scriptModel,
 } from "./fakes.ts";
-import { loginOf, nowSeconds, postConsent } from "./mcp-connect-requests.ts";
+import {
+  authorizationUrlOf,
+  loginOf,
+  nowSeconds,
+  postConsent,
+} from "./mcp-connect-requests.ts";
 import {
   agentOf,
   connectedOwner,
@@ -653,7 +658,7 @@ describe("an OAuth start that was running", () => {
       expect(await outcomeOf(disconnectOf(ownerId))).toBe("disconnected");
       release();
 
-      expect(await statusOf(starting)).not.toBe(303);
+      expect(await authorizationUrlOf(await starting)).toBeUndefined();
       expect(await hubKeysOf(ownerId)).not.toContainEqual(
         expect.stringMatching(/^oauth:/u)
       );
@@ -686,7 +691,7 @@ describe("an OAuth start that was running", () => {
       await hubOf(ownerId).acknowledgeRemoval(testMcpCatalogId);
       release();
 
-      expect(await statusOf(starting)).not.toBe(303);
+      expect(await authorizationUrlOf(await starting)).toBeUndefined();
       const keys = await hubKeysOf(ownerId);
       expect(keys.filter((key) => key.startsWith("oauth:"))).toEqual([]);
       const { state } = await startedConsent(
@@ -725,7 +730,7 @@ describe("an OAuth start that was running", () => {
         })
       );
 
-      expect(refused.status).not.toBe(303);
+      expect(await authorizationUrlOf(refused)).toBeUndefined();
       expect(oauth.registrations).toHaveLength(0);
     },
     slowTest
@@ -895,7 +900,7 @@ describe("removing an Owner while a start is running", () => {
       await hubOf(ownerId).removeOwnerStorage();
       release();
 
-      expect(await statusOf(starting)).not.toBe(303);
+      expect(await authorizationUrlOf(await starting)).toBeUndefined();
       expect(await hubKeysOf(ownerId)).toEqual([]);
     },
     slowTest
@@ -917,7 +922,7 @@ describe("removing an Owner", () => {
           authDate: nowSeconds() - 83,
         })
       );
-      expect(refused.status).not.toBe(303);
+      expect(await authorizationUrlOf(refused)).toBeUndefined();
       expect(
         await outcomeOf(hubOf(ownerId).addConnection(testMcpCatalogId, 5000))
       ).toBe("failed");

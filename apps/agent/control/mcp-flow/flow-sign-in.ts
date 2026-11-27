@@ -5,6 +5,8 @@ import { fakeNotionOrigin } from "./fake-notion.ts";
 import { flowCheck } from "./flow-checks.ts";
 import { signedTelegramLogin } from "./telegram-login-signature.ts";
 
+const continueLinkPattern = /<a href="(?<url>[^"]+)">Continue to /u;
+
 export interface SignInOptions {
   readonly workerUrl: URL;
   readonly botToken: string;
@@ -62,16 +64,18 @@ export const signInThroughEdge = Effect.fnUntraced(function* signIn(
     method: "POST",
     body: login,
   });
-  const authorization = new URL(started.location ?? workerUrl);
+  const link = continueLinkPattern.exec(started.body)?.groups?.["url"];
+  const authorization = new URL(link?.replaceAll("&amp;", "&") ?? workerUrl);
   yield* flowCheck(
     "start of OAuth",
-    started.status === 303 &&
+    started.status === 200 &&
+      started.location === null &&
       authorization.origin === fakeNotionOrigin &&
       authorization.searchParams.get("code_challenge_method") === "S256",
-    `${started.status} ${started.location ?? ""}`
+    `${started.status} ${started.location ?? started.body}`
   );
   yield* Console.log(
-    `Edge: 303 to ${authorization.origin}${authorization.pathname} with PKCE S256`
+    `Edge: a page that continues to ${authorization.origin}${authorization.pathname} with PKCE S256, no redirect of the form`
   );
 
   const callback = yield* request(

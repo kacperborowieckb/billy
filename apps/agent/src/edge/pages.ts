@@ -15,11 +15,30 @@ export const escapeHtml = (text: string) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-export const page = (status: number, title: string, body: string) =>
+interface PageContent {
+  readonly title: string;
+  readonly head: string;
+  readonly body: string;
+}
+
+const documentResponse = (status: number, { title, head, body }: PageContent) =>
   new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}button{font-size:1rem;padding:.6rem 1.2rem}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`,
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${head}<title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}button{font-size:1rem;padding:.6rem 1.2rem}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`,
     { status, headers: pageHeaders }
   );
+
+export const page = (status: number, title: string, body: string) =>
+  documentResponse(status, { title, head: "", body });
+
+export const continuePage = (serverName: string, authorizationUrl: string) => {
+  const url = escapeHtml(authorizationUrl);
+  const name = escapeHtml(serverName);
+  return documentResponse(200, {
+    title: `Continue to ${serverName}`,
+    head: `<meta http-equiv="refresh" content="0; url=${url}">`,
+    body: `<p>Sign in at ${name} to finish the connection.</p><p><a href="${url}">Continue to ${name}</a></p>`,
+  });
+};
 
 export const connectRefusedPage = () =>
   page(

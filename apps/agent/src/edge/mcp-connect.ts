@@ -6,6 +6,7 @@ import type { OwnerId } from "../owner-id.ts";
 import {
   alreadyConnectedPage,
   connectRefusedPage,
+  continuePage,
   escapeHtml,
   notAvailablePage,
   page,
@@ -143,15 +144,8 @@ export const handleMcpConnect = Effect.fnUntraced(function* handleMcpConnect(
   if (Option.isNone(started)) {
     return notAvailablePage();
   }
-  return started.value.outcome === "redirect"
-    ? new Response(null, {
-        status: 303,
-        headers: {
-          Location: started.value.authorizationUrl,
-          "Cache-Control": "no-store",
-          "Referrer-Policy": "no-referrer",
-        },
-      })
+  return started.value.outcome === "started"
+    ? continuePage(started.value.serverName, started.value.authorizationUrl)
     : refusalPageFor(started.value.outcome);
 });
 

@@ -155,7 +155,8 @@ export class McpOAuthStarter {
           await this.forgetExpired();
           await this.dependencies.markAuthenticating(entry.catalogId);
           return {
-            outcome: "redirect",
+            outcome: "started",
+            serverName: entry.displayName,
             authorizationUrl: started.authorizationUrl,
           } as const;
         }

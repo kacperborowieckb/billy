@@ -9,7 +9,7 @@ Generated from `apps/agent/src/edge/routes.ts` by `pnpm control map`. Do not edi
 | `POST /operator/mcp-connections` | Operator token as Authorization: Bearer | Adds an MCP Connection with no sign-in for an Owner from the MCP Catalog through the Owner's MCP Hub. It serves the test-only catalog entry; a server that needs OAuth is connected from the chat. |
 | `POST /operator/mcp-connections/refresh` | Operator token as Authorization: Bearer | Asks the Owner's MCP Hub to fetch the tool list of a connected MCP server again and to send the new tool catalog copy to the Personal Agent. The answer also holds the sanitized last error of the MCP Connection (phase, reason, HTTP status, time). |
 | `GET /mcp/connect` | Telegram login data from a login_url button, signed with the bot token, fresh, and from the Owner's Channel Identity | Shows the consent page for connecting an MCP server. It starts nothing. |
-| `POST /mcp/connect` | The same Telegram login data, in the form that the consent page sends | Asks the Owner's MCP Hub to start OAuth with PKCE and redirects to the authorization server. |
+| `POST /mcp/connect` | The same Telegram login data, in the form that the consent page sends | Asks the Owner's MCP Hub to start OAuth with PKCE and answers with a page that goes on to the authorization server. |
 | `GET /oauth/callback` | The state that the authorization server returns: the routing id of the Owner's MCP Hub and a single-use nonce | Finds the MCP Hub from the routing id and asks it to check the nonce and the issuer, exchange the code, and finish the MCP Connection. A replay of a good callback shows the same result. |
 | `GET /oauth/client-metadata.json` | Public | Serves the OAuth Client ID Metadata Document of the agent. It exists on HTTPS only. |
 
