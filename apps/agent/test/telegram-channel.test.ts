@@ -49,6 +49,7 @@ const sendWith = (
         telegramChannel({
           apiUrl: "https://telegram.fake",
           botToken: "token",
+          edgeUrl: "https://edge.test.example",
           fetch: api.fetch,
         })
       )
@@ -172,6 +173,7 @@ const showTypingWith = (
         telegramChannel({
           apiUrl: "https://telegram.fake",
           botToken: "token",
+          edgeUrl: "https://edge.test.example",
           fetch,
         })
       )
@@ -237,6 +239,7 @@ const reactWith = (
       Effect.provide(
         telegramChannel({
           apiUrl: "https://telegram.fake",
+          edgeUrl: "https://edge.test.example",
           botToken: "token",
           fetch,
         })
@@ -323,5 +326,90 @@ describe("Telegram reaction list", () => {
       expect(telegramReactions.has(emoji)).toBe(false);
       expect(telegramReactions.has(match)).toBe(true);
     }
+  });
+});
+
+describe("Telegram Owner proof link", () => {
+  it("sends a login_url inline button for the Edge path", async () => {
+    const requests: { url: string; body: unknown }[] = [];
+    const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push({ url: request.url, body: await request.json() });
+      return Response.json({ ok: true, result: { message_id: 5 } });
+    };
+
+    const delivery = await Effect.runPromise(
+      Channel.pipe(
+        Effect.flatMap((channel) =>
+          channel.sendOwnerProofLink({
+            conversationId: "1",
+            text: "Connect Notion",
+            label: "Connect Notion",
+            edgePath: "/mcp/connect?c=notion",
+          })
+        ),
+        Effect.provide(
+          telegramChannel({
+            apiUrl: "https://telegram.fake",
+            botToken: "token",
+            edgeUrl: "https://edge.test.example",
+            fetch,
+          })
+        )
+      )
+    );
+
+    expect(delivery).toEqual({ _tag: "Confirmed", channelMessageId: "5" });
+    expect(requests).toEqual([
+      {
+        url: "https://telegram.fake/bottoken/sendMessage",
+        body: {
+          chat_id: 1,
+          text: "Connect Notion",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "Connect Notion",
+                  login_url: {
+                    url: "https://edge.test.example/mcp/connect?c=notion",
+                  },
+                },
+              ],
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  it("fails without a request when the Edge public URL is not set", async () => {
+    let requested = false;
+    const delivery = await Effect.runPromise(
+      Channel.pipe(
+        Effect.flatMap((channel) =>
+          channel.sendOwnerProofLink({
+            conversationId: "1",
+            text: "Connect Notion",
+            label: "Connect Notion",
+            edgePath: "/mcp/connect?c=notion",
+          })
+        ),
+        Effect.provide(
+          telegramChannel({
+            apiUrl: "https://telegram.fake",
+            botToken: "token",
+            edgeUrl: "",
+            fetch: () => {
+              requested = true;
+              return Promise.resolve(Response.json({ ok: true }));
+            },
+          })
+        )
+      )
+    );
+
+    expect(delivery._tag).toBe("Failed");
+    expect(requested).toBe(false);
   });
 });

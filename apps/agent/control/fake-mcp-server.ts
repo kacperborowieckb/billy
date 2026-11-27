@@ -1,5 +1,7 @@
 import { Effect } from "effect";
 
+import { createFakeOAuthServer } from "./fake-oauth-server.ts";
+
 export const fakeMcpPages = [
   {
     id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
@@ -139,6 +141,7 @@ const textResult = (text: string, isError = false) => ({
 });
 
 export const createFakeMcpServer = () => {
+  const oauth = createFakeOAuthServer();
   const calls: FakeMcpCall[] = [];
   const state = { requests: 0, slowMillis: 60_000, hiddenTools: false };
 
@@ -188,6 +191,10 @@ export const createFakeMcpServer = () => {
 
   const fetchHandler = async (request: Request): Promise<Response> => {
     state.requests += 1;
+    const oauthAnswer = await oauth.answer(request);
+    if (oauthAnswer !== null) {
+      return oauthAnswer;
+    }
     if (request.method !== "POST") {
       return new Response(null, { status: 405 });
     }
@@ -228,6 +235,7 @@ export const createFakeMcpServer = () => {
   return {
     fetch: fetchHandler,
     calls,
+    oauth,
     get requests() {
       return state.requests;
     },
@@ -242,6 +250,7 @@ export const createFakeMcpServer = () => {
       state.requests = 0;
       state.slowMillis = 60_000;
       state.hiddenTools = false;
+      oauth.reset();
     },
   };
 };

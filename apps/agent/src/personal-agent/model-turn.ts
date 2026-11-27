@@ -8,6 +8,7 @@ import { Redactor } from "../tracing/redactor.ts";
 import { tracedRequestOf } from "../tracing/traced-request.ts";
 import { TurnTraces } from "../tracing/turn-trace.ts";
 import { AgentStorage } from "./agent-storage.ts";
+import { sendConnectButtons } from "./connect-buttons.ts";
 import { staySilent } from "./delivery.ts";
 import { keepFinishedSteps, stepsNotKeptReason } from "./kept-steps.ts";
 import { recordModelSteps } from "./model-step-metrics.ts";
@@ -213,6 +214,7 @@ export const runModelTurn = <Failure, Requirements>({
       reaction: decided.reaction,
       replyTo: kind.replyTo ?? event,
     });
+    yield* sendConnectButtons(event, kind.replyTo ?? event, delivery._tag);
     if (delivery._tag === "Failed") {
       yield* finished(steps, unanswered);
       if (kind.tracesSendFailure === true) {

@@ -3,10 +3,12 @@ import type { ApprovalAnswer } from "../../event.ts";
 import { approvalAnswers } from "../../personal-agent/storage-values.ts";
 import type { ApprovalRequest, ShownApproval } from "../channel.ts";
 
-export interface InlineKeyboardButton {
-  readonly text: string;
-  readonly callback_data: string;
-}
+export type InlineKeyboardButton =
+  | { readonly text: string; readonly callback_data: string }
+  | {
+      readonly text: string;
+      readonly login_url: { readonly url: string };
+    };
 
 export type InlineKeyboard = readonly (readonly InlineKeyboardButton[])[];
 

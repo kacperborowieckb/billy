@@ -38,6 +38,7 @@ import m0036 from "./20261125072556_trace_request_parts/migration.sql";
 import m0037 from "./20261125072602_trace_retention_trigger/migration.sql";
 import m0038 from "./20261125152925_refused_compaction_blocks/migration.sql";
 import m0039 from "./20261126131445_mcp_connections/migration.sql";
+import m0040 from "./20261127001448_mcp_connect_requests/migration.sql";
 
 export default {
   migrations: {
@@ -81,5 +82,6 @@ export default {
     "20261125072602_trace_retention_trigger": m0037,
     "20261125152925_refused_compaction_blocks": m0038,
     "20261126131445_mcp_connections": m0039,
+    "20261127001448_mcp_connect_requests": m0040,
   },
 };

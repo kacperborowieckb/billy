@@ -56,6 +56,13 @@ export interface OutgoingDocument {
   readonly text: string;
 }
 
+export interface OutgoingOwnerProofLink {
+  readonly conversationId: string;
+  readonly text: string;
+  readonly label: string;
+  readonly edgePath: string;
+}
+
 export interface OutgoingReaction {
   readonly conversationId: string;
   readonly channelMessageId: string;
@@ -82,6 +89,9 @@ export class Channel extends Context.Service<
     ) => Effect.Effect<Delivery>;
     readonly sendDocument: (
       document: OutgoingDocument
+    ) => Effect.Effect<Delivery>;
+    readonly sendOwnerProofLink: (
+      link: OutgoingOwnerProofLink
     ) => Effect.Effect<Delivery>;
     readonly answerPress: (answer: ApprovalPressAnswer) => Effect.Effect<void>;
     readonly react: (

@@ -25,7 +25,44 @@ export interface McpAddConnectionOutcome {
   readonly outcome: "added" | "unknown_catalog_entry" | "failed";
 }
 
+export interface McpOAuthRequest {
+  readonly catalogId: string;
+  readonly redirectUrl: string;
+  readonly clientMetadataUrl: string | undefined;
+  readonly proofId: string;
+}
+
+export type McpConsentOutcome =
+  | {
+      readonly outcome: "ready_to_consent";
+      readonly serverName: string;
+      readonly authorizationServer: string;
+      readonly clientMode: "CIMD" | "DCR";
+    }
+  | {
+      readonly outcome:
+        | "unknown_catalog_entry"
+        | "already_connected"
+        | "unavailable";
+    };
+
+export type McpOAuthStartOutcome =
+  | { readonly outcome: "redirect"; readonly authorizationUrl: string }
+  | {
+      readonly outcome:
+        | "unknown_catalog_entry"
+        | "already_connected"
+        | "proof_used"
+        | "unavailable";
+    };
+
 export interface McpHubRpc {
+  readonly describeConsent: (
+    request: McpOAuthRequest
+  ) => Promise<McpConsentOutcome>;
+  readonly startOAuth: (
+    request: McpOAuthRequest
+  ) => Promise<McpOAuthStartOutcome>;
   readonly addConnection: (
     catalogId: string,
     connectTimeoutMillis: number
@@ -36,6 +73,7 @@ export interface McpHubRpc {
 export class McpHubPort extends Context.Service<
   McpHubPort,
   {
+    readonly routingId: string;
     readonly callTool: (
       request: McpCallRequest
     ) => Effect.Effect<McpCallOutcome>;

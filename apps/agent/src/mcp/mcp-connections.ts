@@ -5,7 +5,7 @@ import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { mcpConnectionStates } from "../personal-agent/storage-values.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
-import { mcpConnections, mcpTools } from "./mcp-schema.ts";
+import { mcpConnectRequests, mcpConnections, mcpTools } from "./mcp-schema.ts";
 import { McpToolCopySchema } from "./mcp-tool-copy.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 
@@ -100,7 +100,35 @@ const makeMcpConnections = (catalog: McpCatalog) =>
         })
       );
 
-    return { catalog, states, stateOf, setState, tools, replaceTools };
+    const requestConnect = (eventId: string, catalogId: string) =>
+      database
+        .insert(mcpConnectRequests)
+        .values({ eventId, catalogId })
+        .onConflictDoNothing();
+
+    const connectRequestsOf = (eventId: string) =>
+      database
+        .select({ catalogId: mcpConnectRequests.catalogId })
+        .from(mcpConnectRequests)
+        .where(eq(mcpConnectRequests.eventId, eventId))
+        .pipe(Effect.map((rows) => rows.map(({ catalogId }) => catalogId)));
+
+    const settleConnectRequests = (eventId: string) =>
+      database
+        .delete(mcpConnectRequests)
+        .where(eq(mcpConnectRequests.eventId, eventId));
+
+    return {
+      catalog,
+      states,
+      stateOf,
+      setState,
+      tools,
+      replaceTools,
+      requestConnect,
+      connectRequestsOf,
+      settleConnectRequests,
+    };
   });
 
 export class McpConnections extends Context.Service<

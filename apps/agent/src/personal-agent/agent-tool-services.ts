@@ -29,6 +29,7 @@ const mcpSnapshot = Effect.gen(function* mcpSnapshotEffect() {
     states,
     copies,
     hub: yield* McpHubPort,
+    requestConnect: connections.requestConnect,
   };
 });
 

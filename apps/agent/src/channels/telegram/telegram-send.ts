@@ -6,6 +6,7 @@ import type {
   Delivery,
   OutgoingApprovalMessage,
   OutgoingMessage,
+  OutgoingOwnerProofLink,
 } from "../channel.ts";
 import { approvalBlocksOf } from "./approval-keyboard.ts";
 import type { InlineKeyboard } from "./approval-keyboard.ts";
@@ -13,6 +14,7 @@ import type { InlineKeyboard } from "./approval-keyboard.ts";
 export interface TelegramConfig {
   readonly apiUrl: string;
   readonly botToken: string;
+  readonly edgeUrl: string;
   readonly fetch?: typeof fetch;
 }
 
@@ -145,6 +147,23 @@ const textPartsOf = (message: OutgoingMessage): TelegramPart[] =>
 
 export const send = (config: TelegramConfig) => (message: OutgoingMessage) =>
   sendParts(config, textPartsOf(message));
+
+export const sendOwnerProofLink =
+  (config: TelegramConfig) => (link: OutgoingOwnerProofLink) =>
+    config.edgeUrl === ""
+      ? Effect.succeed(failed("The Edge public URL is not configured"))
+      : sendPart(config, {
+          conversationId: link.conversationId,
+          text: link.text,
+          keyboard: [
+            [
+              {
+                text: link.label,
+                login_url: { url: `${config.edgeUrl}${link.edgePath}` },
+              },
+            ],
+          ],
+        });
 
 export const approvalNotSentStatus =
   "Cancelled: the reply did not send in full, so nothing waits for your Approval.";

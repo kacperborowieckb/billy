@@ -240,6 +240,8 @@ const testChannel = Layer.succeed(Channel, {
         ? { _tag: "Failed", reason: "never" }
         : answer.next
     ),
+  sendOwnerProofLink: () =>
+    Effect.succeed({ _tag: "Failed", reason: "unused" }),
   answerPress: () => Effect.void,
   react: () =>
     answer.next === "never" ? Effect.never : Effect.succeed(answer.next),

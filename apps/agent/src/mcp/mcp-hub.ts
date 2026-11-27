@@ -11,9 +11,13 @@ import type {
   McpAddConnectionOutcome,
   McpCallOutcome,
   McpCallRequest,
+  McpConsentOutcome,
   McpHubRpc,
+  McpOAuthRequest,
+  McpOAuthStartOutcome,
 } from "./mcp-hub-contract.ts";
 import { resultTextOf, toolCopyOf } from "./mcp-hub-results.ts";
+import { McpOAuthStarter } from "./mcp-oauth-starter.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { mcpCatalogFor } from "./mcp-test-catalog.ts";
@@ -40,6 +44,23 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
   private readonly manager = new LazyMcpClientManager("billy-mcp-hub", "1.0.0");
 
   readonly lifecycle = Lifecycle.install(this).use(this.manager);
+
+  private readonly oauth = new McpOAuthStarter({
+    catalog: this.catalog,
+    send: (input, init) =>
+      guardedFetch(this.send, this.allowedOrigins)(input, init),
+    allowedOrigins: this.allowedOrigins,
+    storage: this.ctx.storage,
+    routingId: this.ctx.id.toString(),
+    isRecorded: (catalogId) => this.isRecorded(catalogId),
+    markAuthenticating: async (catalogId) => {
+      const agent = await personalAgentFor(
+        this.env.PERSONAL_AGENT,
+        OwnerIdSchema.make(this.ctx.id.name ?? "")
+      );
+      await agent.receiveMcpConnectionState(catalogId, "authenticating");
+    },
+  });
 
   private readonly setups = new Map<string, Promise<McpAddConnectionOutcome>>();
 
@@ -101,6 +122,14 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     return this.ctx.storage
       .get<true>(`connection:${catalogId}`)
       .then((recorded) => recorded === true);
+  }
+
+  describeConsent(request: McpOAuthRequest): Promise<McpConsentOutcome> {
+    return this.oauth.describeConsent(request);
+  }
+
+  startOAuth(request: McpOAuthRequest): Promise<McpOAuthStartOutcome> {
+    return this.oauth.startOAuth(request);
   }
 
   addConnection(
