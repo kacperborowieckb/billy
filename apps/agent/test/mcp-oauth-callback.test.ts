@@ -434,7 +434,12 @@ describe("a replay of a good callback", () => {
     };
 
     await agent.receiveMcpConnected(completion);
+    await agent.receiveMcpConnectionState(testMcpCatalogId, "failed");
     await agent.receiveMcpConnected(completion);
+
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "failed" },
+    ]);
 
     expect(await addedEntryCountOf(ownerId)).toBe(1);
     expect(fakeTelegram.sent).toHaveLength(2);

@@ -65,14 +65,14 @@ export const receiveMcpConnected = (catalog: McpCatalog, received: unknown) =>
     if (entry === undefined) {
       return;
     }
-    const connections = yield* McpConnections;
-    yield* connections.replaceTools(catalogId, tools);
-    yield* connections.setState(catalogId, "ready");
     const journal = yield* Journal;
     const eventId = `mcp-connection-added:${completionId}`;
     if ((yield* journal.readForEvent(eventId)).length > 0) {
       return;
     }
+    const connections = yield* McpConnections;
+    yield* connections.replaceTools(catalogId, tools);
+    yield* connections.setState(catalogId, "ready");
     yield* journal.append({
       _tag: "McpConnectionAdded",
       eventId,
