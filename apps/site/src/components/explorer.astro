@@ -1,0 +1,294 @@
+---
+// "See it in the app": what Billy does today, then what is coming, as a
+// vertical tablist; the phone plays the picked one (src/scripts/explorer.ts).
+import { icons, outfits, billy } from "../art";
+import { today } from "../scripts/features";
+import { soon } from "../scripts/soon";
+import Phone from "./phone.astro";
+
+const groups = [
+  { label: "Today", items: today, offset: 0 },
+  { label: "Coming soon", items: soon, offset: today.length },
+];
+---
+
+<section id="app" class="wrap section explorer" aria-labelledby="app-title" data-explorer>
+  <div class="head">
+    <h2 id="app-title" class="display-section">See it in the app</h2>
+    <p class="lede">Pick something Billy does. The phone plays it the way it looks in your chat.</p>
+  </div>
+  <div class="grid">
+    <div class="list" role="tablist" aria-label="What Billy does" aria-orientation="vertical" data-features>
+      <span class="marker" aria-hidden="true" data-marker></span>
+      {
+        groups.map((group) => (
+          <>
+            <p class="group">{group.label}</p>
+            {group.items.map((feature, position) => {
+              const index = group.offset + position;
+              return (
+                <button
+                  class="feature"
+                  type="button"
+                  role="tab"
+                  id={`tab-${feature.id}`}
+                  aria-controls="app-panel"
+                  aria-selected={index === 0 ? "true" : "false"}
+                  tabindex={index === 0 ? 0 : -1}
+                >
+                  <img class="px" src={icons[feature.icon]} alt="" width="32" height="32" />
+                  <b>{feature.title}</b>
+                  {feature.soon && <em>Soon</em>}
+                  <span>{feature.line}</span>
+                </button>
+              );
+            })}
+          </>
+        ))
+      }
+    </div>
+    <div class="show" role="tabpanel" id="app-panel" aria-labelledby="tab-notes" data-panel>
+      <button class:list={["replay"]} type="button" data-replay>Play again</button>
+      <span class="caption" aria-hidden="true" data-caption>Notes</span>
+      <span class="ridge" aria-hidden="true"></span>
+      <span class="mascot side" aria-hidden="true">
+        <img class="px" src={billy.base} alt="" width="128" height="128" />
+        <img class="px" src={outfits.forest} alt="" width="128" height="128" data-outfit />
+      </span>
+      <Phone class="show-phone" />
+    </div>
+  </div>
+</section>
+
+<style>
+  .head {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: end;
+    gap: var(--space-6);
+    margin-block-end: var(--space-7);
+  }
+
+  .head .lede {
+    font-size: 17px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 28px;
+  }
+
+  .list {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2);
+    border-radius: 24px;
+    background: var(--color-surface-sunken);
+  }
+
+  /* The selected row's card slides to it (transform only). */
+  .marker {
+    position: absolute;
+    inset: 0 var(--space-2) auto;
+    block-size: var(--h, 64px);
+    border-radius: 16px;
+    background: var(--color-surface-raised);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      var(--shadow-float);
+    transform: translateY(var(--y, 8px));
+    transition:
+      transform 320ms var(--easing-move),
+      block-size 320ms var(--easing-move);
+  }
+
+  .group {
+    position: relative;
+    z-index: 1;
+    padding: 16px 14px 8px;
+    color: var(--color-ink-muted);
+    font: 500 11px / 1 var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .feature {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    flex: 1;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 2px 14px;
+    padding: 11px 14px;
+    border: 0;
+    border-radius: 16px;
+    background: none;
+    color: var(--color-ink);
+    text-align: start;
+    cursor: pointer;
+    transition: transform var(--duration-quick) var(--easing-standard);
+  }
+
+  .feature:active {
+    transform: scale(0.985);
+  }
+
+  .feature img {
+    grid-row: span 2;
+    inline-size: 40px;
+    block-size: 40px;
+    padding: 4px;
+    border-radius: 11px;
+    background: var(--color-surface-raised);
+    box-shadow: 0 0 0 1px var(--color-line);
+  }
+
+  .feature b {
+    font: 600 15.5px / 1.25 var(--font-sans);
+  }
+
+  .feature span {
+    grid-column: 2;
+    color: var(--color-ink-muted);
+    font-size: 13.5px;
+    line-height: 1.35;
+  }
+
+  .feature em {
+    grid-row: span 2;
+    grid-column: 3;
+    padding: 5px 7px;
+    border-radius: 6px;
+    background: var(--color-honey);
+    color: var(--color-on-honey);
+    font: 500 11px / 1 var(--font-mono);
+    font-style: normal;
+  }
+
+  .feature[aria-selected="true"] img {
+    background: var(--color-honey);
+    box-shadow: 0 0 0 1px var(--color-honey-line);
+  }
+
+  .show {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-block-size: 820px;
+    padding: 72px var(--space-5) 40px;
+    overflow: hidden;
+    border-radius: 28px;
+    background: linear-gradient(var(--color-sky), var(--color-sky-low));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 6%, transparent);
+  }
+
+  .show::before,
+  .show::after,
+  .ridge {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    image-rendering: pixelated;
+    filter: var(--scenery-light);
+  }
+
+  .ridge {
+    inset-block-end: 120px;
+    block-size: 120px;
+    background: url("@repo/mascot/assets/world/hills.svg") 15% bottom / auto 120px repeat-x;
+    opacity: 0.35;
+  }
+
+  .show::before {
+    inset-block-end: 48px;
+    block-size: 240px;
+    background: url("@repo/mascot/assets/world/hills.svg") 70% bottom / auto 240px repeat-x;
+  }
+
+  .show::after {
+    inset-block-end: 0;
+    block-size: 48px;
+    background: url("@repo/mascot/assets/world/water.svg") left top / auto 48px repeat-x;
+  }
+
+  .show :global(.show-phone) {
+    --pw: 330px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .side {
+    --mascot-size: 128px;
+    position: absolute;
+    inset-block-end: 34px;
+    inset-inline-start: var(--space-5);
+    z-index: 2;
+  }
+
+  .caption {
+    position: absolute;
+    inset-block-start: 20px;
+    inset-inline-end: 22px;
+    z-index: 2;
+    padding: 8px 12px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--color-surface-raised) 75%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--color-forest-ink);
+    font: 500 12px / 1 var(--font-mono);
+  }
+
+  .replay {
+    position: absolute;
+    inset-block-start: 16px;
+    inset-inline-start: 22px;
+    z-index: 3;
+    block-size: 36px;
+    padding-inline: 14px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--color-ink) 7%, var(--color-surface));
+    color: var(--color-ink);
+    font: 500 14px / 1 var(--font-sans);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-quick) var(--easing-standard),
+      transform var(--duration-quick) var(--easing-standard);
+  }
+
+  .replay:active {
+    transform: scale(0.97);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .replay:hover {
+      background: color-mix(in srgb, var(--color-ink) 12%, var(--color-surface));
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .head,
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 760px) {
+    .show {
+      min-block-size: 680px;
+      padding-block-start: 64px;
+    }
+
+    .show :global(.show-phone) {
+      --pw: 290px;
+    }
+
+    .side {
+      display: none;
+    }
+  }
+</style>

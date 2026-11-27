@@ -10,6 +10,18 @@
   --color-on-bubble-you: #ffffff;
   --color-plate: #f2d8ae;
   --color-sky: #e8f0eb;
+  --color-sky-low: #d9e9df;
+  --color-dawn: #f7e6cc;
+  --color-dawn-low: #f4d4ae;
+  --color-dusk: #e7dcea;
+  --color-dusk-low: #f0c9a9;
+  --color-night: #0f1a22;
+  --color-night-high: #0c141c;
+  --color-night-low: #152a2b;
+  --color-on-night: #f4f1ea;
+  --color-on-night-muted: #b3bcc0;
+  --color-phone-bezel: #1d1d1f;
+  --color-phone-bezel-edge: #3a3a3c;
   --color-ink: #1c1917;
   --color-ink-muted: #625c57;
   --color-line: #ebe7e1;
@@ -77,6 +89,7 @@
   --shadow-composer: 0 1px 2px #1c19170a, 0 6px 20px #1c19170f;
   --shadow-float: 0 1px 1px #1c19170a, 0 2px 6px #1c19170a, 0 16px 32px -12px #26473c33;
   --shadow-button: 0 1px 2px #21342d4d, 0 6px 16px -6px #21342d73;
+  --shadow-phone: 0 2px 4px #1c191714, 0 30px 60px -20px #1c191759;
   --size-touch: 44px;
   --size-button-lg: 56px;
   --size-avatar: 44px;
@@ -97,6 +110,11 @@
   --easing-drift: cubic-bezier(0, 0, 1, 1);
   --easing-float: cubic-bezier(0.37, 0, 0.63, 1);
   --easing-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-send: 365ms;
+  --easing-send: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --duration-receive: 280ms;
+  --easing-receive: cubic-bezier(0.34, 1.42, 0.64, 1);
+  --duration-sky: 1400ms;
 }
 
 :root[data-theme="light"] {
@@ -112,6 +130,16 @@
     --color-on-bubble-you: #142d22;
     --color-plate: #343c3d;
     --color-sky: #17211d;
+    --color-sky-low: #1d2b24;
+    --color-dawn: #2a2620;
+    --color-dawn-low: #3a2f24;
+    --color-dusk: #2a2530;
+    --color-dusk-low: #3d2e25;
+    --color-night: #0c141c;
+    --color-night-high: #080e14;
+    --color-night-low: #10201f;
+    --color-phone-bezel: #050709;
+    --color-phone-bezel-edge: #2a2a2c;
     --color-ink: #f2efea;
     --color-ink-muted: #a8a39c;
     --color-line: #353331;
@@ -139,6 +167,16 @@
   --color-on-bubble-you: #142d22;
   --color-plate: #343c3d;
   --color-sky: #17211d;
+  --color-sky-low: #1d2b24;
+  --color-dawn: #2a2620;
+  --color-dawn-low: #3a2f24;
+  --color-dusk: #2a2530;
+  --color-dusk-low: #3d2e25;
+  --color-night: #0c141c;
+  --color-night-high: #080e14;
+  --color-night-low: #10201f;
+  --color-phone-bezel: #050709;
+  --color-phone-bezel-edge: #2a2a2c;
   --color-ink: #f2efea;
   --color-ink-muted: #a8a39c;
   --color-line: #353331;
@@ -167,6 +205,9 @@
     --duration-bob: 0ms;
     --duration-flow: 0ms;
     --duration-drift: 0ms;
+    --duration-send: 0ms;
+    --duration-receive: 0ms;
+    --duration-sky: 0ms;
   }
 }
 

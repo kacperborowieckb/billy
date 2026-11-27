@@ -1,86 +1,94 @@
 ---
+// Self-host: what running Billy yourself means, in three plain facts.
 import { buttonVariants } from "@/components/ui/button";
-import PixelIcon from "./pixel-icon.astro";
+
+import { icons } from "../art";
+import { sourceUrl } from "./nav-links";
+
+const facts = [
+  { icon: icons.search, title: "Open source", text: "Read every line on GitHub before you run it." },
+  { icon: icons.connector, title: "Your own Cloudflare account", text: "Billy runs where you deploy him, with your own model key." },
+  { icon: icons.note, title: "$5 a month", text: "The Cloudflare Workers Paid plan covers one person. You pay your model provider directly." },
+];
 ---
 
 <section id="self-host" class="wrap section selfhost" aria-labelledby="self-host-title">
-  <div class="copy" data-reveal>
-    <p class="eyebrow">Self-host</p>
+  <div class="copy">
     <h2 id="self-host-title" class="display-section">Run Billy on your own account.</h2>
-    <p>Billy is open source. Deploy him to your own Cloudflare account, bring your own model key, and keep every byte where you can see it.</p>
-    <a class={buttonVariants({ variant: "outline" })} href="https://github.com/kacperborowieckb/billy">Read the source</a>
+    <p class="lede">Billy is open source. Deploy him to your own Cloudflare account, bring your own model key, and keep every byte where you can see it.</p>
+    <div class="actions">
+      <a class={buttonVariants({ className: "go" })} href={sourceUrl}>Get Billy<svg class="chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg></a>
+      <a class={buttonVariants({ variant: "secondary" })} href={sourceUrl}>Read the source</a>
+    </div>
   </div>
-  <figure class="terminal" data-reveal>
-    <figcaption>
-      <PixelIcon name="connector" scale={1} />
-      <span>Clone, install, and check your setup</span>
-    </figcaption>
-    <pre><code><span class="prompt" aria-hidden="true">$ </span>git clone https://github.com/kacperborowieckb/billy
-<span class="prompt" aria-hidden="true">$ </span>cd billy
-<span class="prompt" aria-hidden="true">$ </span>pnpm install
-<span class="prompt" aria-hidden="true">$ </span>pnpm --filter @repo/agent control doctor
-<span class="ok">Result: healthy</span></code></pre>
-  </figure>
+  <ul class="facts">
+    {
+      facts.map((fact) => (
+        <li>
+          <img class="px" src={fact.icon} alt="" width="32" height="32" />
+          <h3>{fact.title}</h3>
+          <p>{fact.text}</p>
+        </li>
+      ))
+    }
+  </ul>
 </section>
 
 <style>
   .selfhost {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     align-items: center;
     gap: var(--space-8);
   }
 
-  .copy {
+  .lede {
+    margin-block-start: 18px;
+    font-size: 17px;
+  }
+
+  .actions {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-5);
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-block-start: 28px;
   }
 
-  .copy p:not(.eyebrow) {
-    max-inline-size: var(--size-measure);
-    color: var(--color-ink-muted);
-  }
-
-  .terminal {
+  .facts {
     margin: 0;
-    overflow: hidden;
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-lg);
+    padding: 0;
+    border-block-start: 1px solid var(--color-line-strong);
+    list-style: none;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 4px var(--space-4);
+    padding-block: 20px;
+    border-block-end: 1px solid var(--color-line-strong);
+  }
+
+  img {
+    grid-row: span 2;
+    inline-size: 40px;
+    block-size: 40px;
+    padding: 4px;
+    border-radius: 12px;
     background: var(--color-surface-raised);
-    box-shadow: var(--shadow-composer);
+    box-shadow: 0 0 0 1px var(--color-line);
   }
 
-  figcaption {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-5);
-    border-block-end: 1px solid var(--color-line);
-    background: var(--color-bubble-billy);
-    font: var(--text-body-strong);
+  h3 {
+    font: 600 17px / 1.3 var(--font-sans);
+  }
+
+  li p {
     color: var(--color-ink-muted);
+    font-size: 15px;
   }
 
-  pre {
-    margin: 0;
-    padding: var(--space-5);
-    overflow-x: auto;
-    font: var(--text-code);
-    color: var(--color-ink);
-  }
-
-  .prompt {
-    color: var(--color-ink-muted);
-    user-select: none;
-  }
-
-  .ok {
-    color: var(--color-forest);
-  }
-
-  @media (max-width: 960px) {
+  @media (max-width: 1023px) {
     .selfhost {
       grid-template-columns: minmax(0, 1fr);
       gap: var(--space-6);

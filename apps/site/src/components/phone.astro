@@ -1,0 +1,38 @@
+---
+// A drawn iPhone with Billy's chat open: status bar, header, the thread
+// (filled and played by src/scripts/chat.ts), the composer and the home bar.
+// It is a picture of the app, so it is hidden from assistive technology; the
+// section around it describes what it shows.
+import { billy } from "../art";
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class:list={["phone", className]} aria-hidden="true">
+  <div class="phone-screen">
+    <div class="phone-status">
+      <span>9:41</span>
+      <i class="phone-island"></i>
+      <span>
+        <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"></rect><rect x="5" y="5.5" width="3" height="6.5" rx="1"></rect><rect x="10" y="3" width="3" height="9" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1"></rect></svg>
+        <svg viewBox="0 0 16 12"><path d="M8 11.2 5.6 8.6a3.4 3.4 0 0 1 4.8 0Zm-4-4.3a5.7 5.7 0 0 1 8 0l1.3-1.4a7.6 7.6 0 0 0-10.6 0Zm-2.6-2.7a9.4 9.4 0 0 1 13.2 0L16 2.8a11.4 11.4 0 0 0-16 0Z"></path></svg>
+        <svg viewBox="0 0 27 13"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity="0.4"></rect><rect x="2" y="2" width="20" height="9" rx="2"></rect><path d="M25 4.5v4a2 2 0 0 0 0-4Z" opacity="0.4"></path></svg>
+      </span>
+    </div>
+    <div class="phone-head">
+      <svg class="back" viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      <span class="phone-who"><span class="disc"><img class="px" src={billy.portrait} alt="" width="34" height="34" /></span>Billy</span>
+      <span></span>
+    </div>
+    <div class="chat-thread" data-thread></div>
+    <div class="phone-composer">
+      <span class="phone-field" data-field>Message Billy</span>
+      <span class="phone-send" data-send><svg viewBox="0 0 16 16"><path d="M8 13V3.5M3.8 7.6 8 3.4l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+    </div>
+    <i class="phone-homebar"></i>
+  </div>
+</div>

@@ -1,6 +1,7 @@
 ---
 import "../styles/ui.css";
 import "../styles/site.css";
+import "../styles/chat.css";
 import { billy } from "../art";
 
 interface Props {
@@ -20,16 +21,18 @@ const { title, description } = Astro.props;
     <meta name="description" content={description} />
     <link rel="icon" type="image/png" href={billy.portrait} />
     <script is:inline>
-      // Before first paint: the saved day or night choice, and a flag that
-      // lets CSS hide sections until they scroll in.
+      // Before first paint: the saved day or night choice. The site opens in
+      // day until someone presses the switch.
+      let theme = "light";
       try {
-        const theme = localStorage.getItem("billy-theme");
-        if (theme === "light" || theme === "dark") {
-          document.documentElement.dataset.theme = theme;
+        const saved = localStorage.getItem("billy-theme");
+        if (saved === "light" || saved === "dark") {
+          theme = saved;
         }
       } catch {
-        // Storage can be blocked: follow the system theme.
+        // Storage can be blocked: stay in day.
       }
+      document.documentElement.dataset.theme = theme;
       document.documentElement.classList.add("js");
     </script>
   </head>

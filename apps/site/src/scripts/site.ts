@@ -1,8 +1,10 @@
-import { startVignettes } from "./vignettes";
+import { startExplorer } from "./explorer";
+import { startKeeps } from "./keeps";
+import { startValley } from "./valley";
 
-// The site's script: the day and night switch, the header material, sections
-// arriving on scroll, and the hero conversations (./vignettes.ts). Everything works and
-// reads the same without it.
+// The site's script: the day and night switch, the header material, the
+// Product menu, and the three played conversations (the hero valley, "What
+// Billy keeps" and the app explorer). Everything reads the same without it.
 
 const root = document.documentElement;
 const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
@@ -69,37 +71,42 @@ if (masthead) {
   update();
 }
 
-// Sections arrive once, as they enter the viewport. Chat messages inside a
-// revealed panel follow one after another.
-const reveal = new IntersectionObserver(
-  (entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) {
-        continue;
-      }
-      const element = entry.target as HTMLElement;
-      for (const [index, message] of [
-        ...element.querySelectorAll<HTMLElement>("[data-chat] > *"),
-      ].entries()) {
-        message.style.transitionDelay = `${250 + index * 180}ms`;
-      }
-      element.classList.add("is-in");
-      reveal.unobserve(element);
-    }
-  },
-  { rootMargin: "0px 0px -12% 0px", threshold: 0.12 }
-);
-for (const element of document.querySelectorAll<HTMLElement>("[data-reveal]")) {
-  const siblings = [
-    ...(element.parentElement?.querySelectorAll<HTMLElement>(
-      ":scope > [data-reveal]"
-    ) ?? []),
-  ];
-  element.style.setProperty(
-    "--reveal-index",
-    String(siblings.indexOf(element))
+// The Product menu: opens on click, or after a short hover where there is a
+// fine pointer; Escape and moving focus away close it.
+const product = document.querySelector<HTMLElement>("[data-menu]");
+const productButton = product?.querySelector<HTMLButtonElement>("button");
+if (product && productButton) {
+  let timer = 0;
+  const setOpen = (open: boolean) => {
+    product.classList.toggle("is-open", open);
+    productButton.setAttribute("aria-expanded", String(open));
+  };
+  const later = (open: boolean) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => setOpen(open), 120);
+  };
+  productButton.addEventListener("click", () =>
+    setOpen(!product.classList.contains("is-open"))
   );
-  reveal.observe(element);
+  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    product.addEventListener("pointerenter", () => later(true));
+    product.addEventListener("pointerleave", () => later(false));
+  }
+  product.addEventListener("focusout", (event) => {
+    if (!product.contains(event.relatedTarget as Node | null)) {
+      setOpen(false);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+    }
+  });
+  for (const link of product.querySelectorAll("a")) {
+    link.addEventListener("click", () => setOpen(false));
+  }
 }
 
-startVignettes();
+startValley();
+startKeeps();
+startExplorer();
