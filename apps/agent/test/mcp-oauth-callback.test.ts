@@ -583,9 +583,7 @@ describe("a replay of a good callback", () => {
       expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(2)
     );
     const earlierReplay = goodCallback(first);
-    await new Promise((resolve) => {
-      setTimeout(resolve, 200);
-    });
+    await Effect.runPromise(Effect.sleep(200));
     releaseExchange();
     const [later, earlier] = await Promise.all([laterAttempt, earlierReplay]);
 
