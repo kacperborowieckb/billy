@@ -589,6 +589,22 @@ describe("a replay of a good callback", () => {
     expect(fakeTelegram.sent).toHaveLength(2);
   });
 
+  it("keeps the Connection ready when the Owner chat cannot be read after the completion is stored", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9969);
+    const { state } = await startedConsent(9969, ownerId);
+    await runInDurableObject(await agentOf(ownerId), (_instance, { storage }) =>
+      storage.sql.exec("DROP TABLE owner_channel_conversations")
+    );
+
+    const response = await goodCallback(state);
+
+    expect(response.status).toBe(200);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+  });
+
   it("keeps the Connection ready when the Connected message cannot be sent", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9994);
     const { state } = await startedConsent(9994, ownerId);

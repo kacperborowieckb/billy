@@ -49,6 +49,21 @@ export const connectedMessageOf = (
     ? `Connected ${displayName}`
     : `Connected ${displayName} (account ${accountLabel})`;
 
+const announceConnected = Effect.fnUntraced(function* announceConnected(
+  displayName: string,
+  accountLabel: string | undefined
+) {
+  const conversation = yield* (yield* OwnerChannelConversation).current;
+  if (conversation === undefined) {
+    return;
+  }
+  const channel = yield* Channel;
+  yield* channel.send({
+    conversationId: conversation.conversationId,
+    text: connectedMessageOf(displayName, accountLabel),
+  });
+});
+
 export const McpConnectedCopySchema = Schema.Struct({
   catalogId: Schema.String,
   tools: McpToolCatalogCopySchema,
@@ -88,20 +103,11 @@ export const receiveMcpConnected = Effect.fnUntraced(
     if (!isFirstTime) {
       return;
     }
-    const conversation = yield* (yield* OwnerChannelConversation).current;
-    if (conversation !== undefined) {
-      const channel = yield* Channel;
-      yield* channel
-        .send({
-          conversationId: conversation.conversationId,
-          text: connectedMessageOf(entry.displayName, accountLabel),
-        })
-        .pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning("The Connected message was not sent", cause)
-          )
-        );
-    }
+    yield* announceConnected(entry.displayName, accountLabel).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("The Connected message was not sent", cause)
+      )
+    );
   },
   Effect.orDie
 );
