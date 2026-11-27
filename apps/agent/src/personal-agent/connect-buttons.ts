@@ -3,14 +3,15 @@ import { Effect } from "effect";
 import { Channel } from "../channels/channel.ts";
 import { mcpEntryOf } from "../mcp/mcp-catalog.ts";
 import { McpConnections } from "../mcp/mcp-connections.ts";
+import { McpHubPort } from "../mcp/mcp-hub-contract.ts";
 import { destinationOf } from "./delivery-send.ts";
 import type { InboxEvent } from "./inbox.ts";
 
 export const connectButtonFailedText =
   "I could not send the Connect button. Ask me to connect again.";
 
-export const connectEdgePath = (catalogId: string) =>
-  `/mcp/connect?c=${encodeURIComponent(catalogId)}`;
+export const connectEdgePath = (catalogId: string, routingId: string) =>
+  `/mcp/connect?c=${encodeURIComponent(catalogId)}&r=${encodeURIComponent(routingId)}`;
 
 export const sendConnectButtons = Effect.fnUntraced(
   function* sendConnectButtons(
@@ -28,6 +29,7 @@ export const sendConnectButtons = Effect.fnUntraced(
       return;
     }
     const channel = yield* Channel;
+    const hub = yield* McpHubPort;
     const destination = yield* destinationOf(replyTo);
     if (destination === undefined) {
       return;
@@ -41,7 +43,7 @@ export const sendConnectButtons = Effect.fnUntraced(
         conversationId: destination.conversationId,
         text: `Connect ${name}`,
         label: `Connect ${name}`,
-        edgePath: connectEdgePath(catalogId),
+        edgePath: connectEdgePath(catalogId, hub.routingId),
       });
       if (sent._tag === "Failed") {
         yield* channel.send({

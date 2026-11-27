@@ -1,5 +1,5 @@
 import { env, runInDurableObject } from "cloudflare:test";
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { McpConnections } from "../src/mcp/mcp-connections.ts";
@@ -53,10 +53,12 @@ const signed = async (
   return new URLSearchParams({ ...fields, hash });
 };
 
-const nowSeconds = () => Math.floor(Date.now() / 1000);
+const nowSeconds = () =>
+  Math.floor(DateTime.toEpochMillis(DateTime.nowUnsafe()) / 1000);
 
 const loginOf = async (
   telegramUserId: number,
+  ownerId: string,
   overrides: { authDate?: number; botToken?: string } = {}
 ) => {
   const params = await signed(
@@ -68,6 +70,7 @@ const loginOf = async (
     overrides.botToken
   );
   params.set("c", testMcpCatalogId);
+  params.set("r", env.MCP_HUB.idFromName(ownerId).toString());
   return params;
 };
 
@@ -107,7 +110,7 @@ beforeEach(() => {
 
 describe("the Connect button", () => {
   it("sends a login_url button that code writes, with no link from the model", async () => {
-    await addOwner(9951);
+    const ownerId = await addOwner(9951);
     scriptModel([
       {
         callTool: connectMcpServerToolName,
@@ -138,7 +141,7 @@ describe("the Connect button", () => {
             {
               text: "Connect Test server",
               login_url: {
-                url: "https://edge.test.example/mcp/connect?c=test_server",
+                url: `https://edge.test.example/mcp/connect?c=test_server&r=${env.MCP_HUB.idFromName(ownerId).toString()}`,
               },
             },
           ],
@@ -153,7 +156,7 @@ describe("the consent page", () => {
     const ownerId = await addOwner(9952);
     const wakes = mcpHubWakes.count;
 
-    const response = await getConsent(await loginOf(9952));
+    const response = await getConsent(await loginOf(9952, ownerId));
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -167,27 +170,27 @@ describe("the consent page", () => {
   });
 
   it.each([
-    ["another Telegram account", () => loginOf(9999)],
+    ["another Telegram account", (ownerId) => loginOf(9999, ownerId)],
     [
       "a bad signature",
-      async () => {
-        const params = await loginOf(9953);
+      async (ownerId: string) => {
+        const params = await loginOf(9953, ownerId);
         params.set("hash", "0".repeat(64));
         return params;
       },
     ],
     [
       "a signature made with another bot token",
-      () => loginOf(9953, { botToken: "another-bot" }),
+      (ownerId) => loginOf(9953, ownerId, { botToken: "another-bot" }),
     ],
     [
       "an old auth_date",
-      () => loginOf(9953, { authDate: nowSeconds() - 3600 }),
+      (ownerId) => loginOf(9953, ownerId, { authDate: nowSeconds() - 3600 }),
     ],
   ])("refuses %s and starts nothing", async (_name, makeParams) => {
     const ownerId = await addOwner(9953);
     const wakes = mcpHubWakes.count;
-    const params = await makeParams();
+    const params = await makeParams(ownerId);
 
     const getAnswer = await getConsent(params);
     const postAnswer = await postConsent(params);
@@ -201,11 +204,40 @@ describe("the consent page", () => {
   });
 });
 
+describe("a forwarded button or link", () => {
+  it("refuses another registered Owner and starts nothing", async () => {
+    const ownerId = await addOwner(9958);
+    const otherOwnerId = await addOwner(9959);
+    const params = await loginOf(9959, ownerId);
+
+    const getAnswer = await getConsent(params);
+    const postAnswer = await postConsent(params);
+
+    expect(getAnswer.status).toBe(403);
+    expect(postAnswer.status).toBe(403);
+    expect(await oauthKeyCountOf(ownerId)).toBe(0);
+    expect(await oauthKeyCountOf(otherOwnerId)).toBe(0);
+  });
+
+  it("uses up the login proof at the first POST", async () => {
+    const ownerId = await addOwner(9960);
+    const params = await loginOf(9960, ownerId);
+
+    const first = await postConsent(params);
+    const second = await postConsent(params);
+
+    expect(first.status).toBe(303);
+    expect(second.status).toBe(403);
+    expect(second.headers.get("Location")).toBeNull();
+    expect(await oauthKeyCountOf(ownerId)).toBe(1);
+  });
+});
+
 describe("starting OAuth from the consent page", () => {
   it("redirects to the authorization server with PKCE S256 and a state without the Owner", async () => {
     const ownerId = await addOwner(9954);
 
-    const response = await postConsent(await loginOf(9954));
+    const response = await postConsent(await loginOf(9954, ownerId));
 
     expect(response.status).toBe(303);
     const location = new URL(response.headers.get("Location") ?? "");
@@ -244,10 +276,10 @@ describe("starting OAuth from the consent page", () => {
   });
 
   it("registers a client when the server has no client metadata documents", async () => {
-    await addOwner(9955);
+    const ownerId = await addOwner(9955);
     fakeMcpServer.oauth.supportClientIdMetadata(false);
 
-    const response = await postConsent(await loginOf(9955));
+    const response = await postConsent(await loginOf(9955, ownerId));
 
     const location = new URL(response.headers.get("Location") ?? "");
     expect(location.searchParams.get("client_id")).toBe("fake-dcr-client");
@@ -263,7 +295,7 @@ describe("starting OAuth from the consent page", () => {
     const ownerId = await addOwner(9956);
     fakeMcpServer.oauth.supportPkce(false);
 
-    const response = await postConsent(await loginOf(9956));
+    const response = await postConsent(await loginOf(9956, ownerId));
 
     expect(response.status).toBe(502);
     expect(await oauthKeyCountOf(ownerId)).toBe(0);
@@ -271,8 +303,8 @@ describe("starting OAuth from the consent page", () => {
   });
 
   it("answers 404 for a service that the catalog does not list", async () => {
-    await addOwner(9957);
-    const params = await loginOf(9957);
+    const ownerId = await addOwner(9957);
+    const params = await loginOf(9957, ownerId);
     params.set("c", "unknown");
 
     const response = await postConsent(params);

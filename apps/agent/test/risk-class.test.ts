@@ -38,6 +38,7 @@ const readTools = new Set([
   "list_schedules",
   "find_mcp_tools",
   "call_mcp_tool",
+  "connect_mcp_server",
   "stay_silent",
   "react",
   "quiet_hours",

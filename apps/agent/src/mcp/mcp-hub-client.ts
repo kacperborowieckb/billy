@@ -9,6 +9,7 @@ export const mcpHubClient = (
   ownerId: OwnerId
 ) =>
   Layer.succeed(McpHubPort, {
+    routingId: namespace.idFromName(ownerId).toString(),
     callTool: (request) =>
       Effect.promise(() => namespace.getByName(ownerId).callTool(request)).pipe(
         Effect.catchCause(() =>

@@ -32,7 +32,7 @@ export const connectRefusedPage = () =>
   page(
     403,
     "This link did not work",
-    "<p>Open the connect button in your chat with the agent again. If it still fails, ask the agent to connect the service once more.</p>"
+    "<p>Open the Connect button in your chat with Billy again. If it still fails, ask Billy to connect the service once more.</p>"
   );
 
 const notAvailablePage = () =>
@@ -76,21 +76,27 @@ const paramsOf = (request: Request) =>
       )
     : Effect.succeed(new URLSearchParams(new URL(request.url).search));
 
-const ownerOfLogin = (params: URLSearchParams, env: Env) =>
-  Effect.gen(function* ownerOfLoginEffect() {
-    const login = yield* verifyTelegramLogin(params, env.TELEGRAM_BOT_TOKEN);
-    if (login._tag === "Refused") {
-      return Option.none<OwnerId>();
-    }
-    const directory = yield* Directory;
-    const owner = yield* directory.findOwner(
-      telegramIdentity(login.telegramUserId)
-    );
-    return owner.pipe(
-      Option.filter(({ status }) => status === "active"),
-      Option.map(({ ownerId }) => ownerId)
-    );
-  });
+const ownerOfLogin = Effect.fnUntraced(function* ownerOfLogin(
+  params: URLSearchParams,
+  env: Env
+) {
+  const login = yield* verifyTelegramLogin(params, env.TELEGRAM_BOT_TOKEN);
+  if (login._tag === "Refused") {
+    return Option.none<OwnerId>();
+  }
+  const directory = yield* Directory;
+  const owner = yield* directory.findOwner(
+    telegramIdentity(login.telegramUserId)
+  );
+  return owner.pipe(
+    Option.filter(({ status }) => status === "active"),
+    Option.map(({ ownerId }) => ownerId),
+    Option.filter(
+      (ownerId) =>
+        env.MCP_HUB.idFromName(ownerId).toString() === params.get("r")
+    )
+  );
+});
 
 const consentPage = (
   params: URLSearchParams,
@@ -104,6 +110,7 @@ const consentPage = (
     ...loginFieldsOf(params),
     ["hash", params.get("hash") ?? ""],
     ["c", params.get("c") ?? ""],
+    ["r", params.get("r") ?? ""],
   ]
     .map(
       ([name, value]) =>
@@ -113,70 +120,75 @@ const consentPage = (
   return page(
     200,
     `Connect ${consent.serverName}`,
-    `<p>The agent will connect to <strong>${escapeHtml(consent.serverName)}</strong>.</p><ul><li>Sign-in happens at: ${escapeHtml(consent.authorizationServer)}</li><li>Client mode: ${escapeHtml(consent.clientMode)}</li></ul><form method="post" action="/mcp/connect">${hidden}<button type="submit">Continue</button></form>`
+    `<p>Billy will connect to <strong>${escapeHtml(consent.serverName)}</strong>.</p><ul><li>Sign-in happens at: ${escapeHtml(consent.authorizationServer)}</li><li>Client mode: ${escapeHtml(consent.clientMode)}</li></ul><form method="post" action="/mcp/connect">${hidden}<button type="submit">Continue</button></form>`
   );
 };
 
-export const handleMcpConnect = (request: Request, env: Env) =>
-  Effect.gen(function* handleMcpConnectEffect() {
-    const params = yield* paramsOf(request);
-    const ownerId = yield* ownerOfLogin(params, env);
-    const catalogId = params.get("c") ?? "";
-    if (Option.isNone(ownerId)) {
+type RefusedOutcome =
+  | "already_connected"
+  | "unknown_catalog_entry"
+  | "proof_used"
+  | "unavailable";
+
+const refusalPageFor = (outcome: RefusedOutcome) => {
+  switch (outcome) {
+    case "already_connected": {
+      return alreadyConnectedPage();
+    }
+    case "unknown_catalog_entry": {
+      return unknownServicePage();
+    }
+    case "proof_used": {
       return connectRefusedPage();
     }
-    const hub = env.MCP_HUB.getByName(ownerId.value);
-    const oauthRequest = oauthRequestOf(request, catalogId);
-    if (request.method === "GET") {
-      const consent = yield* Effect.tryPromise(
-        async () => await hub.describeConsent(oauthRequest)
-      ).pipe(Effect.option);
-      if (Option.isNone(consent)) {
-        return notAvailablePage();
-      }
-      switch (consent.value.outcome) {
-        case "ready_to_consent": {
-          return consentPage(params, consent.value);
-        }
-        case "already_connected": {
-          return alreadyConnectedPage();
-        }
-        case "unknown_catalog_entry": {
-          return unknownServicePage();
-        }
-        default: {
-          return notAvailablePage();
-        }
-      }
-    }
-    const started = yield* Effect.tryPromise(
-      async () => await hub.startOAuth(oauthRequest)
-    ).pipe(Effect.option);
-    if (Option.isNone(started)) {
+    default: {
       return notAvailablePage();
     }
-    switch (started.value.outcome) {
-      case "redirect": {
-        return new Response(null, {
-          status: 303,
-          headers: {
-            Location: started.value.authorizationUrl,
-            "Cache-Control": "no-store",
-            "Referrer-Policy": "no-referrer",
-          },
-        });
-      }
-      case "already_connected": {
-        return alreadyConnectedPage();
-      }
-      case "unknown_catalog_entry": {
-        return unknownServicePage();
-      }
-      default: {
-        return notAvailablePage();
-      }
+  }
+};
+
+export const handleMcpConnect = Effect.fnUntraced(function* handleMcpConnect(
+  request: Request,
+  env: Env
+) {
+  const params = yield* paramsOf(request);
+  const ownerId = yield* ownerOfLogin(params, env);
+  if (Option.isNone(ownerId)) {
+    return connectRefusedPage();
+  }
+  const hub = env.MCP_HUB.getByName(ownerId.value);
+  const oauthRequest = {
+    ...oauthRequestOf(request, params.get("c") ?? ""),
+    proofId: params.get("hash") ?? "",
+  };
+  if (request.method === "GET") {
+    const consent = yield* Effect.tryPromise(
+      async () => await hub.describeConsent(oauthRequest)
+    ).pipe(Effect.option);
+    if (Option.isNone(consent)) {
+      return notAvailablePage();
     }
-  });
+    return consent.value.outcome === "ready_to_consent"
+      ? consentPage(params, consent.value)
+      : refusalPageFor(consent.value.outcome);
+  }
+  const started = yield* Effect.tryPromise(
+    async () => await hub.startOAuth(oauthRequest)
+  ).pipe(Effect.option);
+  if (Option.isNone(started)) {
+    return notAvailablePage();
+  }
+  return started.value.outcome === "redirect"
+    ? new Response(null, {
+        status: 303,
+        headers: {
+          Location: started.value.authorizationUrl,
+          "Cache-Control": "no-store",
+          "Referrer-Policy": "no-referrer",
+        },
+      })
+    : refusalPageFor(started.value.outcome);
+});
 
 export const handleClientMetadata = (request: Request) =>
   Effect.sync(() => {

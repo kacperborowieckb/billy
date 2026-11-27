@@ -1,3 +1,5 @@
+import { DateTime } from "effect";
+
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type {
@@ -12,7 +14,13 @@ import type { PendingOAuth } from "./oauth-start.ts";
 
 const pendingOAuthKeyPrefix = "oauth:";
 
+const usedProofKeyPrefix = "proof:";
+
 const oauthStartLifetimeMillis = 10 * 60 * 1000;
+
+const usedProofLifetimeMillis = 15 * 60 * 1000;
+
+const nowMillis = () => DateTime.toEpochMillis(DateTime.nowUnsafe());
 
 export interface McpOAuthStarterDependencies {
   readonly catalog: McpCatalog;
@@ -87,16 +95,20 @@ export class McpOAuthStarter {
     }
     const { entry } = checked;
     try {
+      const discovery = await this.discover(entry, request);
+      if (!(await this.useUpProof(request.proofId))) {
+        return { outcome: "proof_used" };
+      }
       const started = await startOAuth({
         send: this.dependencies.send,
-        discovery: await this.discover(entry, request),
+        discovery,
         catalogId: entry.catalogId,
         serverUrl: entry.serverUrl,
         redirectUrl: request.redirectUrl,
         clientMetadataUrl: request.clientMetadataUrl,
         clientName: "Billy",
         routingId: this.dependencies.routingId,
-        nowMillis: Date.now(),
+        nowMillis: nowMillis(),
         lifetimeMillis: oauthStartLifetimeMillis,
       });
       await this.dependencies.storage.put<PendingOAuth>(
@@ -114,15 +126,31 @@ export class McpOAuthStarter {
     }
   }
 
+  private async useUpProof(proofId: string) {
+    const { storage } = this.dependencies;
+    const key = `${usedProofKeyPrefix}${proofId}`;
+    if ((await storage.get<number>(key)) !== undefined) {
+      return false;
+    }
+    await storage.put<number>(key, nowMillis() + usedProofLifetimeMillis);
+    return true;
+  }
+
   private async forgetExpired() {
     const { storage } = this.dependencies;
     const pending = await storage.list<PendingOAuth>({
       prefix: pendingOAuthKeyPrefix,
     });
-    const now = Date.now();
-    const expired = [...pending]
-      .filter(([, value]) => value.expiresAtMillis <= now)
-      .map(([key]) => key);
+    const proofs = await storage.list<number>({ prefix: usedProofKeyPrefix });
+    const now = nowMillis();
+    const expired = [
+      ...[...pending]
+        .filter(([, value]) => value.expiresAtMillis <= now)
+        .map(([key]) => key),
+      ...[...proofs]
+        .filter(([, expiresAtMillis]) => expiresAtMillis <= now)
+        .map(([key]) => key),
+    ];
     if (expired.length > 0) {
       await storage.delete(expired);
     }

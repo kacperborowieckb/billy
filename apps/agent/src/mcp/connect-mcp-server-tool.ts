@@ -28,21 +28,24 @@ export const connectMcpServerTool = (
       inputSchema: ConnectMcpServerInput,
       riskClass: "read",
       failureMessage: "The Connect button could not be prepared.",
-      work: ({ connection }) =>
-        Effect.gen(function* connectEffect() {
-          const entry = yield* entryOrFail(services.catalog, connection);
-          if (services.states.get(entry.catalogId) === "ready") {
-            return yield* Effect.fail(
-              new ToolFailed({
-                message: `${entry.displayName} is already connected. Tell the Owner.`,
-              })
-            );
-          }
-          yield* services.requestConnect(eventId, entry.catalogId);
-          return {
-            connection: entry.displayName,
-            notice: `Code sends a Connect button for ${entry.displayName} after your reply. Tell the Owner to tap it and agree at ${entry.displayName}. Do not write a link.`,
-          };
-        }),
+      work: Effect.fnUntraced(function* connectWork({
+        connection,
+      }: {
+        readonly connection: string;
+      }) {
+        const entry = yield* entryOrFail(services.catalog, connection);
+        if (services.states.get(entry.catalogId) === "ready") {
+          return yield* Effect.fail(
+            new ToolFailed({
+              message: `${entry.displayName} is already connected. Tell the Owner.`,
+            })
+          );
+        }
+        yield* services.requestConnect(eventId, entry.catalogId);
+        return {
+          connection: entry.displayName,
+          notice: `Code sends a Connect button for ${entry.displayName} after your reply. Tell the Owner to tap it and agree at ${entry.displayName}. Do not write a link.`,
+        };
+      }),
     }
   );

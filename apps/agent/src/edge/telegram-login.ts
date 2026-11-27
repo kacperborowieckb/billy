@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option, Schema } from "effect";
 
 const encoder = new TextEncoder();
 
@@ -10,7 +10,7 @@ const hex = (bytes: ArrayBuffer) =>
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-const unsignedFields = new Set(["hash", "c"]);
+const unsignedFields = new Set(["hash", "c", "r"]);
 
 export const loginFieldsOf = (params: URLSearchParams) =>
   [...params.entries()].filter(([name]) => !unsignedFields.has(name));
@@ -54,22 +54,23 @@ export type TelegramLogin =
       readonly reason: "bad_signature" | "stale_login" | "malformed";
     };
 
-export const verifyTelegramLogin = (
-  params: URLSearchParams,
-  botToken: string
-) =>
-  Effect.gen(function* verifyTelegramLoginEffect() {
-    const presented = params.get("hash");
-    const id = Number(params.get("id"));
-    const authDate = Number(params.get("auth_date"));
-    if (
-      presented === null ||
-      !Number.isSafeInteger(id) ||
-      id <= 0 ||
-      !Number.isSafeInteger(authDate)
-    ) {
+const LoginFieldsSchema = Schema.Struct({
+  id: Schema.NumberFromString.pipe(
+    Schema.check(Schema.isInt(), Schema.isGreaterThan(0))
+  ),
+  auth_date: Schema.NumberFromString.pipe(Schema.check(Schema.isInt())),
+  hash: Schema.String,
+});
+
+const decodeLoginFields = Schema.decodeUnknownOption(LoginFieldsSchema);
+
+export const verifyTelegramLogin = Effect.fnUntraced(
+  function* verifyTelegramLogin(params: URLSearchParams, botToken: string) {
+    const fields = decodeLoginFields(Object.fromEntries(params));
+    if (Option.isNone(fields)) {
       return { _tag: "Refused", reason: "malformed" } satisfies TelegramLogin;
     }
+    const { id, auth_date: authDate, hash: presented } = fields.value;
     const expected = yield* Effect.promise(() =>
       signatureOf(botToken, dataCheckStringOf(loginFieldsOf(params)))
     );
@@ -85,4 +86,5 @@ export const verifyTelegramLogin = (
       return { _tag: "Refused", reason: "stale_login" } satisfies TelegramLogin;
     }
     return { _tag: "Verified", telegramUserId: id } satisfies TelegramLogin;
-  });
+  }
+);

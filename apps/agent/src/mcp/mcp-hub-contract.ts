@@ -29,6 +29,7 @@ export interface McpOAuthRequest {
   readonly catalogId: string;
   readonly redirectUrl: string;
   readonly clientMetadataUrl: string | undefined;
+  readonly proofId: string;
 }
 
 export type McpConsentOutcome =
@@ -51,6 +52,7 @@ export type McpOAuthStartOutcome =
       readonly outcome:
         | "unknown_catalog_entry"
         | "already_connected"
+        | "proof_used"
         | "unavailable";
     };
 
@@ -71,6 +73,7 @@ export interface McpHubRpc {
 export class McpHubPort extends Context.Service<
   McpHubPort,
   {
+    readonly routingId: string;
     readonly callTool: (
       request: McpCallRequest
     ) => Effect.Effect<McpCallOutcome>;
