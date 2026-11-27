@@ -64,7 +64,9 @@ const firstJson = async (send: FetchFunction, urls: readonly string[]) => {
   return answers.find(Option.isSome) ?? Option.none<unknown>();
 };
 
-const resourceMetadataPattern = /resource_metadata="(?<url>[^"]+)"/u;
+const challengeProbeTimeoutMillis = 5000;
+
+const resourceMetadataPattern = /resource_metadata="(?<url>[^"]+)"/iu;
 
 const initializeBody = JSON.stringify({
   jsonrpc: "2.0",
@@ -86,6 +88,7 @@ const challengedMetadataUrl = async (send: FetchFunction, serverUrl: URL) => {
         Accept: "application/json, text/event-stream",
       },
       body: initializeBody,
+      signal: AbortSignal.timeout(challengeProbeTimeoutMillis),
     });
     const challenge = response.headers.get("WWW-Authenticate") ?? "";
     const url = resourceMetadataPattern.exec(challenge)?.groups?.["url"];

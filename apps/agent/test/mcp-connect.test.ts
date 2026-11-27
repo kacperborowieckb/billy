@@ -264,6 +264,17 @@ describe("discovering the authorization server", () => {
     expect(location.pathname).toBe("/tenant1/authorize");
   });
 
+  it("registers a client at the tenant registration endpoint", async () => {
+    const ownerId = await addOwner(9964);
+    fakeMcpServer.oauth.useLayout("challenged_tenant");
+    fakeMcpServer.oauth.supportClientIdMetadata(false);
+
+    const response = await postConsent(await loginOf(9964, ownerId));
+
+    expect(response.status).toBe(303);
+    expect(fakeMcpServer.oauth.registrations).toHaveLength(1);
+  });
+
   it("refuses metadata whose issuer is not the selected issuer", async () => {
     const ownerId = await addOwner(9962);
     fakeMcpServer.oauth.useLayout("root_metadata_only");

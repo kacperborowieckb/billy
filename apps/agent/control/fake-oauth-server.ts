@@ -22,7 +22,7 @@ export const createFakeOAuthServer = () => {
       return new Response(null, {
         status: 401,
         headers: {
-          "WWW-Authenticate": `Bearer resource_metadata="${origin}/custom/prm"`,
+          "WWW-Authenticate": `Bearer Resource_Metadata="${origin}/custom/prm"`,
         },
       });
     }
@@ -59,7 +59,7 @@ export const createFakeOAuthServer = () => {
     if (url.pathname.startsWith("/.well-known/oauth-authorization-server")) {
       return Response.json(metadataOf(origin));
     }
-    if (url.pathname === "/register" && request.method === "POST") {
+    if (url.pathname.endsWith("/register") && request.method === "POST") {
       registrations.push(await request.json());
       return Response.json({ client_id: "fake-dcr-client" }, { status: 201 });
     }
