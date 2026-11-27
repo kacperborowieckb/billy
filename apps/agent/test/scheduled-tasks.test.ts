@@ -172,7 +172,7 @@ describe("a Daily Scheduled Task", () => {
 });
 
 describe("the tools of a Scheduled Task Turn", () => {
-  it("gives the model exactly the three read tools", async () => {
+  it("gives the model exactly the three note and schedule read tools and the two MCP tools", async () => {
     const ownerId = await ownerInWarsaw(9403);
     await seedScheduledTask(ownerId);
 
@@ -181,6 +181,8 @@ describe("the tools of a Scheduled Task Turn", () => {
     await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
     const names = (lastModelCall().tools ?? []).map((tool) => tool.name);
     expect(names.toSorted()).toEqual([
+      "call_mcp_tool",
+      "find_mcp_tools",
       "list_linked_notes",
       "list_schedules",
       "search_notes",

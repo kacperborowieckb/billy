@@ -292,7 +292,9 @@ describe("a Brief that fires", () => {
     expect(instructionsAndContext).toContain(`- ${note.noteId} (task`);
     expect(instructionsAndContext).toContain("Buy a gift for Ana");
     expect((call.tools ?? []).map((tool) => tool.name).toSorted()).toEqual([
+      "call_mcp_tool",
       "close_open_loop",
+      "find_mcp_tools",
       "list_linked_notes",
       "list_open_loops",
       "list_schedules",

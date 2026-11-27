@@ -24,6 +24,7 @@ import {
 } from "../schedule/set-schedule-tool.ts";
 import { scheduleToolServicesOf } from "./owner-message-tools.ts";
 import type { ScheduledTaskToolServices } from "./scheduled-task-tools.ts";
+import { sideSessionMcpTools } from "./side-session-mcp-tools.ts";
 
 export const proactiveTools = (
   eventId: string,
@@ -44,5 +45,6 @@ export const proactiveTools = (
     [listOpenLoopsToolName]: listOpenLoopsTool(noteServices, eventId),
     [listSchedulesToolName]: listSchedulesTool(scheduleServices, eventId),
     [setScheduleToolName]: setScheduleTool(scheduleServices, eventId),
+    ...sideSessionMcpTools(eventId, services),
   };
 };
