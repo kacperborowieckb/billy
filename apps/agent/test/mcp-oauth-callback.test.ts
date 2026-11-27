@@ -445,6 +445,24 @@ describe("a replay of a good callback", () => {
     expect(fakeTelegram.sent).toHaveLength(2);
   });
 
+  it("does not share a running callback with one that has a wrong iss", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9992);
+    const { state } = await startedConsent(9992, ownerId);
+
+    const [good, wrong] = await Promise.all([
+      goodCallback(state),
+      callbackWith({
+        code: fakeOAuthSecrets.authorizationCode,
+        state,
+        iss: "https://evil.example",
+      }),
+    ]);
+
+    expect(good.status).toBe(200);
+    expect(wrong.status).toBe(403);
+    expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
+  });
+
   it("makes one token request for two callbacks at the same time", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9982);
     const { state } = await startedConsent(9982, ownerId);

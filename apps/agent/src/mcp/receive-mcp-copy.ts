@@ -57,8 +57,8 @@ export const McpConnectedCopySchema = Schema.Struct({
 
 export type McpConnectedCopy = typeof McpConnectedCopySchema.Type;
 
-export const receiveMcpConnected = (catalog: McpCatalog, received: unknown) =>
-  Effect.gen(function* receiveConnectedEffect() {
+export const receiveMcpConnected = Effect.fnUntraced(
+  function* receiveMcpConnected(catalog: McpCatalog, received: unknown) {
     const { catalogId, tools, accountLabel, completionId } =
       yield* Schema.decodeUnknownEffect(McpConnectedCopySchema)(received);
     const entry = mcpEntryOf(catalog, catalogId);
@@ -86,4 +86,6 @@ export const receiveMcpConnected = (catalog: McpCatalog, received: unknown) =>
         text: connectedMessageOf(entry.displayName, accountLabel),
       });
     }
-  }).pipe(Effect.orDie);
+  },
+  Effect.orDie
+);

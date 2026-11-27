@@ -60,14 +60,15 @@ export class McpOAuthCompleter {
   }
 
   complete(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
-    const running = this.running.get(returned.nonce);
+    const runKey = JSON.stringify([returned.nonce, returned.iss ?? null]);
+    const running = this.running.get(runKey);
     if (running !== undefined) {
       return running;
     }
     const started = this.run(returned).finally(() => {
-      this.running.delete(returned.nonce);
+      this.running.delete(runKey);
     });
-    this.running.set(returned.nonce, started);
+    this.running.set(runKey, started);
     return started;
   }
 
