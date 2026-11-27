@@ -17,6 +17,10 @@ export const mcpHubClient = (
           Effect.succeed({ _tag: "Failed", reason: "failed" } as const)
         )
       ),
+    acknowledgeRemoval: (catalogId) =>
+      Effect.promise(() =>
+        namespace.getByName(ownerId).acknowledgeRemoval(catalogId)
+      ).pipe(Effect.catchCause(() => Effect.void)),
     disconnect: (catalogId) =>
       Effect.promise(
         async (): Promise<McpDisconnectOutcome> =>

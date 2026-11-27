@@ -20,7 +20,6 @@ import type {
   McpCallOutcome,
   McpCallRequest,
   McpConsentOutcome,
-  McpDisconnectOutcome,
   McpHubRpc,
   McpRefreshOutcome,
   McpOAuthCallback,
@@ -118,6 +117,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     ownerId: () => this.ownerName(),
     credentials: (ownerId) => this.credentialsOf(ownerId),
     isReady: (catalogId) => this.ledger.isReady(catalogId),
+    isBeingRemoved: (catalogId) => this.ledger.isBeingRemoved(catalogId),
     markAuthenticating: async (catalogId) => {
       if ((await this.ledger.stateOf(catalogId)) === undefined) {
         await this.tellState(this.ownerName(), catalogId, "authenticating");
@@ -166,6 +166,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   private readonly disconnector = new McpDisconnector({
     catalog: this.catalog,
+    ledger: this.ledger,
     entryQueue: this.entryQueue,
     connector: this.connector,
     storage: this.ctx.storage,
@@ -258,8 +259,12 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     return this.calls.callTool(request);
   }
 
-  disconnect(catalogId: string): Promise<McpDisconnectOutcome> {
+  disconnect(catalogId: string) {
     return this.disconnector.disconnect(catalogId);
+  }
+
+  acknowledgeRemoval(catalogId: string): Promise<void> {
+    return this.disconnector.acknowledgeRemoval(catalogId);
   }
 
   removeOwnerStorage(): Promise<void> {

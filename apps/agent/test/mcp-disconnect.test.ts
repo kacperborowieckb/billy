@@ -15,7 +15,7 @@ import {
   resetFakes,
   scriptModel,
 } from "./fakes.ts";
-import { nowSeconds } from "./mcp-connect-requests.ts";
+import { loginOf, nowSeconds, postConsent } from "./mcp-connect-requests.ts";
 import {
   agentOf,
   connectedOwner,
@@ -113,7 +113,11 @@ const expectAgentForgot = async (ownerId: string) => {
 const expectNothingLeft = async (ownerId: string) => {
   expect(await storedTokensOf(ownerId)).toBeUndefined();
   const keys = await hubKeysOf(ownerId);
-  expect(keys.filter((key) => key.includes(testMcpCatalogId))).toEqual([]);
+  expect(
+    keys.filter(
+      (key) => key.includes(testMcpCatalogId) && !key.startsWith("removing:")
+    )
+  ).toEqual([]);
   expect(keys.filter((key) => /^(?:oauth|settled):/u.test(key))).toEqual([]);
 };
 
@@ -417,6 +421,7 @@ describe("one state machine for each catalog entry", () => {
     async () => {
       const { ownerId, telegramUserId } = await connectedOwner();
       await disconnectOf(ownerId);
+      await hubOf(ownerId).acknowledgeRemoval(testMcpCatalogId);
 
       const { state } = await startedConsent(
         telegramUserId,
@@ -582,22 +587,51 @@ describe("a Turn that disconnects", () => {
 
 describe("an OAuth start that was running", () => {
   it(
-    "is a new connect when it finishes after a disconnect",
+    "is refused when it finishes after a disconnect, and works after the Personal Agent removal is acknowledged",
     async () => {
       const userId = newTelegramUserId();
       const ownerId = await ownerWhoWroteToTheAgent(userId);
       const release = oauth.holdMetadataRequests();
-      const starting = startedConsent(userId, ownerId);
+      const starting = postConsent(
+        await loginOf(userId, ownerId, { authDate: nowSeconds() - 53 })
+      );
       await vi.waitFor(() =>
         expect(oauth.heldMetadataRequests).toBeGreaterThan(0)
       );
 
       expect(await outcomeOf(disconnectOf(ownerId))).toBe("disconnected");
       release();
-      const { state } = await starting;
 
+      expect(await statusOf(starting)).not.toBe(303);
+      expect(await hubKeysOf(ownerId)).not.toContain(
+        expect.stringMatching(/^oauth:/u)
+      );
+      await hubOf(ownerId).acknowledgeRemoval(testMcpCatalogId);
+      const { state } = await startedConsent(
+        userId,
+        ownerId,
+        nowSeconds() - 59
+      );
       expect(await statusOf(goodCallback(state))).toBe(200);
       expect(await tagOf(searchOf(ownerId))).toBe("Result");
+    },
+    slowTest
+  );
+
+  it(
+    "is refused while the Personal Agent removal is not acknowledged",
+    async () => {
+      const { ownerId, telegramUserId } = await connectedOwner();
+      await disconnectOf(ownerId);
+
+      const refused = await postConsent(
+        await loginOf(telegramUserId, ownerId, {
+          authDate: nowSeconds() - 61,
+        })
+      );
+
+      expect(refused.status).not.toBe(303);
+      expect(oauth.registrations).toHaveLength(0);
     },
     slowTest
   );

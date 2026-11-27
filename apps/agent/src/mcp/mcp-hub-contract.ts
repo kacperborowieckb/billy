@@ -109,6 +109,7 @@ export interface McpHubRpc {
   ) => Promise<McpAddConnectionOutcome>;
   readonly callTool: (request: McpCallRequest) => Promise<McpCallOutcome>;
   readonly disconnect: (catalogId: string) => Promise<McpDisconnectOutcome>;
+  readonly acknowledgeRemoval: (catalogId: string) => Promise<void>;
   readonly removeOwnerStorage: () => Promise<void>;
   readonly lastError: (catalogId: string) => Promise<McpLastError | undefined>;
   readonly refreshToolCatalog: (
@@ -127,5 +128,6 @@ export class McpHubPort extends Context.Service<
     readonly disconnect: (
       catalogId: string
     ) => Effect.Effect<McpDisconnectOutcome>;
+    readonly acknowledgeRemoval: (catalogId: string) => Effect.Effect<void>;
   }
 >()("McpHubPort") {}

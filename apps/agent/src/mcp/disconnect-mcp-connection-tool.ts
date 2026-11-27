@@ -79,6 +79,7 @@ export const disconnectMcpConnectionTool = (
           );
         }
         yield* services.removeConnection(entry.catalogId, outcome.revocation);
+        yield* services.hub.acknowledgeRemoval(entry.catalogId);
         return {
           connection: entry.displayName,
           status: "disconnected" as const,

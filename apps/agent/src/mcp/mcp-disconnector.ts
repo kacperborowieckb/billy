@@ -1,6 +1,7 @@
 import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
+import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
 import type {
   McpDisconnectOutcome,
   McpRevocation,
@@ -26,9 +27,12 @@ import type {
 
 const closeDeadlineMillis = 3000;
 
+const removalMarkerLifetimeMillis = 60_000;
+
 export interface McpDisconnectorDependencies {
   readonly catalog: McpCatalog;
   readonly entryQueue: KeyedQueue;
+  readonly ledger: McpConnectionLedger;
   readonly connector: McpServerConnector;
   readonly storage: DurableObjectStorage;
   readonly send: FetchFunction;
@@ -96,9 +100,10 @@ export class McpDisconnector {
   private async disconnectInQueue(
     catalogId: string
   ): Promise<McpDisconnectOutcome> {
-    const { storage, connector, send } = this.dependencies;
+    const { storage, connector, send, ledger } = this.dependencies;
     const held = await this.heldCredentialsOf(catalogId);
     await storage.delete(await this.keysOf(catalogId));
+    await ledger.markBeingRemoved(catalogId, removalMarkerLifetimeMillis);
     await connector.forget(catalogId, closeDeadlineMillis);
     const revocation: McpRevocation =
       held === undefined
@@ -110,6 +115,12 @@ export class McpDisconnector {
             tokens: held.tokens,
           });
     return { outcome: "disconnected", revocation };
+  }
+
+  acknowledgeRemoval(catalogId: string): Promise<void> {
+    return this.dependencies.entryQueue.run(catalogId, async () => {
+      await this.dependencies.ledger.clearBeingRemoved(catalogId);
+    });
   }
 
   async removeAll(): Promise<void> {
