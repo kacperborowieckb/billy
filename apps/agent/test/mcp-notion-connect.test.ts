@@ -56,6 +56,32 @@ beforeEach(() => {
   resetFakes();
 });
 
+describe("a completion for an entry that the Catalog does not hold", () => {
+  it("logs the reason and no account name", async () => {
+    const lines: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts) => {
+      lines.push(parts.map(String).join(" "));
+    });
+    const ownerId = await ownerWhoWroteToTheAgent(newTelegramUserId());
+
+    const agent = await agentOf(ownerId);
+
+    await agent.receiveMcpConnected({
+      catalogId: "removed_entry",
+      tools: [],
+      accountLabel: "Pat Reader",
+      completionId: "completion-1",
+    });
+    log.mockRestore();
+
+    const output = lines.join("\n");
+    expect(output).toContain(
+      '"phase":"completion","reason":"unknown_catalog_entry","catalogId":"removed_entry"'
+    );
+    expect(output).not.toContain("Pat Reader");
+  });
+});
+
 describe("a Notion connection with a tool list of the real size", () => {
   it("stores every tool, tells the Owner, and writes the Journal Entry", async () => {
     fakeMcpServer.useTools(fakeNotionTools);

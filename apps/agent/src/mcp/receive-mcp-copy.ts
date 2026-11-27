@@ -124,6 +124,11 @@ export const receiveMcpConnected = Effect.fnUntraced(
       );
     const entry = mcpEntryOf(catalog, catalogId);
     if (entry === undefined) {
+      yield* mcpFailureLog({
+        phase: "completion",
+        reason: "unknown_catalog_entry",
+        catalogId,
+      });
       return;
     }
     const { database } = yield* AgentStorage;
