@@ -11,4 +11,8 @@ export class McpHub extends LiveMcpHub {
   }
 
   protected override readonly send = sendToFakeMcpServer;
+
+  completionsWaitingFor(catalogId: string) {
+    return this.completer.completionsWaitingFor(catalogId);
+  }
 }

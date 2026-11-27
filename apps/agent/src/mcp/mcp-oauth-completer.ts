@@ -75,6 +75,10 @@ export class McpOAuthCompleter {
     this.dependencies = dependencies;
   }
 
+  completionsWaitingFor(catalogId: string) {
+    return this.entryQueue.waitingCount(catalogId);
+  }
+
   complete(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
     const { nonce } = returned;
     const running = this.running.get(nonce);

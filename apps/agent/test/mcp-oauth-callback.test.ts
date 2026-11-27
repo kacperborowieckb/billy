@@ -105,6 +105,15 @@ const journalTagsOf = (ownerId: string) =>
     )
   );
 
+const completionsWaitingOf = (ownerId: string) =>
+  runInDurableObject(env.MCP_HUB.getByName(ownerId), (instance) =>
+    (
+      instance as unknown as {
+        completionsWaitingFor: (catalogId: string) => number;
+      }
+    ).completionsWaitingFor(testMcpCatalogId)
+  );
+
 const addedEntryCountOf = async (ownerId: string) => {
   const tags = await journalTagsOf(ownerId);
   return tags.filter((tag) => tag === "McpConnectionAdded").length;
@@ -583,7 +592,9 @@ describe("a replay of a good callback", () => {
       expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(2)
     );
     const earlierReplay = goodCallback(first);
-    await Effect.runPromise(Effect.sleep(200));
+    await vi.waitFor(async () =>
+      expect(await completionsWaitingOf(ownerId)).toBe(1)
+    );
     releaseExchange();
     const [later, earlier] = await Promise.all([laterAttempt, earlierReplay]);
 

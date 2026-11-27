@@ -79,7 +79,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
       this.tellState(this.ownerName(), catalogId, "authenticating"),
   });
 
-  private readonly completer = new McpOAuthCompleter({
+  protected readonly completer = new McpOAuthCompleter({
     catalog: this.catalog,
     send: this.guardedSend,
     storage: this.ctx.storage,
