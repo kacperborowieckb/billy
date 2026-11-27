@@ -2,7 +2,6 @@ import { Option } from "effect";
 
 import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import type { AdmittedCall } from "./mcp-admitted-call.ts";
-import { authorizedFetch } from "./mcp-authorized-fetch.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpConnectionHealth } from "./mcp-connection-health.ts";
 import { isDeadlineError } from "./mcp-deadline-error.ts";
@@ -12,9 +11,9 @@ import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { McpQueueHolds } from "./mcp-queue-holds.ts";
 import { McpSdkServers, sdkIdOf } from "./mcp-sdk-servers.ts";
+import { serverRegistrationOf } from "./mcp-server-registration.ts";
 import { within } from "./mcp-within.ts";
 import type { SealedCredentials } from "./sealed-credentials.ts";
-import { SealedOAuthProvider } from "./sealed-oauth-provider.ts";
 
 const closeDeadlineMillis = 3000;
 
@@ -53,8 +52,11 @@ export class McpServerConnector {
     return this.servers.epochOf(catalogId);
   }
 
-  isLive(catalogId: string) {
-    return this.servers.isReady(this.servers.currentId(catalogId));
+  isLive(catalogId: string, epoch: number) {
+    return (
+      this.epochOf(catalogId) === epoch &&
+      this.servers.isReady(sdkIdOf(catalogId, epoch))
+    );
   }
 
   private async registerAndConnect(
@@ -72,25 +74,17 @@ export class McpServerConnector {
     }
     await this.servers.dropStale(catalogId, sdkId);
     await this.servers.track(catalogId, sdkId);
-    await manager.registerServer(sdkId, {
-      url: entry.serverUrl,
-      name: entry.displayName,
-      transport: {
-        type: "streamable-http",
-        fetch: authorizedFetch({
-          send: guardedFetch(send, allowedOrigins),
-          entry,
-          ownerId,
-          health,
-          queueWaitsOnConnect: () => this.queueHolds.isHeld(catalogId),
-        }),
-        authProvider: new SealedOAuthProvider(
-          sealedCredentials,
-          catalogId,
-          "Billy"
-        ),
-      },
-    });
+    await manager.registerServer(
+      sdkId,
+      serverRegistrationOf({
+        credentials: sealedCredentials,
+        send: guardedFetch(send, allowedOrigins),
+        entry,
+        ownerId,
+        health,
+        queueWaitsOnConnect: () => this.queueHolds.isHeld(catalogId),
+      })
+    );
     const connected = await manager.connectToServer(sdkId);
     if (connected.state !== "connected") {
       throw new Error("The MCP server is not connected");
@@ -134,76 +128,75 @@ export class McpServerConnector {
       epoch = this.epochOf(entry.catalogId),
     }: ConnectOptions
   ): Promise<"connected" | "timed_out"> {
+    const sdkId = sdkIdOf(entry.catalogId, epoch);
     await this.dependencies.start();
-    if (this.isLive(entry.catalogId)) {
+    if (this.isLive(entry.catalogId, epoch)) {
       return "connected";
     }
     const connected = await within(
-      this.servers.connectOnce(
-        entry.catalogId,
-        sdkIdOf(entry.catalogId, epoch),
-        () => this.registerAndConnect(entry, ownerId, epoch)
+      this.servers.connectOnce(entry.catalogId, sdkId, () =>
+        this.registerAndConnect(entry, ownerId, epoch)
       ),
       connectTimeoutMillis
     );
     if (Option.isSome(connected)) {
       return "connected";
     }
-    this.servers.retire(entry.catalogId, sdkIdOf(entry.catalogId, epoch));
+    this.servers.retire(entry.catalogId, sdkId);
     return "timed_out";
+  }
+
+  private retireAtDeadline(catalogId: string, sdkId: string, error: unknown) {
+    if (isDeadlineError(error)) {
+      this.servers.retire(catalogId, sdkId);
+    }
   }
 
   async refreshTools(
     entry: McpCatalogEntry,
     ownerId: string,
-    connectTimeoutMillis: number
+    { timeoutMillis, epoch = this.epochOf(entry.catalogId) }: ConnectOptions
   ): Promise<"refreshed" | "failed" | "timed_out"> {
+    const sdkId = sdkIdOf(entry.catalogId, epoch);
     try {
       const connected = await this.connectWhenNeeded(entry, ownerId, {
-        timeoutMillis: connectTimeoutMillis,
+        timeoutMillis,
+        epoch,
       });
       if (connected === "timed_out") {
         return "timed_out";
       }
-      const discovered = await this.dependencies.manager.discoverIfConnected(
-        this.servers.currentId(entry.catalogId)
-      );
+    } catch {
+      return "failed";
+    }
+    try {
+      const discovered =
+        await this.dependencies.manager.discoverIfConnected(sdkId);
       return discovered?.success === true ? "refreshed" : "failed";
     } catch (error) {
-      if (isDeadlineError(error)) {
-        this.servers.retire(
-          entry.catalogId,
-          this.servers.currentId(entry.catalogId)
-        );
-      }
+      this.retireAtDeadline(entry.catalogId, sdkId, error);
       return "failed";
     }
   }
 
-  close(catalogId: string) {
-    return this.closeWhileQueueHeld(catalogId, closeDeadlineMillis);
+  close(catalogId: string, epoch: number) {
+    return this.closeWhileQueueHeld(catalogId, epoch, closeDeadlineMillis);
   }
 
-  closeWhileQueueHeld(catalogId: string, deadlineMillis: number) {
-    return this.closeSdkServerWhileQueueHeld(
-      catalogId,
-      this.servers.currentId(catalogId),
-      deadlineMillis
-    );
-  }
-
-  private closeSdkServerWhileQueueHeld(
+  closeWhileQueueHeld(
     catalogId: string,
-    sdkId: string,
+    epoch: number,
     deadlineMillis: number
   ) {
+    const sdkId = sdkIdOf(catalogId, epoch);
     return this.whileQueueHeld(catalogId, () =>
       this.servers.closeWithin(catalogId, sdkId, deadlineMillis)
     );
   }
 
   async forget(catalogId: string, deadlineMillis: number) {
-    const closedSdkId = this.servers.currentId(catalogId);
+    const closedEpoch = this.epochOf(catalogId);
+    const closedSdkId = sdkIdOf(catalogId, closedEpoch);
     const running = this.servers.connectOf(closedSdkId);
     this.servers.retire(catalogId, closedSdkId);
     if (running !== undefined) {
@@ -212,16 +205,12 @@ export class McpServerConnector {
         deadlineMillis
       ).catch(() => null);
     }
-    await this.closeSdkServerWhileQueueHeld(
-      catalogId,
-      closedSdkId,
-      deadlineMillis
-    );
+    await this.closeWhileQueueHeld(catalogId, closedEpoch, deadlineMillis);
   }
 
-  toolCopiesOf(catalogId: string) {
+  toolCopiesOf(catalogId: string, epoch: number) {
     return this.dependencies.manager
-      .listTools({ serverId: this.servers.currentId(catalogId) })
+      .listTools({ serverId: sdkIdOf(catalogId, epoch) })
       .map(toolCopyOf);
   }
 
@@ -231,6 +220,9 @@ export class McpServerConnector {
     { request, epoch }: AdmittedCall
   ): Promise<McpCallOutcome> {
     const calledSdkId = sdkIdOf(request.catalogId, epoch);
+    if (this.epochOf(request.catalogId) !== epoch) {
+      return { _tag: "Failed", reason: "not_connected" };
+    }
     try {
       if (
         (await this.ensureConnected(entry, ownerId, {
@@ -240,9 +232,20 @@ export class McpServerConnector {
       ) {
         return { _tag: "Failed", reason: "timed_out" };
       }
-      if (this.epochOf(request.catalogId) !== epoch) {
-        return { _tag: "Failed", reason: "not_connected" };
-      }
+    } catch {
+      return { _tag: "Failed", reason: "failed" };
+    }
+    if (this.epochOf(request.catalogId) !== epoch) {
+      return { _tag: "Failed", reason: "not_connected" };
+    }
+    return this.callConnected(request, calledSdkId);
+  }
+
+  private async callConnected(
+    request: AdmittedCall["request"],
+    calledSdkId: string
+  ): Promise<McpCallOutcome> {
+    try {
       const result = await within(
         this.dependencies.manager.callTool(
           {
@@ -260,9 +263,7 @@ export class McpServerConnector {
       }
       return resultOutcomeOf(result.value);
     } catch (error) {
-      if (isDeadlineError(error)) {
-        this.servers.retire(request.catalogId, calledSdkId);
-      }
+      this.retireAtDeadline(request.catalogId, calledSdkId, error);
       return { _tag: "Failed", reason: "failed" };
     }
   }

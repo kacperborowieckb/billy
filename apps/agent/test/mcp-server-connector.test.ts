@@ -12,9 +12,15 @@ interface FakeBehavior {
   readonly closeOf?: (id: string) => Promise<void>;
   readonly connectOf?: (id: string) => Promise<void>;
   readonly callOf?: (id: string) => Promise<void>;
+  readonly discoverOf?: (id: string) => Promise<void>;
 }
 
-const fakeSdkManager = ({ closeOf, connectOf, callOf }: FakeBehavior = {}) => {
+const fakeSdkManager = ({
+  closeOf,
+  connectOf,
+  callOf,
+  discoverOf,
+}: FakeBehavior = {}) => {
   const mcpConnections: Record<string, FakeConnection> = {};
   const rows = new Set<string>();
   const registered: string[] = [];
@@ -48,7 +54,10 @@ const fakeSdkManager = ({ closeOf, connectOf, callOf }: FakeBehavior = {}) => {
       await connectOf?.(id);
       return { state: "connected" };
     },
-    discoverIfConnected: () => Promise.resolve({ success: true }),
+    discoverIfConnected: async (id: string) => {
+      await discoverOf?.(id);
+      return { success: true };
+    },
     listTools: () => [],
     callTool: async ({ serverId }: { serverId: string }) => {
       calledIds.push(serverId);
@@ -139,7 +148,7 @@ describe("the connector of a Connection that is removed", () => {
     await connector.forget("c", 50);
     const outcome = await callOf(connector, epoch);
 
-    expect(outcome).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(outcome).toEqual({ _tag: "Failed", reason: "not_connected" });
     expect(registered).toEqual([]);
   });
 
@@ -341,6 +350,53 @@ describe("one owner for each SDK operation", () => {
     expect(calledIds).toEqual(["c:0", "c:1"]);
   });
 
+  it("retires only the id of a discovery that times out after the replacement has connected", async () => {
+    const oldDiscovery = Promise.withResolvers<undefined>();
+    let discoveries = 0;
+    const { manager, rows } = fakeSdkManager({
+      discoverOf: (id) => {
+        discoveries += 1;
+        return id === "c:0" && discoveries === 2
+          ? (oldDiscovery.promise as Promise<void>)
+          : Promise.resolve();
+      },
+    });
+    const connector = connectorOver(manager);
+    await callOf(connector, connector.epochOf("c"));
+
+    const refreshing = connector.refreshTools(entry as never, "owner", {
+      timeoutMillis: 1000,
+    });
+    await vi.waitFor(() => expect(discoveries).toBe(2));
+    await connector.forget("c", 20);
+    await callOf(connector, connector.epochOf("c"));
+    oldDiscovery.reject(
+      Object.assign(new Error("timed out"), { code: -32_001 })
+    );
+
+    expect(await refreshing).toBe("failed");
+    expect(connector.epochOf("c")).toBe(1);
+    expect(Object.keys(manager.mcpConnections)).toEqual(["c:1"]);
+    await vi.waitFor(() => expect(rows).toEqual(new Set(["c:1"])));
+  });
+
+  it("does not retire again for a connect failure of a refresh", async () => {
+    const { manager } = fakeSdkManager({
+      connectOf: () =>
+        Promise.reject(
+          Object.assign(new Error("timed out"), { code: -32_001 })
+        ),
+    });
+    const connector = connectorOver(manager);
+
+    const outcome = await connector.refreshTools(entry as never, "owner", {
+      timeoutMillis: 1000,
+    });
+
+    expect(outcome).toBe("failed");
+    expect(connector.epochOf("c")).toBe(1);
+  });
+
   it.each(["close", "closeWhileQueueHeld"] as const)(
     "advances the epoch on %s, so a reconnect gets a new id and the late cleanup of the old close leaves it registered",
     async (way) => {
@@ -355,8 +411,8 @@ describe("one owner for each SDK operation", () => {
       await callOf(connector, connector.epochOf("c"));
 
       await (way === "close"
-        ? connector.close("c")
-        : connector.closeWhileQueueHeld("c", 20));
+        ? connector.close("c", 0)
+        : connector.closeWhileQueueHeld("c", 0, 20));
       const reconnected = await callOf(connector, connector.epochOf("c"));
       release.resolve(undefined);
       await vi.waitFor(() => expect(rows).toEqual(new Set(["c:1"])));

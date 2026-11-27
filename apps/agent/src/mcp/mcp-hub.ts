@@ -39,8 +39,6 @@ import { SealedCredentials } from "./sealed-credentials.ts";
 import { parseSealKeyring } from "./token-seal.ts";
 import type { SealKeyring } from "./token-seal.ts";
 
-const closeDeadlineMillis = 3000;
-
 const sendFromWorker: FetchFunction = (input, init) => fetch(input, init);
 
 export class McpHub extends DurableObject<Env> implements McpHubRpc {
@@ -86,16 +84,16 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     catalog: this.catalog,
     entryQueue: this.entryQueue,
     ledger: this.ledger,
-    isLive: (catalogId) => this.connector.isLive(catalogId),
-    copiesOf: (catalogId) => this.connector.toolCopiesOf(catalogId),
-    refreshTools: (catalogId, ownerId, connectTimeoutMillis) => {
+    epochOf: (catalogId) => this.connector.epochOf(catalogId),
+    isLive: (catalogId, epoch) => this.connector.isLive(catalogId, epoch),
+    copiesOf: (id, epoch) => this.connector.toolCopiesOf(id, epoch),
+    refreshTools: (catalogId, ownerId, options) => {
       const entry = mcpEntryOf(this.catalog, catalogId);
       return entry === undefined
         ? Promise.resolve("failed" as const)
-        : this.connector.refreshTools(entry, ownerId, connectTimeoutMillis);
+        : this.connector.refreshTools(entry, ownerId, options);
     },
-    closeLive: (catalogId) =>
-      this.connector.closeWhileQueueHeld(catalogId, closeDeadlineMillis),
+    closeLive: (id, epoch) => this.connector.close(id, epoch),
     deliver: async (catalogId, copies) => {
       const agent = await this.agentOf(this.ownerName());
       await agent.receiveMcpToolCatalog(catalogId, copies);
@@ -161,7 +159,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     toolCopies: this.toolCopies,
     ownerId: () => this.ownerName(),
     agentOf: (ownerId) => this.agentOf(ownerId),
-    closeConnection: (catalogId) => this.closeQuietly(catalogId),
+    closeConnection: (catalogId, epoch) => this.closeQuietly(catalogId, epoch),
   });
 
   private readonly disconnector = new McpDisconnector({
@@ -226,9 +224,9 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     }
   }
 
-  private async closeQuietly(catalogId: string) {
+  private async closeQuietly(catalogId: string, epoch: number) {
     try {
-      await this.connector.close(catalogId);
+      await this.connector.close(catalogId, epoch);
     } catch (error) {
       await Effect.runPromise(
         Effect.logWarning("The MCP connection did not close", error)

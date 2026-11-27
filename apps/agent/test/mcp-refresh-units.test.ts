@@ -126,6 +126,7 @@ describe("the tool catalog sync of a Connection that is removed", () => {
       catalog: [{ catalogId: "c" }] as never,
       entryQueue: new KeyedQueue(),
       ledger: readyLedger(() => ready),
+      epochOf: () => 0,
       isLive: () => true,
       copiesOf: () => [copy("a")],
       refreshTools: () => {
@@ -159,6 +160,7 @@ describe("the copy marker of the tool catalog sync", () => {
       catalog: [],
       entryQueue: new KeyedQueue(),
       ledger: readyLedger(() => true),
+      epochOf: () => 0,
       isLive: () => true,
       copiesOf: () => current,
       refreshTools: () => Promise.resolve("refreshed"),
@@ -171,12 +173,12 @@ describe("the copy marker of the tool catalog sync", () => {
       },
     });
 
-    const sending = sync.sendWhenChanged("c");
+    const sending = sync.sendWhenChanged("c", 0);
     await vi.waitFor(() => expect(delivered).toHaveLength(1));
     current = [copy("b")];
     firstDelivery.resolve(undefined);
     await sending;
-    await sync.sendWhenChanged("c");
+    await sync.sendWhenChanged("c", 0);
 
     expect(delivered).toEqual([["a"], ["b"]]);
   });
