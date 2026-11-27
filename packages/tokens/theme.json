@@ -213,7 +213,9 @@
     "radius-pill": 999,
     "radius-round": {
       "percent": 50
-    }
+    },
+    "radius-scene": 24,
+    "radius-stage": 32
   },
   "size": {
     "size-touch": 44,
@@ -425,6 +427,9 @@
     },
     "duration-sky": {
       "milliseconds": 1400
+    },
+    "duration-sun": {
+      "milliseconds": 1600
     }
   }
 }

@@ -1,11 +1,12 @@
 // The hero valley: the light moves from dawn to day to dusk while Billy
 // works through the day in the phone beside him. It runs only while the hero
-// is on screen and the tab is visible; under reduced motion it rests on the
-// finished morning.
+// is on screen, the tab is visible and motion is allowed (./watch.ts);
+// otherwise it rests on the finished morning.
 import { outfits } from "../art";
 import { createChat } from "./chat";
 import { scenes } from "./stories";
 import { repeat } from "./timing";
+import { isReduced, whenActive } from "./watch";
 
 type Scene = (typeof scenes)[number];
 
@@ -23,8 +24,10 @@ export const startValley = () => {
   }
   const chat = createChat(thread);
   let current: Scene = first;
-  let running = false;
   let loop = 0;
+  // The greeting bubble changes a beat after the scene; the scene owns that
+  // timer, so a stop or the next scene cancels it.
+  let greeting = 0;
 
   const placeSun = () => {
     const box = stage.getBoundingClientRect();
@@ -32,7 +35,7 @@ export const startValley = () => {
     sun.style.transform = `translate(${x * box.width - 44}px, ${30 + y * (box.height - 260)}px)`;
   };
 
-  const show = (scene: Scene) => {
+  const show = (scene: Scene, instant: boolean) => {
     current = scene;
     for (const sky of skies) {
       sky.classList.toggle("is-on", sky.dataset.sky === scene.sky);
@@ -40,51 +43,51 @@ export const startValley = () => {
     placeSun();
     clock.textContent = scene.time;
     outfit.src = outfits[scene.outfit];
+    window.clearTimeout(greeting);
+    if (instant) {
+      say.textContent = scene.say;
+      say.classList.remove("is-out");
+      return;
+    }
     say.classList.add("is-out");
-    window.setTimeout(() => {
+    greeting = window.setTimeout(() => {
       say.textContent = scene.say;
       say.classList.remove("is-out");
     }, 700);
   };
 
-  show(first);
+  // The resting picture: the finished morning.
+  const rest = () => {
+    loop += 1;
+    window.clearTimeout(greeting);
+    chat.stop();
+    if (isReduced()) {
+      show(first, true);
+      chat.fill(first.script);
+    } else {
+      say.classList.remove("is-out");
+    }
+  };
+
+  show(first, true);
   chat.fill(first.script);
   window.addEventListener("resize", placeSun);
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    return;
-  }
 
-  const setRunning = (on: boolean) => {
-    if (on === running) {
+  whenActive(stage, (active) => {
+    if (!active) {
+      rest();
       return;
     }
-    running = on;
     loop += 1;
-    if (!on) {
-      chat.stop();
-      return;
-    }
     const id = loop;
     const start = scenes.indexOf(current);
     repeat(
-      () => running && id === loop,
+      () => id === loop,
       (turn) => {
         const scene = scenes[(start + turn) % scenes.length] ?? first;
-        show(scene);
+        show(scene, false);
         return chat.play(scene.script);
       }
     );
-  };
-
-  let visible = false;
-  new IntersectionObserver(
-    ([entry]) => {
-      visible = Boolean(entry?.isIntersecting);
-      setRunning(visible && !document.hidden);
-    },
-    { threshold: 0.25 }
-  ).observe(stage);
-  document.addEventListener("visibilitychange", () =>
-    setRunning(visible && !document.hidden)
-  );
+  });
 };

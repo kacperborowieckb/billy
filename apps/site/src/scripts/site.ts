@@ -1,6 +1,7 @@
 import { startExplorer } from "./explorer";
 import { startKeeps } from "./keeps";
 import { startValley } from "./valley";
+import { whenActive } from "./watch";
 
 // The site's script: the day and night switch, the header material, the
 // Product menu, and the three played conversations (the hero valley, "What
@@ -76,11 +77,19 @@ if (masthead) {
 const product = document.querySelector<HTMLElement>("[data-menu]");
 const productButton = product?.querySelector<HTMLButtonElement>("button");
 if (product && productButton) {
+  const menu = product.querySelector<HTMLElement>(".menu");
   let timer = 0;
+  // A closed menu is inert, so its links are out of the tab order; any
+  // pending hover open or close is dropped when the state is set directly.
   const setOpen = (open: boolean) => {
+    window.clearTimeout(timer);
     product.classList.toggle("is-open", open);
     productButton.setAttribute("aria-expanded", String(open));
+    if (menu) {
+      menu.inert = !open;
+    }
   };
+  setOpen(false);
   const later = (open: boolean) => {
     window.clearTimeout(timer);
     timer = window.setTimeout(() => setOpen(open), 120);
@@ -98,13 +107,22 @@ if (product && productButton) {
     }
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && product.classList.contains("is-open")) {
+      if (product.contains(document.activeElement)) {
+        productButton.focus();
+      }
       setOpen(false);
     }
   });
   for (const link of product.querySelectorAll("a")) {
     link.addEventListener("click", () => setOpen(false));
   }
+}
+
+// The footer's stars twinkle only while it is on screen.
+const footer = document.querySelector<HTMLElement>("[data-night]");
+if (footer) {
+  whenActive(footer);
 }
 
 startValley();

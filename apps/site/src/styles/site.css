@@ -208,6 +208,14 @@ body {
   }
 }
 
+/* A section that is off screen, in a hidden tab, or under reduced motion is
+   marked is-paused (src/scripts/watch.ts): its loops hold still. */
+.is-paused,
+.is-paused *,
+.is-paused *::before {
+  animation-play-state: paused !important;
+}
+
 @keyframes water-flow {
   to {
     transform: translateX(var(--tile));

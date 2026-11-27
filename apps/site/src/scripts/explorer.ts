@@ -6,6 +6,7 @@ import { outfits } from "../art";
 import { createChat } from "./chat";
 import { today } from "./features";
 import { soon } from "./soon";
+import { whenActive } from "./watch";
 
 const features = [...today, ...soon];
 
@@ -89,22 +90,20 @@ export const startExplorer = () => {
   window.addEventListener("resize", place);
   select(0, false);
 
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry?.isIntersecting) {
-        observer.disconnect();
-        const feature = features[current];
-        if (
-          feature &&
-          !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ) {
-          chat.play(feature.script);
-        }
-      }
-    },
-    { threshold: 0.3 }
-  );
-  observer.observe(section);
+  // The first time the section is active the picked feature plays; when it
+  // leaves the screen (or the tab hides) playback stops on what it showed.
+  let played = false;
+  whenActive(section, (active) => {
+    const feature = features[current];
+    if (!active) {
+      chat.stop();
+      return;
+    }
+    if (feature && !played) {
+      played = true;
+      chat.play(feature.script);
+    }
+  });
 };
 
 export { features };

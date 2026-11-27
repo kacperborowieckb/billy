@@ -8,6 +8,7 @@ import { createChat } from "./chat";
 import { brief } from "./markup";
 import { noteLoops } from "./stories";
 import { after, inSequence, repeat, wait } from "./timing";
+import { isReduced, whenActive } from "./watch";
 
 const reminders: readonly {
   icon: IconName;
@@ -104,7 +105,7 @@ export const startKeeps = () => {
     bar.style.setProperty("--progress", finished ? "1" : "0");
     done.classList.toggle("is-on", finished);
   };
-  resetBrief(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  resetBrief(isReduced());
 
   const briefTurn = async (live: () => boolean) => {
     resetBrief(false);
@@ -118,43 +119,30 @@ export const startKeeps = () => {
       bar.style.setProperty("--progress", String((count + 1) / items.length));
       return wait(900);
     });
+    if (!live()) {
+      return;
+    }
     done.classList.add("is-on");
     await wait(2400);
   };
 
-  let running = false;
   let loop = 0;
-  const setRunning = (on: boolean) => {
-    if (
-      on === running ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      return;
-    }
-    running = on;
+  whenActive(section, (active) => {
     loop += 1;
-    if (!on) {
+    if (!active) {
       notesChat.stop();
+      if (isReduced()) {
+        notesChat.fill(noteLoops[0] ?? []);
+        resetBrief(true);
+      }
       return;
     }
     const id = loop;
-    const live = () => running && id === loop;
+    const live = () => id === loop;
     repeat(live, (turn) =>
       notesChat.play(noteLoops[turn % noteLoops.length] ?? [])
     );
     after(1400, () => repeat(live, rowsTurn));
     after(700, () => repeat(live, () => briefTurn(live)));
-  };
-
-  let visible = false;
-  new IntersectionObserver(
-    ([entry]) => {
-      visible = Boolean(entry?.isIntersecting);
-      setRunning(visible && !document.hidden);
-    },
-    { threshold: 0.25 }
-  ).observe(section);
-  document.addEventListener("visibilitychange", () =>
-    setRunning(visible && !document.hidden)
-  );
+  });
 };

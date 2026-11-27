@@ -6,9 +6,7 @@
 import { billy } from "../art";
 import type { Step } from "./markup";
 import { frame, inSequence, wait } from "./timing";
-
-const isReduced = () =>
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+import { isReduced } from "./watch";
 
 const plain = (html: string) => {
   const box = document.createElement("div");
@@ -106,11 +104,17 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
       return wait(Math.min(64, 1700 / text.length));
     });
     await wait(200);
+    // A newer run owns the composer now: leave it alone.
+    if (!live()) {
+      return;
+    }
     send?.classList.add("is-pressed");
     await wait(140);
     send?.classList.remove("is-pressed");
-    field.classList.remove("is-typing");
-    field.textContent = placeholder;
+    if (live()) {
+      field.classList.remove("is-typing");
+      field.textContent = placeholder;
+    }
   };
 
   const press = async (selector: string) => {
@@ -154,10 +158,8 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
       .pop()
       ?.classList.add("is-struck");
 
-  const play = async (step: Step, live: () => boolean) => {
-    if (!live()) {
-      return;
-    }
+  // A step's messages: a timestamp, your message, Billy typing, his answer.
+  const say = async (step: Step, live: () => boolean) => {
     if (step.stamp) {
       await add(stamp(step.stamp));
       await wait(250);
@@ -176,6 +178,10 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
       await add(row("him", step.him));
       await wait(step.after ?? 900);
     }
+  };
+
+  // A step's actions: a quick reply, ticking tasks, a strike, a pause.
+  const act = async (step: Step, live: () => boolean) => {
     if (step.tap && live()) {
       await press(step.tap);
     }
@@ -185,6 +191,16 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
     if (step.strike && live()) {
       strike();
       await wait(400);
+    }
+    if (step.after && !(step.you || step.him) && live()) {
+      await wait(step.after);
+    }
+  };
+
+  const play = async (step: Step, live: () => boolean) => {
+    if (live()) {
+      await say(step, live);
+      await act(step, live);
     }
   };
 
@@ -230,6 +246,10 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
         field.classList.remove("is-typing");
         field.textContent = placeholder;
       }
+      if (isReduced()) {
+        this.fill(script);
+        return;
+      }
       if (thread.children.length > 0) {
         thread.classList.add("is-clearing");
         await wait(200);
@@ -243,8 +263,17 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
       await inSequence(script, (step) => play(step, live));
     },
 
+    /** Stop playing: typing dots go, and the thread shows again. */
     stop() {
       run += 1;
+      for (const dots of thread.querySelectorAll(".chat-dots")) {
+        dots.closest(".chat-row")?.remove();
+      }
+      thread.classList.remove("is-clearing");
+      if (field) {
+        field.classList.remove("is-typing");
+        field.textContent = placeholder;
+      }
     },
   };
 };

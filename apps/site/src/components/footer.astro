@@ -23,7 +23,7 @@ const columns = [
 ];
 ---
 
-<footer class="night" aria-labelledby="close-title">
+<footer class="night" aria-labelledby="close-title" data-night>
   <img class="px moon" src={world.moon} alt="" width="112" height="112" />
   {
     stars.map((star) => (
@@ -43,7 +43,7 @@ const columns = [
         <h2 id="close-title">Set Billy up on your own account</h2>
         <p>Clone it, add your model key, and send him the first thing to remember.</p>
       </div>
-      <a class={buttonVariants({ className: "go light" })} href="/#self-host">Get Billy<svg class="chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg></a>
+      <a class={buttonVariants({ className: "go light" })} href="/#self-host">Get Billy<svg class="chevron" data-icon="inline-end" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg></a>
     </div>
     <p class="word" aria-hidden="true">Tell Billy.</p>
     <div class="columns">
