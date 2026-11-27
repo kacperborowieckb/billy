@@ -9,13 +9,9 @@ import type { McpCallOutcome } from "./mcp-hub-contract.ts";
 import { resultTextOf, toolCopyOf } from "./mcp-hub-results.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
+import { within } from "./mcp-within.ts";
 import type { SealedCredentials } from "./sealed-credentials.ts";
 import { SealedOAuthProvider } from "./sealed-oauth-provider.ts";
-
-const within = <Value>(work: Promise<Value>, millis: number) =>
-  Effect.runPromise(
-    Effect.tryPromise(() => work).pipe(Effect.timeoutOption(millis))
-  );
 
 export interface McpServerConnectorDependencies {
   readonly manager: LazyMcpClientManager;
@@ -57,6 +53,7 @@ export class McpServerConnector {
     const { manager, send, allowedOrigins, credentials, health } =
       this.dependencies;
     const { catalogId } = entry;
+    const sealedCredentials = await credentials(ownerId);
     if (this.epochOf(catalogId) !== epoch) {
       throw new Error("The MCP Connection was removed before it connected");
     }
@@ -73,7 +70,7 @@ export class McpServerConnector {
           queueWaitsOnConnect: () => (this.queueHolds.get(catalogId) ?? 0) > 0,
         }),
         authProvider: new SealedOAuthProvider(
-          await credentials(ownerId),
+          sealedCredentials,
           catalogId,
           "Billy"
         ),

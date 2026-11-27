@@ -12,6 +12,7 @@ import { McpRefreshUnavailableError } from "../src/mcp/mcp-refresh-unavailable-e
 import { McpServerConnector } from "../src/mcp/mcp-server-connector.ts";
 import { McpToolCopySync } from "../src/mcp/mcp-tool-copy-sync.ts";
 import type { McpToolCopy } from "../src/mcp/mcp-tool-copy.ts";
+import { revokeTokens } from "../src/mcp/oauth-token-revocation.ts";
 
 const challenged = (status: number, challenge: string) =>
   new Response(null, { status, headers: { "WWW-Authenticate": challenge } });
@@ -193,6 +194,19 @@ const connectorOver = (manager: Record<string, unknown>) =>
     health: {} as never,
   });
 
+describe("the revocation of a token", () => {
+  it("answers failed, not an error, when the client secret cannot be encoded", async () => {
+    const outcome = await revokeTokens({
+      send: () => Promise.resolve(new Response(null, { status: 200 })),
+      client: { client_id: "c", client_secret: "\uD800", redirectUrl: "r" },
+      revocationEndpoint: "https://mcp.test.example/revoke",
+      tokens: { access_token: "a", token_type: "Bearer" },
+    });
+
+    expect(outcome).toBe("failed");
+  });
+});
+
 describe("the connector of a Connection that is removed", () => {
   const entry = { catalogId: "c", serverUrl: "https://mcp.test.example/mcp" };
   const request = {
@@ -236,6 +250,33 @@ describe("the connector of a Connection that is removed", () => {
 
     expect(outcome).toEqual({ _tag: "Failed", reason: "not_connected" });
     expect(manager.callTool).not.toHaveBeenCalled();
+  });
+
+  it("does not register a server when the Connection was removed while its credentials were read", async () => {
+    const registerServer = vi.fn();
+    const credentialsRead = Promise.withResolvers<undefined>();
+    const connector = new McpServerConnector({
+      manager: { mcpConnections: {}, registerServer } as never,
+      start: () => Promise.resolve(),
+      send: () => Promise.resolve(new Response(null, { status: 500 })),
+      allowedOrigins: [],
+      credentials: async () => {
+        await credentialsRead.promise;
+        return {} as never;
+      },
+      health: {} as never,
+    });
+    const epoch = connector.epochOf("c");
+
+    const calling = connector.callTool(entry as never, "owner", {
+      request,
+      epoch,
+    });
+    await connector.forget("c", 50);
+    credentialsRead.resolve(undefined);
+
+    expect(await calling).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(registerServer).not.toHaveBeenCalled();
   });
 
   it("gives up a close that never ends when the deadline comes", async () => {

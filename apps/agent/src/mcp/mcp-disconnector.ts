@@ -27,7 +27,14 @@ import type {
 
 const closeDeadlineMillis = 3000;
 
-const removalMarkerLifetimeMillis = 60_000;
+const revocationOfEarlierDisconnect = (
+  earlier: "pending" | McpRevocation | undefined
+): McpRevocation => {
+  if (earlier === undefined) {
+    return "not_attempted";
+  }
+  return earlier === "pending" ? "failed" : earlier;
+};
 
 export interface McpDisconnectorDependencies {
   readonly catalog: McpCatalog;
@@ -102,18 +109,20 @@ export class McpDisconnector {
   ): Promise<McpDisconnectOutcome> {
     const { storage, connector, send, ledger } = this.dependencies;
     const held = await this.heldCredentialsOf(catalogId);
+    const earlier = await ledger.removalOf(catalogId);
     await storage.delete(await this.keysOf(catalogId));
-    await ledger.markBeingRemoved(catalogId, removalMarkerLifetimeMillis);
+    await ledger.markBeingRemoved(catalogId, "pending");
     await connector.forget(catalogId, closeDeadlineMillis);
     const revocation: McpRevocation =
       held === undefined
-        ? "not_attempted"
+        ? revocationOfEarlierDisconnect(earlier)
         : await revokeTokens({
             send,
             client: held.client,
             revocationEndpoint: held.revocationEndpoint,
             tokens: held.tokens,
           });
+    await ledger.markBeingRemoved(catalogId, revocation);
     return { outcome: "disconnected", revocation };
   }
 

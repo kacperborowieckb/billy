@@ -5,9 +5,11 @@ import { fakeOAuthSecrets } from "../control/fake-oauth-server.ts";
 import { testMcpCatalogId } from "../src/mcp/mcp-test-catalog.ts";
 import {
   callMcpToolToolName,
+  connectMcpServerToolName,
   disconnectMcpConnectionToolName,
   findMcpToolsToolName,
 } from "../src/mcp/mcp-tool-names.ts";
+import { removeMcpConnection } from "../src/mcp/receive-mcp-copy.ts";
 import {
   fakeMcpServer,
   fakeModel,
@@ -121,6 +123,18 @@ const expectNothingLeft = async (ownerId: string) => {
   expect(keys.filter((key) => /^(?:oauth|settled):/u.test(key))).toEqual([]);
 };
 
+const approveButtonOf = () =>
+  vi.waitFor(() => {
+    const button = fakeTelegram.sent
+      .flatMap((request) => request.body.reply_markup?.inline_keyboard ?? [])
+      .flat()
+      .findLast((candidate) => candidate.text === "Approve");
+    if (button === undefined) {
+      throw new Error("No Approval message was sent yet");
+    }
+    return { text: button.text, callback_data: button.callback_data };
+  });
+
 const say = async (userId: number, text: string, sentSoFar: number) => {
   await telegramWebhook(textUpdate({ fromUserId: userId, text }));
   await vi.waitFor(() =>
@@ -209,16 +223,15 @@ describe("disconnect in an owner Turn", () => {
         fakeTelegram.sent.length
       );
 
-      const request = fakeTelegram.sent.at(-1);
-      const approve = request?.body.reply_markup?.inline_keyboard[0]?.[0];
-      expect(approve?.text).toBe("Approve");
+      const approve = await approveButtonOf();
+      expect(approve.text).toBe("Approve");
       expect(oauth.revocationRequests).toEqual([]);
       expect(await storedTokensOf(ownerId)).toBeDefined();
 
       await telegramWebhook(
         pressUpdate({
           fromUserId: telegramUserId,
-          data: approve?.callback_data ?? "",
+          data: approve.callback_data,
           messageId: fakeTelegram.sent.length,
         })
       );
@@ -477,8 +490,7 @@ describe("a Pending Approval for a disconnected server", () => {
         { say: "Waiting for your Approval." },
       ]);
       await say(telegramUserId, "create a page", fakeTelegram.sent.length);
-      const approve =
-        fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard[0]?.[0];
+      const approve = await approveButtonOf();
 
       scriptModel([
         {
@@ -504,7 +516,7 @@ describe("a Pending Approval for a disconnected server", () => {
       await telegramWebhook(
         pressUpdate({
           fromUserId: telegramUserId,
-          data: approve?.callback_data ?? "",
+          data: approve.callback_data,
           messageId: fakeTelegram.sent.length,
         })
       );
@@ -603,7 +615,7 @@ describe("an OAuth start that was running", () => {
       release();
 
       expect(await statusOf(starting)).not.toBe(303);
-      expect(await hubKeysOf(ownerId)).not.toContain(
+      expect(await hubKeysOf(ownerId)).not.toContainEqual(
         expect.stringMatching(/^oauth:/u)
       );
       await hubOf(ownerId).acknowledgeRemoval(testMcpCatalogId);
@@ -668,14 +680,13 @@ describe("an approved call that a disconnect cuts", () => {
         { say: "Waiting for your Approval." },
       ]);
       await say(telegramUserId, "create a page", fakeTelegram.sent.length);
-      const approve =
-        fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard[0]?.[0];
+      const approve = await approveButtonOf();
       const releaseCall = fakeMcpServer.holdToolCalls();
 
       await telegramWebhook(
         pressUpdate({
           fromUserId: telegramUserId,
-          data: approve?.callback_data ?? "",
+          data: approve.callback_data,
           messageId: fakeTelegram.sent.length,
         })
       );
@@ -687,6 +698,112 @@ describe("an approved call that a disconnect cuts", () => {
         expect(await approvalStatesOf(ownerId)).toEqual(["unconfirmed"])
       );
       expect(fakeMcpServer.toolCallRequests).toBe(1);
+    },
+    slowTest
+  );
+});
+
+describe("a removal that is not acknowledged", () => {
+  it(
+    "keeps the first revocation result when a disconnect is repeated",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      oauth.failRevocationsWith(500);
+
+      expect(await disconnectOf(ownerId)).toEqual({
+        outcome: "disconnected",
+        revocation: "failed",
+      });
+      oauth.failRevocationsWith(undefined);
+
+      expect(await disconnectOf(ownerId)).toEqual({
+        outcome: "disconnected",
+        revocation: "failed",
+      });
+    },
+    slowTest
+  );
+
+  it(
+    "stays blocking until the Personal Agent removal is acknowledged, with no time limit",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      await disconnectOf(ownerId);
+
+      const markers = await runInDurableObject(
+        hubOf(ownerId),
+        async (_instance, { storage }) => {
+          const stored = await storage.list({ prefix: "removing:" });
+          return [...stored.values()];
+        }
+      );
+
+      expect(markers).toEqual(["revoked"]);
+    },
+    slowTest
+  );
+
+  it(
+    "is cleared by a connect request when the Personal Agent has no Connection",
+    async () => {
+      const { ownerId, telegramUserId } = await connectedOwner();
+      await disconnectOf(ownerId);
+      await runInDurableObject(await agentOf(ownerId), (instance) =>
+        instance.runtime.runPromise(
+          removeMcpConnection(testMcpCatalogId, "revoked")
+        )
+      );
+      scriptModel([
+        {
+          callTool: connectMcpServerToolName,
+          input: { connection: testMcpCatalogId },
+        },
+        { say: "Tap the button." },
+      ]);
+
+      await say(telegramUserId, "connect again", fakeTelegram.sent.length);
+
+      const markers = await hubKeysOf(ownerId);
+      expect(markers.filter((key) => key.startsWith("removing:"))).toEqual([]);
+    },
+    slowTest
+  );
+
+  it(
+    "also expires a pending disconnect Approval of the Connection",
+    async () => {
+      const { ownerId, telegramUserId } = await connectedOwner();
+      scriptModel([
+        {
+          callTool: callMcpToolToolName,
+          input: {
+            connection: testMcpCatalogId,
+            tool: "search",
+            arguments: { query: "reading" },
+          },
+        },
+        {
+          callTool: disconnectMcpConnectionToolName,
+          input: { connection: testMcpCatalogId },
+        },
+        { say: "Waiting for your Approval." },
+      ]);
+      await say(
+        telegramUserId,
+        "read then disconnect",
+        fakeTelegram.sent.length
+      );
+      await approveButtonOf();
+      await runInDurableObject(await agentOf(ownerId), (instance) =>
+        instance.runtime.runPromise(
+          removeMcpConnection(testMcpCatalogId, "revoked")
+        )
+      );
+
+      await vi.waitFor(async () => {
+        await runDurableObjectAlarm(await agentOf(ownerId));
+        expect(await approvalStatesOf(ownerId)).toEqual(["expired"]);
+      });
     },
     slowTest
   );

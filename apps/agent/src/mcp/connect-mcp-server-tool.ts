@@ -41,6 +41,9 @@ export const connectMcpServerTool = (
             })
           );
         }
+        if (!services.states.has(entry.catalogId)) {
+          yield* services.hub.acknowledgeRemoval(entry.catalogId);
+        }
         yield* services.requestConnect(eventId, entry.catalogId);
         return {
           connection: entry.displayName,

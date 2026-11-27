@@ -67,3 +67,10 @@ export const latestExchangeKey = (catalogId: string) =>
   `latest-exchange:${catalogId}`;
 
 export const removalMarkerKey = (catalogId: string) => `removing:${catalogId}`;
+
+const decodeRemovalMarker = Schema.decodeUnknownOption(
+  Schema.Literals(["pending", "revoked", "failed", "not_attempted"])
+);
+
+export const removalMarkerOf = (stored: unknown) =>
+  Option.getOrUndefined(decodeRemovalMarker(stored));

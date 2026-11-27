@@ -30,8 +30,8 @@ const revokeOne = async (
   input: TokenRevocationInput,
   { token, hint }: TokenToRevoke
 ): Promise<TokenRevocationOutcome> => {
-  const authentication = clientAuthenticationOf(input.client);
   try {
+    const authentication = clientAuthenticationOf(input.client);
     const status = await withinDeadline(async (signal) => {
       const response = await input.send(input.revocationEndpoint, {
         method: "POST",

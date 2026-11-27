@@ -6,6 +6,7 @@ import {
   lastErrorKey,
   lastErrorOf,
   removalMarkerKey,
+  removalMarkerOf,
 } from "./oauth-storage-keys.ts";
 import type { HubConnectionState, McpLastError } from "./oauth-storage-keys.ts";
 
@@ -32,21 +33,19 @@ export class McpConnectionLedger {
     return lastErrorOf(await this.storage.get(lastErrorKey(catalogId)));
   }
 
-  async isBeingRemoved(catalogId: string) {
-    const expiresAtMillis = await this.storage.get<number>(
-      removalMarkerKey(catalogId)
-    );
-    return (
-      expiresAtMillis !== undefined &&
-      expiresAtMillis > DateTime.toEpochMillis(DateTime.nowUnsafe())
-    );
+  async removalOf(catalogId: string) {
+    return removalMarkerOf(await this.storage.get(removalMarkerKey(catalogId)));
   }
 
-  markBeingRemoved(catalogId: string, lifetimeMillis: number) {
-    return this.storage.put<number>(
-      removalMarkerKey(catalogId),
-      DateTime.toEpochMillis(DateTime.nowUnsafe()) + lifetimeMillis
-    );
+  async isBeingRemoved(catalogId: string) {
+    return (await this.removalOf(catalogId)) !== undefined;
+  }
+
+  markBeingRemoved(
+    catalogId: string,
+    marker: "pending" | "revoked" | "failed" | "not_attempted"
+  ) {
+    return this.storage.put(removalMarkerKey(catalogId), marker);
   }
 
   clearBeingRemoved(catalogId: string) {

@@ -1,9 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 
 import { pendingApprovals } from "../approval/pending-approvals-schema.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
-import { callMcpToolToolName } from "./mcp-tool-names.ts";
+import {
+  callMcpToolToolName,
+  disconnectMcpConnectionToolName,
+} from "./mcp-tool-names.ts";
 
 const FrozenCallSchema = Schema.fromJsonString(
   Schema.Struct({ connection: Schema.String })
@@ -29,7 +32,10 @@ export const makeApprovalsOfConnectionDue = Effect.fnUntraced(
       .where(
         and(
           eq(pendingApprovals.state, "pending"),
-          eq(pendingApprovals.toolName, callMcpToolToolName)
+          inArray(pendingApprovals.toolName, [
+            callMcpToolToolName,
+            disconnectMcpConnectionToolName,
+          ])
         )
       );
     for (const approval of open) {
