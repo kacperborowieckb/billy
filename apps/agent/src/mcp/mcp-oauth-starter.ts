@@ -13,6 +13,7 @@ import { pendingOAuthOf, startOAuth } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
 import {
   pendingOAuthKeyPrefix,
+  expiryOf,
   settledOAuthKeyPrefix,
   settledOAuthOf,
   usedProofKeyPrefix,
@@ -153,11 +154,11 @@ export class McpOAuthStarter {
       expiresAtMillis === undefined || expiresAtMillis <= now;
     const expiredKeysOf = async (
       prefix: string,
-      expiryOf: (stored: unknown) => number | undefined
+      readExpiry: (stored: unknown) => number | undefined
     ) => {
       const stored = await storage.list({ prefix });
       return [...stored]
-        .filter(([, value]) => isExpired(expiryOf(value)))
+        .filter(([, value]) => isExpired(readExpiry(value)))
         .map(([key]) => key);
     };
     const expired = [
@@ -165,9 +166,7 @@ export class McpOAuthStarter {
         pendingOAuthKeyPrefix,
         (stored) => pendingOAuthOf(stored)?.expiresAtMillis
       )),
-      ...(await expiredKeysOf(usedProofKeyPrefix, (stored) =>
-        typeof stored === "number" ? stored : undefined
-      )),
+      ...(await expiredKeysOf(usedProofKeyPrefix, expiryOf)),
       ...(await expiredKeysOf(
         settledOAuthKeyPrefix,
         (stored) => settledOAuthOf(stored)?.expiresAtMillis

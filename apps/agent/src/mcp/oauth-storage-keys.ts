@@ -19,3 +19,16 @@ export type SettledOAuth = typeof SettledOAuthSchema.Type;
 
 export const settledOAuthOf = (stored: unknown) =>
   Option.getOrUndefined(Schema.decodeUnknownOption(SettledOAuthSchema)(stored));
+
+const decodeExpiry = Schema.decodeUnknownOption(Schema.Number);
+
+export const expiryOf = (stored: unknown) =>
+  Option.getOrUndefined(decodeExpiry(stored));
+
+const decodeRecorded = Schema.decodeUnknownOption(Schema.Literal(true));
+
+export const connectionRecordKey = (catalogId: string) =>
+  `connection:${catalogId}`;
+
+export const isConnectionRecorded = (stored: unknown) =>
+  Option.isSome(decodeRecorded(stored));

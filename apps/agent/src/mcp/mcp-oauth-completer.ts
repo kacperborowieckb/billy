@@ -10,6 +10,8 @@ import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { pendingOAuthOf } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
 import {
+  connectionRecordKey,
+  isConnectionRecorded,
   pendingOAuthKeyPrefix,
   settledOAuthKeyPrefix,
   settledOAuthOf,
@@ -89,8 +91,8 @@ export class McpOAuthCompleter {
       return { outcome: "not_started" };
     }
     const serverName = entry.displayName;
-    const recorded = await storage.get<true>(`connection:${entry.catalogId}`);
-    if (recorded === true) {
+    const recorded = await storage.get(connectionRecordKey(entry.catalogId));
+    if (isConnectionRecorded(recorded)) {
       return { outcome: "connected", serverName };
     }
     const connected = await this.dependencies.connect({

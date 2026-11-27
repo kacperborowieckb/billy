@@ -48,44 +48,42 @@ export const connectedMessageOf = (
     ? `Connected ${displayName}`
     : `Connected ${displayName} (account ${accountLabel})`;
 
-export interface McpConnectedCopy {
-  readonly catalogId: string;
-  readonly tools: readonly McpToolCopy[];
-  readonly accountLabel: string | undefined;
-  readonly completionId: string;
-}
+export const McpConnectedCopySchema = Schema.Struct({
+  catalogId: Schema.String,
+  tools: McpToolCatalogCopySchema,
+  accountLabel: Schema.UndefinedOr(Schema.String),
+  completionId: Schema.NonEmptyString,
+});
 
-export const receiveMcpConnected = (
-  catalog: McpCatalog,
-  { catalogId, tools, accountLabel, completionId }: McpConnectedCopy
-) => {
-  const entry = mcpEntryOf(catalog, catalogId);
-  return entry === undefined
-    ? Effect.void
-    : Effect.gen(function* receiveConnectedEffect() {
-        const copy = yield* Schema.decodeUnknownEffect(
-          McpToolCatalogCopySchema
-        )(tools);
-        const connections = yield* McpConnections;
-        yield* connections.replaceTools(catalogId, copy);
-        yield* connections.setState(catalogId, "ready");
-        const journal = yield* Journal;
-        const eventId = `mcp-connection-added:${completionId}`;
-        if ((yield* journal.readForEvent(eventId)).length > 0) {
-          return;
-        }
-        yield* journal.append({
-          _tag: "McpConnectionAdded",
-          eventId,
-          catalogId,
-        });
-        const conversation = yield* (yield* OwnerChannelConversation).current;
-        if (conversation !== undefined) {
-          const channel = yield* Channel;
-          yield* channel.send({
-            conversationId: conversation.conversationId,
-            text: connectedMessageOf(entry.displayName, accountLabel),
-          });
-        }
-      }).pipe(Effect.orDie);
-};
+export type McpConnectedCopy = typeof McpConnectedCopySchema.Type;
+
+export const receiveMcpConnected = (catalog: McpCatalog, received: unknown) =>
+  Effect.gen(function* receiveConnectedEffect() {
+    const { catalogId, tools, accountLabel, completionId } =
+      yield* Schema.decodeUnknownEffect(McpConnectedCopySchema)(received);
+    const entry = mcpEntryOf(catalog, catalogId);
+    if (entry === undefined) {
+      return;
+    }
+    const connections = yield* McpConnections;
+    yield* connections.replaceTools(catalogId, tools);
+    yield* connections.setState(catalogId, "ready");
+    const journal = yield* Journal;
+    const eventId = `mcp-connection-added:${completionId}`;
+    if ((yield* journal.readForEvent(eventId)).length > 0) {
+      return;
+    }
+    yield* journal.append({
+      _tag: "McpConnectionAdded",
+      eventId,
+      catalogId,
+    });
+    const conversation = yield* (yield* OwnerChannelConversation).current;
+    if (conversation !== undefined) {
+      const channel = yield* Channel;
+      yield* channel.send({
+        conversationId: conversation.conversationId,
+        text: connectedMessageOf(entry.displayName, accountLabel),
+      });
+    }
+  }).pipe(Effect.orDie);

@@ -27,6 +27,10 @@ import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { McpServerConnector } from "./mcp-server-connector.ts";
 import { mcpCatalogFor } from "./mcp-test-catalog.ts";
+import {
+  connectionRecordKey,
+  isConnectionRecorded,
+} from "./oauth-storage-keys.ts";
 import { SealedCredentials } from "./sealed-credentials.ts";
 import { parseSealKeyring } from "./token-seal.ts";
 import type { SealKeyring } from "./token-seal.ts";
@@ -147,7 +151,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
         accountLabel,
         completionId,
       });
-      await this.ctx.storage.put(`connection:${entry.catalogId}`, true);
+      await this.ctx.storage.put(connectionRecordKey(entry.catalogId), true);
       return "connected";
     } catch {
       await this.tellState(ownerId, entry.catalogId, "failed");
@@ -155,10 +159,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     }
   }
 
-  private isRecorded(catalogId: string) {
-    return this.ctx.storage
-      .get<true>(`connection:${catalogId}`)
-      .then((recorded) => recorded === true);
+  private async isRecorded(catalogId: string) {
+    return isConnectionRecorded(
+      await this.ctx.storage.get(connectionRecordKey(catalogId))
+    );
   }
 
   describeConsent(request: McpOAuthRequest): Promise<McpConsentOutcome> {
@@ -209,10 +213,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
         this.connector.toolCopiesOf(catalogId)
       );
       await agent.receiveMcpConnectionState(catalogId, "ready");
-      await this.ctx.storage.put(`connection:${catalogId}`, true);
+      await this.ctx.storage.put(connectionRecordKey(catalogId), true);
       return { outcome: "added" };
     } catch {
-      await this.ctx.storage.delete(`connection:${catalogId}`);
+      await this.ctx.storage.delete(connectionRecordKey(catalogId));
       await agent.receiveMcpConnectionState(catalogId, "failed");
       return { outcome: "failed" };
     }
