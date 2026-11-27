@@ -41,7 +41,13 @@ const mcpSnapshot = Effect.gen(function* mcpSnapshotEffect() {
     requestConnect: connections.requestConnect,
     removeConnection: (catalogId: string, revocation: McpRevocation) =>
       removeMcpConnection(catalogId, revocation).pipe(
-        Effect.provideContext(removalServices)
+        Effect.provideContext(removalServices),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            states.delete(catalogId);
+            copies.delete(catalogId);
+          })
+        )
       ),
   };
 });

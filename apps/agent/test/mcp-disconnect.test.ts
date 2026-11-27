@@ -10,6 +10,7 @@ import {
 } from "../src/mcp/mcp-tool-names.ts";
 import {
   fakeMcpServer,
+  fakeModel,
   fakeTelegram,
   resetFakes,
   scriptModel,
@@ -59,6 +60,17 @@ const statusOf = async (work: Promise<Response> | Response) => {
 const tagOf = async (work: Promise<{ readonly _tag: string }>) => {
   const settled = await work;
   return settled._tag;
+};
+
+const lastToolOutputOf = (toolName: string) => {
+  const prompt = fakeModel.doGenerateCalls.at(-1)?.prompt ?? [];
+  const part = prompt
+    .flatMap((message) => (message.role === "tool" ? message.content : []))
+    .findLast(
+      (candidate) =>
+        candidate.type === "tool-result" && candidate.toolName === toolName
+    );
+  return JSON.stringify(part?.type === "tool-result" ? part.output : undefined);
 };
 
 const waitingOf = (ownerId: string) =>
@@ -163,8 +175,6 @@ describe("disconnect in an owner Turn", () => {
         reason: "not_connected",
       });
       expect(fakeMcpServer.toolCallRequests).toBe(0);
-      expect(findMcpToolsToolName).toBeDefined();
-      expect(callMcpToolToolName).toBeDefined();
     },
     slowTest
   );
@@ -496,6 +506,139 @@ describe("a Pending Approval for a disconnected server", () => {
 
       expect(await approvalStatesOf(ownerId)).toEqual(["expired"]);
       expect(fakeMcpServer.calls).toEqual([]);
+    },
+    slowTest
+  );
+});
+
+describe("a Turn that disconnects", () => {
+  it(
+    "answers not connected to find_mcp_tools and call_mcp_tool later in the same Turn",
+    async () => {
+      const { telegramUserId } = await connectedOwner();
+      scriptModel([
+        {
+          callTool: disconnectMcpConnectionToolName,
+          input: { connection: testMcpCatalogId },
+        },
+        {
+          callTool: findMcpToolsToolName,
+          input: { connection: testMcpCatalogId, query: "search" },
+        },
+        {
+          callTool: callMcpToolToolName,
+          input: {
+            connection: testMcpCatalogId,
+            tool: "search",
+            arguments: { query: "reading" },
+          },
+        },
+        { say: "Done." },
+      ]);
+
+      await say(telegramUserId, "disconnect", fakeTelegram.sent.length);
+
+      expect(lastToolOutputOf(findMcpToolsToolName)).toContain("not connected");
+      expect(lastToolOutputOf(callMcpToolToolName)).toContain("not connected");
+      expect(fakeMcpServer.toolCallRequests).toBe(0);
+    },
+    slowTest
+  );
+
+  it(
+    "finishes while a callback holds the queue and needs the Personal Agent",
+    async () => {
+      const userId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(userId);
+      const { state } = await startedConsent(userId, ownerId);
+      const release = oauth.holdTokenRequests();
+      const callback = goodCallback(state);
+      await vi.waitFor(() => expect(oauth.tokenRequests).toHaveLength(1));
+      scriptModel([
+        {
+          callTool: disconnectMcpConnectionToolName,
+          input: { connection: testMcpCatalogId },
+        },
+        { say: "Disconnected." },
+      ]);
+
+      const asking = telegramWebhook(
+        textUpdate({ fromUserId: userId, text: "disconnect" })
+      );
+      await vi.waitFor(async () => expect(await waitingOf(ownerId)).toBe(1));
+      release();
+
+      await asking;
+      expect(await statusOf(callback)).toBe(200);
+      await vi.waitFor(async () =>
+        expect(await removalsOf(ownerId)).toEqual(["revoked"])
+      );
+      await expectNothingLeft(ownerId);
+      await expectAgentForgot(ownerId);
+    },
+    slowTest
+  );
+});
+
+describe("an OAuth start that was running", () => {
+  it(
+    "is a new connect when it finishes after a disconnect",
+    async () => {
+      const userId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(userId);
+      const release = oauth.holdMetadataRequests();
+      const starting = startedConsent(userId, ownerId);
+      await vi.waitFor(() =>
+        expect(oauth.heldMetadataRequests).toBeGreaterThan(0)
+      );
+
+      expect(await outcomeOf(disconnectOf(ownerId))).toBe("disconnected");
+      release();
+      const { state } = await starting;
+
+      expect(await statusOf(goodCallback(state))).toBe(200);
+      expect(await tagOf(searchOf(ownerId))).toBe("Result");
+    },
+    slowTest
+  );
+});
+
+describe("an approved call that a disconnect cuts", () => {
+  it(
+    "is unconfirmed and is not run again",
+    async () => {
+      const { ownerId, telegramUserId } = await connectedOwner();
+      scriptModel([
+        {
+          callTool: callMcpToolToolName,
+          input: {
+            connection: testMcpCatalogId,
+            tool: "create_page",
+            arguments: { title: "New" },
+          },
+        },
+        { say: "Waiting for your Approval." },
+      ]);
+      await say(telegramUserId, "create a page", fakeTelegram.sent.length);
+      const approve =
+        fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard[0]?.[0];
+      const releaseCall = fakeMcpServer.holdToolCalls();
+
+      await telegramWebhook(
+        pressUpdate({
+          fromUserId: telegramUserId,
+          data: approve?.callback_data ?? "",
+          messageId: fakeTelegram.sent.length,
+        })
+      );
+      await vi.waitFor(() => expect(fakeMcpServer.toolCallRequests).toBe(1));
+      expect(await outcomeOf(disconnectOf(ownerId))).toBe("disconnected");
+      releaseCall();
+
+      await vi.waitFor(async () =>
+        expect(await approvalStatesOf(ownerId)).toEqual(["unconfirmed"])
+      );
+      expect(fakeMcpServer.toolCallRequests).toBe(1);
     },
     slowTest
   );

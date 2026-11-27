@@ -90,8 +90,13 @@ export class McpServerConnector {
     if (existing !== undefined) {
       return existing;
     }
-    const started = this.registerAndConnect(entry, ownerId).finally(() => {
-      this.connecting.delete(entry.catalogId);
+    const started: Promise<void> = this.registerAndConnect(
+      entry,
+      ownerId
+    ).finally(() => {
+      if (this.connecting.get(entry.catalogId) === started) {
+        this.connecting.delete(entry.catalogId);
+      }
     });
     this.connecting.set(entry.catalogId, started);
     return started;
@@ -178,9 +183,15 @@ export class McpServerConnector {
 
   async forget(catalogId: string, deadlineMillis: number) {
     this.epochs.set(catalogId, this.epochOf(catalogId) + 1);
-    this.connecting.delete(catalogId);
+    const running = this.connecting.get(catalogId);
     await this.whileQueueHeld(catalogId, async () => {
       try {
+        if (running !== undefined) {
+          await within(
+            running.catch(() => null),
+            deadlineMillis
+          );
+        }
         await within(this.closeIfOpen(catalogId), deadlineMillis);
       } catch {
         await Effect.runPromise(

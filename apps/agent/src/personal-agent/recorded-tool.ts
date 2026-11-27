@@ -178,7 +178,8 @@ export const recordedTool = <
         return yield* progress
           .recordingToolCall(
             call,
-            workOf(definition, input, { markedUntrusted })
+            workOf(definition, input, { markedUntrusted }),
+            { runsOutsideTransaction: definition.hasExternalEffect === true }
           )
           .pipe(
             Effect.catchCause((cause) => {
