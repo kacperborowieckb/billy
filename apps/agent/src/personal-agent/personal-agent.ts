@@ -6,9 +6,9 @@ import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Channel } from "../channels/channel.ts";
 import type { Event } from "../event.ts";
+import { mcpCatalogFor } from "../mcp/mcp-catalog-for-env.ts";
 import type { McpCatalog } from "../mcp/mcp-catalog.ts";
 import type { McpHubPort } from "../mcp/mcp-hub-contract.ts";
-import { mcpCatalogFor } from "../mcp/mcp-production-catalog.ts";
 import type { McpToolCopy } from "../mcp/mcp-tool-copy.ts";
 import {
   receiveMcpConnected,

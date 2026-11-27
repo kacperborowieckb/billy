@@ -2,7 +2,8 @@ export const notionAgentSummaries = {
   "notion-convert-page-to-skill":
     "turn page {page_url|url|page_id} into a Skill",
   "notion-download-skill": "download Skill {id|page_id}",
-  "notion-upload-skill": "upload a Skill to page {page_id}: {action}",
+  "notion-upload-skill":
+    "replace page {page_id} with an uploaded Skill: {action}",
   "notion-get-enabled-skills": "list enabled Skills",
   "notion-update-enabled-skills":
     "change enabled Skills[, add {add_skill_urls}][, remove {remove_skill_urls}]",

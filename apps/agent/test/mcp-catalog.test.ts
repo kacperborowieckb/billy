@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import { fakeMcpTools } from "../control/fake-mcp-server.ts";
 import { mcpApprovalSummaryOf } from "../src/mcp/mcp-approval-summary.ts";
 import { mcpArgumentProblemOf } from "../src/mcp/mcp-arguments.ts";
+import { productionMcpCatalog } from "../src/mcp/mcp-catalog-for-env.ts";
 import {
   matchesMcpIdShape,
   mcpCatalogProblems,
   mcpToolRiskClass,
 } from "../src/mcp/mcp-catalog.ts";
-import { productionMcpCatalog } from "../src/mcp/mcp-production-catalog.ts";
 import { mcpResultIdsOf } from "../src/mcp/mcp-result-ids.ts";
 import { testMcpCatalogEntry } from "../src/mcp/mcp-test-catalog.ts";
 import { notionCatalogEntry } from "../src/mcp/notion/notion-catalog-entry.ts";
@@ -313,7 +313,48 @@ describe("the Notion entry of the MCP Catalog", () => {
     {
       tool: "notion-update-page",
       args: { page_id: "page-1", command: "replace_content", new_str: "x" },
-      line: 'Notion: update page "page-1": "replace_content"',
+      line: 'Notion: update page "page-1": "replace_content", text "x"',
+    },
+    {
+      tool: "notion-update-page",
+      args: {
+        page_id: "page-1",
+        command: "update_content",
+        content_updates: [
+          { old_str: "a", new_str: "b" },
+          { old_str: "c", new_str: "d", replace_all_matches: true },
+        ],
+        allow_deleting_content: true,
+      },
+      line: 'Notion: update page "page-1": "update_content", text "b" and 1 more, all matches: true and 1 more, may delete content: true',
+    },
+    {
+      tool: "notion-update-data-source",
+      args: {
+        data_source_id: "source-1",
+        properties: { Status: { select: { options: [] } } },
+        in_trash: true,
+      },
+      line: 'Notion: update data source "source-1", change properties ..., to Trash: true',
+    },
+    {
+      tool: "notion-restore-version",
+      args: {
+        page_id: "page-1",
+        time: "2026-11-01T10:00:00Z",
+        include_inline_databases: true,
+      },
+      line: 'Notion: restore "page-1" to its version of "2026-11-01T10:00:00Z", with its databases: true',
+    },
+    {
+      tool: "notion-calendar-create-events",
+      args: {
+        events: [
+          { summary: "Standup" },
+          { summary: "Review", attendees: [{ email: "eve@example.com" }] },
+        ],
+      },
+      line: 'Notion: create calendar event "Standup" and 1 more with "eve@example.com" and 1 more',
     },
     {
       tool: "notion-update-page",

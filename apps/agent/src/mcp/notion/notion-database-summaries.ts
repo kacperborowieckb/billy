@@ -6,7 +6,7 @@ export const notionDatabaseSummaries = {
   "notion-convert-to-meetings-database":
     "turn database {database_id|database_url|url} into a meetings database",
   "notion-update-data-source":
-    "update data source {data_source_id}[, title {title.text.content|title|name}]",
+    "update data source {data_source_id}[, title {title.text.content|title|name}][, change properties {statements|properties}][, page layout {page_layout}][, to Trash: {in_trash}]",
   "notion-create-view":
     "create a view[ {name}][ of type {type}][ on {database_id|data_source_id|parent_page_id}]",
   "notion-update-view": "update view {view_id}[, name {name}]",

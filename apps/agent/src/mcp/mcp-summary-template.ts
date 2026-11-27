@@ -35,49 +35,45 @@ export const shownScalar = (value: string | number | boolean) =>
     ? JSON.stringify(shortened(oneLine(value)))
     : String(value);
 
-interface FoundValue {
-  readonly value: unknown;
-  readonly others: number;
-}
-
-const firstOf = ({ value, others }: FoundValue): FoundValue =>
-  Array.isArray(value)
-    ? { value: value[0], others: others + Math.max(0, value.length - 1) }
-    : { value, others };
-
 const memberOf = (value: unknown, key: string) =>
   typeof value === "object" && value !== null && Object.hasOwn(value, key)
     ? (value as Record<string, unknown>)[key]
     : undefined;
 
-const valueAt = (args: unknown, path: string) => {
-  let found: FoundValue = { value: args, others: 0 };
-  for (const key of path.split(".")) {
-    const { value, others } = firstOf(found);
-    found = { value: memberOf(value, key), others };
+const valuesAt = (
+  value: unknown,
+  keys: readonly string[]
+): readonly unknown[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => valuesAt(item, keys));
   }
-  return firstOf(found);
+  const [key, ...rest] = keys;
+  return key === undefined ? [value] : valuesAt(memberOf(value, key), rest);
 };
 
-const withOthers = (shown: string, others: number) =>
-  others === 0 ? shown : `${shown} and ${others} more`;
+const withOthers = (shown: string, count: number) =>
+  count > 1 ? `${shown} and ${count - 1} more` : shown;
 
 const filledPlaceholder = (placeholder: string, args: unknown) => {
-  const found = summaryPathsOf(placeholder).map((path) => valueAt(args, path));
-  for (const { value, others } of found) {
-    if (isScalar(value)) {
-      return withOthers(shownScalar(value as string), others);
+  const found = summaryPathsOf(placeholder).map((path) =>
+    valuesAt(args, path.split("."))
+  );
+  for (const values of found) {
+    const scalars = values.filter(isScalar);
+    const shown = scalars.find((value) => value === true) ?? scalars[0];
+    if (shown !== undefined) {
+      return withOthers(shownScalar(shown), values.length);
     }
   }
   return withOthers(
     unknownValue,
-    Math.max(0, ...found.map(({ others }) => others))
+    Math.max(0, ...found.map((values) => values.length))
   );
 };
 
 const isGiven = (placeholder: string, args: unknown) =>
-  summaryPathsOf(placeholder).some(
-    (path) => valueAt(args, path).value !== undefined
+  summaryPathsOf(placeholder).some((path) =>
+    valuesAt(args, path.split(".")).some((value) => value !== undefined)
   );
 
 const withoutAbsentParts = (template: string, args: unknown) =>

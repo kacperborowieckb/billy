@@ -7,7 +7,7 @@ const newParent =
 export const notionPageSummaries = {
   "notion-create-pages": `create page {pages.properties.title|pages.properties.Name|pages.content}[ in ${parent}]`,
   "notion-update-page":
-    "update page {page_id}: {command}[, title {properties.title|properties.Name}]",
+    "update page {page_id}: {command}[, title {properties.title|properties.Name}][, text {new_str|content_updates.new_str}][, all matches: {content_updates.replace_all_matches}][, may delete content: {allow_deleting_content}]",
   "notion-move-pages": `move {page_or_database_ids|page_ids} to ${newParent}`,
   "notion-duplicate-page": "duplicate page {page_id}",
   "notion-delete-pages": "move to Trash: {page_ids|pages.id|pages|page_id}",

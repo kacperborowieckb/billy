@@ -228,7 +228,7 @@ Known limit: no Owner removal flow exists yet (#138), so the storage deletion is
 
 ### MCP Connections: the Notion entry
 
-Decision [0036](../decisions/0036-mcp-connections.md), ticket #158. `test/mcp-catalog.test.ts` checks the entry against the documented tool list: `notion-search` and `notion-fetch` are `read`, every other tool is `approve` and has a summary template, and the lines of the create, update, move, and comment tools come from the arguments, also with a list, another argument name, an absent optional argument, and an unreadable one.
+Decision [0036](../decisions/0036-mcp-connections.md), ticket #158. `test/mcp-catalog.test.ts` checks the entry against the documented tool list: `notion-search` and `notion-fetch` are `read`, every other tool is `approve` and has a summary template, and the lines of the create, update, move, and comment tools come from the arguments, also with a list, another argument name, an absent optional argument, an unreadable one, and an option that deletes or replaces something.
 
 `pnpm control mcp-flow` proves the whole path on the local Worker with the Notion entry and no network: the Connect button, the consent page and the OAuth start through the Edge (DCR, PKCE S256), the callback, "Connected Notion (account Acme Workspace)", `find_mcp_tools`, a search and a fetch with no Approval, a page create that waits with the template line, Details (the file with the full arguments), Approve (one call with the exact arguments), disconnect (revocation at the token endpoint), and the Journal. It fails when a step does not happen, when the create runs before Approve, or when a fake token, code, or client secret is in the Journal or in the chat.
 
@@ -359,7 +359,7 @@ The MCP Catalog has the Notion entry. A Notion connection needs no app registrat
 2. **Edge origin.** Deploy with the public origin of the Edge: `pnpm exec wrangler deploy --var AI_GATEWAY_URL:<AI Gateway URL> --var EDGE_PUBLIC_URL:https://<Edge domain>`. A deploy sets the variables from `wrangler.jsonc` and `--var`, so pass both on every deploy. The deploy also creates the `McpHub` Durable Object class.
 3. **BotFather.** In Telegram, send `/setdomain` to `@BotFather`, choose the bot of the Instance, and send the Edge domain (the host only, the same as in `EDGE_PUBLIC_URL`). BotFather accepts a `workers.dev` domain. Without this step Telegram refuses the Connect button.
 4. **Button presses.** The Telegram webhook must receive `callback_query` updates (`allowed_updates` is `["message", "callback_query"]`), for Approve, Reject, and Details.
-5. **Check.** Write "connect Notion" to the bot. A "Connect Notion" button comes. The button opens the consent page of the Edge, and after the sign-in at Notion the bot writes "Connected Notion (account <workspace name>)".
+5. **Check.** Write "connect Notion" to the bot. A "Connect Notion" button comes. The button opens the consent page of the Edge, and after the sign-in at Notion the bot writes "Connected Notion (account <workspace name>)". The part in parentheses is absent when Notion sends no workspace name.
 
 ## Bundle size and startup
 

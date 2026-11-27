@@ -53,7 +53,7 @@ export const matchesMcpIdShape = (shape: McpIdShape, value: unknown) => {
 const catalogIdPattern = /^[a-z][a-z0-9_]{0,31}$/u;
 const toolNamePattern = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const fieldNamePattern = /^[A-Za-z][A-Za-z0-9_]{0,31}$/u;
-const maxSummaryTemplateLength = 200;
+const maxSummaryTemplateLength = 300;
 
 const McpCatalogToolSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.check(Schema.isPattern(toolNamePattern))),

@@ -17,5 +17,5 @@ export const notionCommentSummaries = {
   "notion-get-version-changes":
     "read the changes of {page_id|page|url}[ since {start_time|from}]",
   "notion-restore-version":
-    "restore {page_id|page|url} to its version of {time}[, confirmed: {user_confirmed}]",
+    "restore {page_id|page|url} to its version of {time}[, with its databases: {include_inline_databases}][, confirmed: {user_confirmed}]",
 } as const;
