@@ -61,16 +61,28 @@ export class McpOAuthCompleter {
   }
 
   private async replayOf(nonce: string): Promise<McpCallbackOutcome> {
-    const settled = await this.dependencies.storage.get<SettledOAuth>(
+    const { storage, catalog } = this.dependencies;
+    const settled = await storage.get<SettledOAuth>(
       `${settledOAuthKeyPrefix}${nonce}`
     );
     const entry =
       settled === undefined || settled.expiresAtMillis <= nowMillis()
         ? undefined
-        : mcpEntryOf(this.dependencies.catalog, settled.catalogId);
-    return entry === undefined
-      ? { outcome: "not_started" }
-      : { outcome: "connected", serverName: entry.displayName };
+        : mcpEntryOf(catalog, settled.catalogId);
+    if (settled === undefined || entry === undefined) {
+      return { outcome: "not_started" };
+    }
+    const serverName = entry.displayName;
+    const recorded = await storage.get<true>(`connection:${entry.catalogId}`);
+    if (recorded === true) {
+      return { outcome: "connected", serverName };
+    }
+    const connected = await this.dependencies.connect(
+      entry,
+      settled.ownerId,
+      undefined
+    );
+    return { outcome: connected, serverName };
   }
 
   private async run(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
@@ -107,13 +119,6 @@ export class McpOAuthCompleter {
     if (connected === "failed") {
       return { outcome: "failed", serverName };
     }
-    await storage.put<SettledOAuth>(
-      `${settledOAuthKeyPrefix}${returned.nonce}`,
-      {
-        catalogId: entry.catalogId,
-        expiresAtMillis: nowMillis() + settledLifetimeMillis,
-      }
-    );
     return { outcome: "connected", serverName };
   }
 
@@ -145,6 +150,14 @@ export class McpOAuthCompleter {
           client_id: pending.clientId,
           redirectUrl: pending.redirectUrl,
         })
+      );
+      await this.dependencies.storage.put<SettledOAuth>(
+        `${settledOAuthKeyPrefix}${returned.nonce}`,
+        {
+          ownerId: pending.ownerId,
+          catalogId: entry.catalogId,
+          expiresAtMillis: nowMillis() + settledLifetimeMillis,
+        }
       );
       return { _tag: "Exchanged", label: exchanged.accountLabel };
     } catch {

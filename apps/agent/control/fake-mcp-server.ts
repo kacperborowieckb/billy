@@ -58,7 +58,12 @@ export const createFakeMcpServer = () => {
   const oauth = createFakeOAuthServer();
   const calls: FakeMcpCall[] = [];
   const authorizations: (string | null)[] = [];
-  const state = { requests: 0, slowMillis: 60_000, hiddenTools: false };
+  const state = {
+    requests: 0,
+    slowMillis: 60_000,
+    hiddenTools: false,
+    unavailable: false,
+  };
 
   const answerToolCall = async (message: JsonRpcMessage) => {
     const name = message.params?.name ?? "";
@@ -109,6 +114,9 @@ export const createFakeMcpServer = () => {
     const oauthAnswer = await oauth.answer(request);
     if (oauthAnswer !== null) {
       return oauthAnswer;
+    }
+    if (state.unavailable) {
+      return new Response(null, { status: 503 });
     }
     authorizations.push(request.headers.get("Authorization"));
     if (
@@ -163,6 +171,9 @@ export const createFakeMcpServer = () => {
     get requests() {
       return state.requests;
     },
+    beUnavailable: (unavailable: boolean) => {
+      state.unavailable = unavailable;
+    },
     listHiddenTools: () => {
       state.hiddenTools = true;
     },
@@ -175,6 +186,7 @@ export const createFakeMcpServer = () => {
       state.requests = 0;
       state.slowMillis = 60_000;
       state.hiddenTools = false;
+      state.unavailable = false;
       oauth.reset();
     },
   };

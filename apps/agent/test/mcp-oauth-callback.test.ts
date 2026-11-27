@@ -393,6 +393,25 @@ describe("a replay of a good callback", () => {
     ]);
   });
 
+  it("finishes with the saved tokens when the first connect failed", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9990);
+    const { state } = await startedConsent(9990, ownerId);
+    fakeMcpServer.beUnavailable(true);
+
+    const first = await goodCallback(state);
+    fakeMcpServer.beUnavailable(false);
+    const second = await goodCallback(state);
+
+    expect(first.status).toBe(502);
+    expect(second.status).toBe(200);
+    expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Connected Test server");
+  });
+
   it("makes one token request for two callbacks at the same time", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9982);
     const { state } = await startedConsent(9982, ownerId);
