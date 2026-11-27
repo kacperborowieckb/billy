@@ -9,14 +9,14 @@ import type {
 } from "./mcp-hub-contract.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { discoverOAuth } from "./oauth-discovery.ts";
-import { startOAuth } from "./oauth-start.ts";
+import { pendingOAuthOf, startOAuth } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
 import {
   pendingOAuthKeyPrefix,
   settledOAuthKeyPrefix,
+  settledOAuthOf,
   usedProofKeyPrefix,
 } from "./oauth-storage-keys.ts";
-import type { SettledOAuth } from "./oauth-storage-keys.ts";
 import type { SealedCredentials } from "./sealed-credentials.ts";
 
 const oauthStartLifetimeMillis = 10 * 60 * 1000;
@@ -148,24 +148,30 @@ export class McpOAuthStarter {
 
   private async forgetExpired() {
     const { storage } = this.dependencies;
-    const pending = await storage.list<PendingOAuth>({
-      prefix: pendingOAuthKeyPrefix,
-    });
-    const proofs = await storage.list<number>({ prefix: usedProofKeyPrefix });
-    const settled = await storage.list<SettledOAuth>({
-      prefix: settledOAuthKeyPrefix,
-    });
     const now = nowMillis();
+    const isExpired = (expiresAtMillis: number | undefined) =>
+      expiresAtMillis === undefined || expiresAtMillis <= now;
+    const expiredKeysOf = async (
+      prefix: string,
+      expiryOf: (stored: unknown) => number | undefined
+    ) => {
+      const stored = await storage.list({ prefix });
+      return [...stored]
+        .filter(([, value]) => isExpired(expiryOf(value)))
+        .map(([key]) => key);
+    };
     const expired = [
-      ...[...pending]
-        .filter(([, value]) => value.expiresAtMillis <= now)
-        .map(([key]) => key),
-      ...[...proofs]
-        .filter(([, expiresAtMillis]) => expiresAtMillis <= now)
-        .map(([key]) => key),
-      ...[...settled]
-        .filter(([, value]) => value.expiresAtMillis <= now)
-        .map(([key]) => key),
+      ...(await expiredKeysOf(
+        pendingOAuthKeyPrefix,
+        (stored) => pendingOAuthOf(stored)?.expiresAtMillis
+      )),
+      ...(await expiredKeysOf(usedProofKeyPrefix, (stored) =>
+        typeof stored === "number" ? stored : undefined
+      )),
+      ...(await expiredKeysOf(
+        settledOAuthKeyPrefix,
+        (stored) => settledOAuthOf(stored)?.expiresAtMillis
+      )),
     ];
     if (expired.length > 0) {
       await storage.delete(expired);
