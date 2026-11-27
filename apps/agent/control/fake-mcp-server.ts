@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import { createFakeNotificationStream } from "./fake-mcp-notifications.ts";
 import { fakeMcpTools } from "./fake-mcp-tools.ts";
 import { createFakeOAuthServer } from "./fake-oauth-server.ts";
 
@@ -53,6 +54,7 @@ const textResult = (text: string, isError = false) => ({
 
 export const createFakeMcpServer = () => {
   const oauth = createFakeOAuthServer();
+  const notifications = createFakeNotificationStream();
   const calls: FakeMcpCall[] = [];
   const authorizations: (string | null)[] = [];
   const state = {
@@ -62,11 +64,9 @@ export const createFakeMcpServer = () => {
     unavailable: false,
     demandsMoreScope: false,
     refusesTokens: false,
+    streamsNotifications: false,
     toolCalls: 0,
     responseHold: Promise.resolve(undefined) as Promise<undefined>,
-    notifications: undefined as
-      | ReadableStreamDefaultController<Uint8Array>
-      | undefined,
   };
 
   const answerToolCall = async (message: JsonRpcMessage) => {
@@ -139,15 +139,8 @@ export const createFakeMcpServer = () => {
     if (rejected) {
       return new Response(null, { status: 401 });
     }
-    if (request.method === "GET") {
-      return new Response(
-        new ReadableStream<Uint8Array>({
-          start: (controller) => {
-            state.notifications = controller;
-          },
-        }),
-        { headers: { "Content-Type": "text/event-stream" } }
-      );
+    if (request.method === "GET" && state.streamsNotifications) {
+      return notifications.open();
     }
     if (request.method !== "POST") {
       return new Response(null, { status: 405 });
@@ -203,6 +196,9 @@ export const createFakeMcpServer = () => {
     get requests() {
       return state.requests;
     },
+    streamNotifications: (streams: boolean) => {
+      state.streamsNotifications = streams;
+    },
     refuseAllTokens: (refused: boolean) => {
       state.refusesTokens = refused;
     },
@@ -215,18 +211,12 @@ export const createFakeMcpServer = () => {
       return state.toolCalls;
     },
     get hasNotificationStream() {
-      return state.notifications !== undefined;
+      return notifications.isOpen;
     },
     demandMoreScope: (demanded: boolean) => {
       state.demandsMoreScope = demanded;
     },
-    notifyToolsListChanged: () => {
-      state.notifications?.enqueue(
-        new TextEncoder().encode(
-          `event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", method: "notifications/tools/list_changed" })}\n\n`
-        )
-      );
-    },
+    notifyToolsListChanged: notifications.notifyToolsListChanged,
     beUnavailable: (unavailable: boolean) => {
       state.unavailable = unavailable;
     },
@@ -245,14 +235,10 @@ export const createFakeMcpServer = () => {
       state.unavailable = false;
       state.demandsMoreScope = false;
       state.refusesTokens = false;
+      state.streamsNotifications = false;
       state.toolCalls = 0;
       state.responseHold = Promise.resolve(undefined);
-      try {
-        state.notifications?.close();
-      } catch {
-        state.notifications = undefined;
-      }
-      state.notifications = undefined;
+      notifications.close();
       oauth.reset();
     },
   };

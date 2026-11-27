@@ -510,6 +510,7 @@ describe("the catalog copy follows the server", () => {
   it(
     "updates the copy when the server sends tools/list_changed",
     async () => {
+      fakeMcpServer.streamNotifications(true);
       const { ownerId } = await connectedOwner();
       await vi.waitFor(() =>
         expect(fakeMcpServer.hasNotificationStream).toBe(true)
