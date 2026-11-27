@@ -7,10 +7,12 @@ import type {
   McpOAuthCallback,
 } from "./mcp-hub-contract.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
+import { pendingOAuthOf } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
 import {
   pendingOAuthKeyPrefix,
   settledOAuthKeyPrefix,
+  settledOAuthOf,
 } from "./oauth-storage-keys.ts";
 import type { SettledOAuth } from "./oauth-storage-keys.ts";
 import { exchangeCode } from "./oauth-token-exchange.ts";
@@ -62,8 +64,8 @@ export class McpOAuthCompleter {
 
   private async replayOf(nonce: string): Promise<McpCallbackOutcome> {
     const { storage, catalog } = this.dependencies;
-    const settled = await storage.get<SettledOAuth>(
-      `${settledOAuthKeyPrefix}${nonce}`
+    const settled = settledOAuthOf(
+      await storage.get(`${settledOAuthKeyPrefix}${nonce}`)
     );
     const entry =
       settled === undefined || settled.expiresAtMillis <= nowMillis()
@@ -88,7 +90,7 @@ export class McpOAuthCompleter {
   private async run(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
     const { storage, catalog } = this.dependencies;
     const key = `${pendingOAuthKeyPrefix}${returned.nonce}`;
-    const pending = await storage.get<PendingOAuth>(key);
+    const pending = pendingOAuthOf(await storage.get(key));
     if (pending === undefined || pending.expiresAtMillis <= nowMillis()) {
       return this.replayOf(returned.nonce);
     }
@@ -106,7 +108,10 @@ export class McpOAuthCompleter {
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "denied", serverName };
     }
-    const exchanged = await this.exchange(entry, pending, returned);
+    const exchanged = await this.exchange(entry, pending, {
+      nonce: returned.nonce,
+      code,
+    });
     if (exchanged._tag === "Failed") {
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "failed", serverName };
@@ -125,7 +130,7 @@ export class McpOAuthCompleter {
   private async exchange(
     entry: McpCatalogEntry,
     pending: PendingOAuth,
-    returned: McpOAuthCallback
+    granted: { readonly nonce: string; readonly code: string }
   ): Promise<
     | { readonly _tag: "Failed" }
     | { readonly _tag: "Exchanged"; readonly label: string | undefined }
@@ -138,10 +143,10 @@ export class McpOAuthCompleter {
         clientId: pending.clientId,
         redirectUrl: pending.redirectUrl,
         serverUrl: entry.serverUrl,
-        code: returned.code ?? "",
+        code: granted.code,
         codeVerifier: await credentials.openVerifier(
           entry.catalogId,
-          returned.nonce,
+          granted.nonce,
           pending.sealedCodeVerifier
         ),
       });
@@ -152,7 +157,7 @@ export class McpOAuthCompleter {
         })
       );
       await this.dependencies.storage.put<SettledOAuth>(
-        `${settledOAuthKeyPrefix}${returned.nonce}`,
+        `${settledOAuthKeyPrefix}${granted.nonce}`,
         {
           ownerId: pending.ownerId,
           catalogId: entry.catalogId,

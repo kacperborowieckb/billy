@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 import { base64UrlOf } from "./base64-url.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
@@ -20,17 +20,22 @@ const challengeOf = async (verifier: string) =>
     )
   );
 
-export interface PendingOAuth {
-  readonly ownerId: string;
-  readonly catalogId: string;
-  readonly sealedCodeVerifier: string;
-  readonly clientId: string;
-  readonly redirectUrl: string;
-  readonly issuer: string;
-  readonly issuerIsRequired: boolean;
-  readonly tokenEndpoint: string;
-  readonly expiresAtMillis: number;
-}
+export const PendingOAuthSchema = Schema.Struct({
+  ownerId: Schema.String,
+  catalogId: Schema.String,
+  sealedCodeVerifier: Schema.String,
+  clientId: Schema.String,
+  redirectUrl: Schema.String,
+  issuer: Schema.String,
+  issuerIsRequired: Schema.Boolean,
+  tokenEndpoint: Schema.String,
+  expiresAtMillis: Schema.Number,
+});
+
+export type PendingOAuth = typeof PendingOAuthSchema.Type;
+
+export const pendingOAuthOf = (stored: unknown) =>
+  Option.getOrUndefined(Schema.decodeUnknownOption(PendingOAuthSchema)(stored));
 
 export interface OAuthStartInput {
   readonly send: FetchFunction;
