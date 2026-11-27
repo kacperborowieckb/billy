@@ -7,6 +7,7 @@ import { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import { KeyedQueue } from "./keyed-queue.ts";
 import { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
+import { allowedOriginsOf } from "./mcp-allowed-origins.ts";
 import { McpCallGateway } from "./mcp-call-gateway.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
@@ -39,11 +40,6 @@ import { parseSealKeyring } from "./token-seal.ts";
 import type { SealKeyring } from "./token-seal.ts";
 
 const sendFromWorker: FetchFunction = (input, init) => fetch(input, init);
-
-const allowedOriginsOf = (env: Env): readonly string[] =>
-  env.MCP_TEST_SERVER_URL === ""
-    ? []
-    : [new URL(env.MCP_TEST_SERVER_URL).origin];
 
 export class McpHub extends DurableObject<Env> implements McpHubRpc {
   protected readonly send: FetchFunction = sendFromWorker;
@@ -96,6 +92,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
         ? Promise.resolve("failed" as const)
         : this.connector.refreshTools(entry, ownerId, connectTimeoutMillis);
     },
+    closeLive: (catalogId) => this.closeQuietly(catalogId),
     deliver: async (catalogId, copies) => {
       const agent = await this.agentOf(this.ownerName());
       await agent.receiveMcpToolCatalog(catalogId, copies);

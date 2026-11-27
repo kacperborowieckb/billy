@@ -18,6 +18,7 @@ export interface McpToolCopySyncDependencies {
     ownerId: string,
     connectTimeoutMillis: number
   ) => Promise<"refreshed" | "failed" | "timed_out">;
+  readonly closeLive: (catalogId: string) => Promise<void>;
   readonly deliver: (
     catalogId: string,
     copies: readonly McpToolCopy[]
@@ -41,6 +42,9 @@ export class McpToolCopySync {
   }
 
   async sendWhenChanged(catalogId: string) {
+    if (!(await this.dependencies.ledger.isReady(catalogId))) {
+      return;
+    }
     const copies = this.dependencies.copiesOf(catalogId);
     const serialized = JSON.stringify(copies);
     if (this.sent.get(catalogId) === serialized) {
@@ -83,10 +87,16 @@ export class McpToolCopySync {
       ownerId,
       connectTimeoutMillis
     );
-    if (refreshed === "refreshed") {
-      await entryQueue.run(catalogId, () => this.sendWhenChanged(catalogId));
-    }
-    return { outcome: refreshed };
+    return entryQueue.run(catalogId, async (): Promise<McpRefreshOutcome> => {
+      if (!(await ledger.isReady(catalogId))) {
+        await this.dependencies.closeLive(catalogId);
+        return { outcome: "not_ready" };
+      }
+      if (refreshed === "refreshed") {
+        await this.sendWhenChanged(catalogId);
+      }
+      return { outcome: refreshed };
+    });
   }
 
   async onServerStateChanged() {
