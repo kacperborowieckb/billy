@@ -32,7 +32,18 @@ export class McpSdkServers {
     return this.epochs.get(catalogId) ?? 0;
   }
 
-  refuseWhenRetired(catalogId: string, epoch: number) {
+  async whileCurrent<Value>(
+    catalogId: string,
+    epoch: number,
+    step: () => Promise<Value>
+  ) {
+    this.refuseWhenRetired(catalogId, epoch);
+    const value = await step();
+    this.refuseWhenRetired(catalogId, epoch);
+    return value;
+  }
+
+  private refuseWhenRetired(catalogId: string, epoch: number) {
     if (this.epochOf(catalogId) !== epoch) {
       throw new Error("The MCP Connection was removed during its connect");
     }

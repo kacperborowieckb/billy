@@ -68,15 +68,12 @@ export class McpServerConnector {
       this.dependencies;
     const { catalogId } = entry;
     const sdkId = sdkIdOf(catalogId, epoch);
-    const whileCurrent = async <Value>(step: Promise<Value>) => {
-      const value = await step;
-      this.servers.refuseWhenRetired(catalogId, epoch);
-      return value;
-    };
-    const sealedCredentials = await whileCurrent(credentials(ownerId));
-    await whileCurrent(this.servers.dropStale(catalogId, sdkId));
-    await whileCurrent(this.servers.track(catalogId, sdkId));
-    await whileCurrent(
+    const whileCurrent = <Value>(step: () => Promise<Value>) =>
+      this.servers.whileCurrent(catalogId, epoch, step);
+    const sealedCredentials = await whileCurrent(() => credentials(ownerId));
+    await whileCurrent(() => this.servers.dropStale(catalogId, sdkId));
+    await whileCurrent(() => this.servers.track(catalogId, sdkId));
+    await whileCurrent(() =>
       manager.registerServer(
         sdkId,
         serverRegistrationOf({
@@ -89,11 +86,13 @@ export class McpServerConnector {
         })
       )
     );
-    const connected = await whileCurrent(manager.connectToServer(sdkId));
+    const connected = await whileCurrent(() => manager.connectToServer(sdkId));
     if (connected.state !== "connected") {
       throw new Error("The MCP server is not connected");
     }
-    const discovered = await whileCurrent(manager.discoverIfConnected(sdkId));
+    const discovered = await whileCurrent(() =>
+      manager.discoverIfConnected(sdkId)
+    );
     if (discovered?.success !== true) {
       throw new Error("The MCP server did not list its tools");
     }

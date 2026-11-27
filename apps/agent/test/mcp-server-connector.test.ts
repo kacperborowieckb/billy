@@ -13,6 +13,7 @@ interface FakeBehavior {
   readonly connectOf?: (id: string) => Promise<void>;
   readonly callOf?: (id: string) => Promise<void>;
   readonly discoverOf?: (id: string) => Promise<void>;
+  readonly onRegister?: (id: string) => void;
 }
 
 const fakeSdkManager = ({
@@ -20,6 +21,7 @@ const fakeSdkManager = ({
   connectOf,
   callOf,
   discoverOf,
+  onRegister,
 }: FakeBehavior = {}) => {
   const mcpConnections: Record<string, FakeConnection> = {};
   const rows = new Set<string>();
@@ -42,6 +44,7 @@ const fakeSdkManager = ({
   const manager = {
     mcpConnections,
     registerServer: (id: string) => {
+      onRegister?.(id);
       registered.push(id);
       rows.add(id);
       mcpConnections[id] = {
@@ -176,6 +179,45 @@ describe("a connect that was removed while it tracked its id", () => {
     expect(await calling).toEqual({ _tag: "Failed", reason: "failed" });
     expect(registered).toEqual([]);
   });
+
+  it.each(Array.from({ length: 12 }, (_, index) => index))(
+    "never registers a retired id when the removal runs %i microtasks after the tracking settled",
+    async (microtasks) => {
+      const staleRegistrations: string[] = [];
+      const forgetting: Promise<void>[] = [];
+      const storage = storageStub();
+      const { manager } = fakeSdkManager({
+        onRegister: (id) => {
+          if (id !== `c:${connector.epochOf("c")}`) {
+            staleRegistrations.push(id);
+          }
+        },
+      });
+      const connector = connectorOver(manager, storage);
+      const afterMicrotasks = (count: number, run: () => void) => {
+        queueMicrotask(
+          count === 0 ? run : () => afterMicrotasks(count - 1, run)
+        );
+      };
+      const put = storage.put.bind(storage) as (
+        ...args: unknown[]
+      ) => Promise<void>;
+      Reflect.set(storage, "put", async (...args: unknown[]) => {
+        await put(...args);
+        if (forgetting.length === 0) {
+          afterMicrotasks(microtasks, () => {
+            forgetting.push(connector.forget("c", 20));
+          });
+        }
+      });
+
+      await callOf(connector, connector.epochOf("c"));
+      await vi.waitFor(() => expect(forgetting.length).toBeGreaterThan(0));
+      await Promise.all(forgetting);
+
+      expect(staleRegistrations).toEqual([]);
+    }
+  );
 
   it("lists no tools and keeps nothing when the removal ran while it connected", async () => {
     const connecting = Promise.withResolvers<undefined>();
