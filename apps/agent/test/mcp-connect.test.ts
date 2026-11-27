@@ -264,6 +264,17 @@ describe("discovering the authorization server", () => {
     expect(location.pathname).toBe("/tenant1/authorize");
   });
 
+  it("uses well-known metadata when the challenged metadata cannot be decoded", async () => {
+    const ownerId = await addOwner(9965);
+    fakeMcpServer.oauth.useLayout("invalid_challenge");
+
+    const response = await postConsent(await loginOf(9965, ownerId));
+
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get("Location") ?? "");
+    expect(location.pathname).toBe("/authorize");
+  });
+
   it("registers a client at the tenant registration endpoint", async () => {
     const ownerId = await addOwner(9964);
     fakeMcpServer.oauth.useLayout("challenged_tenant");

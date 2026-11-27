@@ -3,7 +3,11 @@ export const createFakeOAuthServer = () => {
   const state = {
     supportsClientIdMetadata: true,
     supportsPkce: true,
-    layout: "root" as "root" | "challenged_tenant" | "root_metadata_only",
+    layout: "root" as
+      | "root"
+      | "challenged_tenant"
+      | "root_metadata_only"
+      | "invalid_challenge",
   };
 
   const metadataOf = (issuer: string) => ({
@@ -45,7 +49,25 @@ export const createFakeOAuthServer = () => {
   };
 
   const answer = async (request: Request) => {
-    if (state.layout !== "root" && !request.url.includes("/register")) {
+    if (state.layout === "invalid_challenge") {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/mcp") {
+        return new Response(null, {
+          status: 401,
+          headers: {
+            "WWW-Authenticate": `Bearer resource_metadata="${url.origin}/custom/prm"`,
+          },
+        });
+      }
+      if (url.pathname === "/custom/prm") {
+        return Response.json({ authorization_servers: "not a list" });
+      }
+    }
+    if (
+      (state.layout === "challenged_tenant" ||
+        state.layout === "root_metadata_only") &&
+      !request.url.includes("/register")
+    ) {
       return answerTenantLayout(request);
     }
     const url = new URL(request.url);

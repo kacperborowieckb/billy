@@ -59,11 +59,6 @@ const fetchJson = async (send: FetchFunction, url: string) => {
   }
 };
 
-const firstJson = async (send: FetchFunction, urls: readonly string[]) => {
-  const answers = await Promise.all(urls.map((url) => fetchJson(send, url)));
-  return answers.find(Option.isSome) ?? Option.none<unknown>();
-};
-
 const challengeProbeTimeoutMillis = 5000;
 
 const resourceMetadataPattern = /resource_metadata="(?<url>[^"]+)"/iu;
@@ -99,17 +94,22 @@ const challengedMetadataUrl = async (send: FetchFunction, serverUrl: URL) => {
 };
 
 const issuerOf = async (send: FetchFunction, serverUrl: URL) => {
-  const resource = await firstJson(send, [
+  const urls = [
     ...(await challengedMetadataUrl(send, serverUrl)),
     ...wellKnownUrls(serverUrl, "oauth-protected-resource"),
-  ]);
-  const listed = resource.pipe(
-    Option.flatMap(decodeProtectedResource),
-    Option.flatMap((metadata) =>
-      Option.fromNullishOr(metadata.authorization_servers?.at(0))
+  ];
+  const answers = await Promise.all(urls.map((url) => fetchJson(send, url)));
+  const listed = answers
+    .map((answer) =>
+      answer.pipe(
+        Option.flatMap(decodeProtectedResource),
+        Option.flatMap((metadata) =>
+          Option.fromNullishOr(metadata.authorization_servers?.at(0))
+        )
+      )
     )
-  );
-  return Option.getOrElse(listed, () => serverUrl.origin);
+    .find(Option.isSome);
+  return listed === undefined ? serverUrl.origin : listed.value;
 };
 
 const matchingMetadata = async (
