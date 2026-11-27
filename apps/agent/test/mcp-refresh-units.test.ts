@@ -184,13 +184,17 @@ describe("the copy marker of the tool catalog sync", () => {
   });
 });
 
-const connectorOver = (manager: Record<string, unknown>) =>
+const connectorOver = (
+  manager: Record<string, unknown>,
+  credentials: () => Promise<never> = () =>
+    Promise.reject(new Error("no credentials"))
+) =>
   new McpServerConnector({
     manager: manager as never,
     start: () => Promise.resolve(),
     send: () => Promise.resolve(new Response(null, { status: 500 })),
     allowedOrigins: [],
-    credentials: () => Promise.reject(new Error("no credentials")),
+    credentials,
     health: {} as never,
   });
 
@@ -281,11 +285,14 @@ describe("the connector of a Connection that is removed", () => {
 
   it("does not register a reconnect while an earlier close of the same Connection is pending", async () => {
     const registerServer = vi.fn();
-    const connector = connectorOver({
-      mcpConnections: { c: {} },
-      registerServer,
-      closeConnection: () => Promise.withResolvers<undefined>().promise,
-    });
+    const connector = connectorOver(
+      {
+        mcpConnections: { c: {} },
+        registerServer,
+        closeConnection: () => Promise.withResolvers<undefined>().promise,
+      },
+      () => Promise.resolve({} as never)
+    );
     await connector.forget("c", 20);
 
     const outcome = await connector.callTool(entry as never, "owner", {
