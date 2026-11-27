@@ -15,6 +15,8 @@ export type McpErrorNote = Omit<McpLastError, "atMillis">;
 export class McpConnectionLedger {
   private readonly storage: DurableObjectStorage;
 
+  private ownerRemoved = false;
+
   constructor(storage: DurableObjectStorage) {
     this.storage = storage;
   }
@@ -38,7 +40,11 @@ export class McpConnectionLedger {
   }
 
   async isBeingRemoved(catalogId: string) {
-    return (await this.removalOf(catalogId)) !== undefined;
+    return this.ownerRemoved || (await this.removalOf(catalogId)) !== undefined;
+  }
+
+  markOwnerRemoved() {
+    this.ownerRemoved = true;
   }
 
   markBeingRemoved(

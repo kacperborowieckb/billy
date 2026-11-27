@@ -279,6 +279,24 @@ describe("the connector of a Connection that is removed", () => {
     expect(registerServer).not.toHaveBeenCalled();
   });
 
+  it("does not register a reconnect while an earlier close of the same Connection is pending", async () => {
+    const registerServer = vi.fn();
+    const connector = connectorOver({
+      mcpConnections: { c: {} },
+      registerServer,
+      closeConnection: () => Promise.withResolvers<undefined>().promise,
+    });
+    await connector.forget("c", 20);
+
+    const outcome = await connector.callTool(entry as never, "owner", {
+      request,
+      epoch: connector.epochOf("c"),
+    });
+
+    expect(outcome).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(registerServer).not.toHaveBeenCalled();
+  });
+
   it("gives up a close that never ends when the deadline comes", async () => {
     const connector = connectorOver({
       mcpConnections: { c: {} },

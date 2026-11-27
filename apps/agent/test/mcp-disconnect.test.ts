@@ -813,10 +813,20 @@ describe("removing an Owner", () => {
   it(
     "deletes the whole hub storage",
     async () => {
-      const { ownerId } = await connectedOwner();
+      const { ownerId, telegramUserId } = await connectedOwner();
 
       await hubOf(ownerId).removeOwnerStorage();
 
+      expect(await hubKeysOf(ownerId)).toEqual([]);
+      const refused = await postConsent(
+        await loginOf(telegramUserId, ownerId, {
+          authDate: nowSeconds() - 83,
+        })
+      );
+      expect(refused.status).not.toBe(303);
+      expect(
+        await outcomeOf(hubOf(ownerId).addConnection(testMcpCatalogId, 5000))
+      ).toBe("failed");
       expect(await hubKeysOf(ownerId)).toEqual([]);
       expect(await hubOf(ownerId).lastError(testMcpCatalogId)).toBeUndefined();
     },

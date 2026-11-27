@@ -4,6 +4,7 @@ import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import type { AdmittedCall } from "./mcp-admitted-call.ts";
 import { authorizedFetch } from "./mcp-authorized-fetch.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
+import { McpConnectionCloser } from "./mcp-connection-closer.ts";
 import type { McpConnectionHealth } from "./mcp-connection-health.ts";
 import type { McpCallOutcome } from "./mcp-hub-contract.ts";
 import { resultTextOf, toolCopyOf } from "./mcp-hub-results.ts";
@@ -37,8 +38,11 @@ export class McpServerConnector {
 
   private readonly epochs = new Map<string, number>();
 
+  private readonly closer: McpConnectionCloser;
+
   constructor(dependencies: McpServerConnectorDependencies) {
     this.dependencies = dependencies;
+    this.closer = new McpConnectionCloser(dependencies.manager);
   }
 
   epochOf(catalogId: string) {
@@ -54,7 +58,7 @@ export class McpServerConnector {
       this.dependencies;
     const { catalogId } = entry;
     const sealedCredentials = await credentials(ownerId);
-    if (this.epochOf(catalogId) !== epoch) {
+    if (this.epochOf(catalogId) !== epoch || this.closer.isClosing(catalogId)) {
       throw new Error("The MCP Connection was removed before it connected");
     }
     await manager.registerServer(catalogId, {
@@ -85,7 +89,7 @@ export class McpServerConnector {
       throw new Error("The MCP server did not list its tools");
     }
     if (this.epochOf(catalogId) !== epoch) {
-      await this.closeIfOpen(catalogId);
+      await this.closer.closeIfOpen(catalogId);
       throw new Error("The MCP Connection was removed while it connected");
     }
   }
@@ -186,16 +190,10 @@ export class McpServerConnector {
     await this.dependencies.manager.closeConnection(catalogId);
   }
 
-  private async closeIfOpen(catalogId: string) {
-    if (this.dependencies.manager.mcpConnections[catalogId] !== undefined) {
-      await this.dependencies.manager.closeConnection(catalogId);
-    }
-  }
-
   async closeWhileQueueHeld(catalogId: string, deadlineMillis: number) {
     await this.whileQueueHeld(catalogId, async () => {
       try {
-        await within(this.closeIfOpen(catalogId), deadlineMillis);
+        await within(this.closer.closeIfOpen(catalogId), deadlineMillis);
       } catch {
         await Effect.runPromise(
           Effect.logWarning("The MCP connection did not close cleanly")

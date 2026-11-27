@@ -132,17 +132,28 @@ export class McpDisconnector {
     });
   }
 
-  async removeAll(): Promise<void> {
-    await Promise.all(
-      this.dependencies.catalog.map((entry) =>
-        this.dependencies.entryQueue.run(entry.catalogId, () =>
-          this.dependencies.connector.forget(
-            entry.catalogId,
-            closeDeadlineMillis
-          )
+  private holdEveryQueue(
+    entries: McpCatalog,
+    work: () => Promise<void>
+  ): Promise<void> {
+    const [first, ...rest] = entries;
+    return first === undefined
+      ? work()
+      : this.dependencies.entryQueue.run(first.catalogId, () =>
+          this.holdEveryQueue(rest, work)
+        );
+  }
+
+  removeAll(): Promise<void> {
+    const { catalog, connector, ledger, storage } = this.dependencies;
+    return this.holdEveryQueue(catalog, async () => {
+      ledger.markOwnerRemoved();
+      await Promise.all(
+        catalog.map((entry) =>
+          connector.forget(entry.catalogId, closeDeadlineMillis)
         )
-      )
-    );
-    await this.dependencies.storage.deleteAll();
+      );
+      await storage.deleteAll();
+    });
   }
 }
