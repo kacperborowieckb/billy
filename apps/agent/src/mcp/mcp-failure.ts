@@ -62,7 +62,8 @@ export type McpFailurePhase =
   | "callback"
   | "token_exchange"
   | "connect"
-  | "completion";
+  | "completion"
+  | "call";
 
 export interface McpFailure {
   readonly phase: McpFailurePhase;
@@ -71,6 +72,7 @@ export interface McpFailure {
   readonly httpStatus?: number;
   readonly toolCount?: number;
   readonly toolCopyCharacters?: number;
+  readonly tool?: string;
 }
 
 export const mcpFailureLog = (failure: McpFailure) =>

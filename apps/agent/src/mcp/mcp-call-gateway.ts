@@ -1,4 +1,7 @@
+import { DateTime } from "effect";
+
 import type { KeyedQueue } from "./keyed-queue.ts";
+import { logMcpCall } from "./mcp-call-log.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
@@ -43,6 +46,18 @@ export class McpCallGateway {
   }
 
   async callTool(request: McpCallRequest): Promise<McpCallOutcome> {
+    const startedAt = DateTime.nowUnsafe();
+    const outcome = await this.run(request);
+    await logMcpCall(
+      request,
+      outcome,
+      DateTime.toEpochMillis(DateTime.nowUnsafe()) -
+        DateTime.toEpochMillis(startedAt)
+    );
+    return outcome;
+  }
+
+  private async run(request: McpCallRequest): Promise<McpCallOutcome> {
     const { catalog, ledger, connector, ownerId } = this.dependencies;
     const epoch = connector.epochOf(request.catalogId);
     const entry = mcpEntryOf(catalog, request.catalogId);

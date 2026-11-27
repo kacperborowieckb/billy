@@ -82,6 +82,36 @@ describe("a completion for an entry that the Catalog does not hold", () => {
   });
 });
 
+describe("the log of a tool catalog copy", () => {
+  it("names the tools that differ from the Catalog and their marks, and no description", async () => {
+    const lines: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts) => {
+      lines.push(parts.map(String).join(" "));
+    });
+    fakeMcpServer.useTools([
+      ...fakeNotionTools.filter(({ name }) => name !== "notion-get-self"),
+      {
+        name: "notion-new-tool",
+        description: "A private description",
+        inputSchema: { type: "object" },
+        annotations: { readOnlyHint: true },
+      },
+    ]);
+
+    await connectNotion();
+    log.mockRestore();
+
+    const logged = lines.find((line) => line.includes("MCP tool catalog"));
+    expect(logged).toContain('"toolCount":74');
+    expect(logged).toContain('"notInCatalog":["notion-new-tool"]');
+    expect(logged).toContain('"catalogToolsNotListed":["notion-get-self"]');
+    expect(logged).toContain(
+      '"markedReadOnly":["notion-search","notion-fetch","notion-new-tool"]'
+    );
+    expect(logged).not.toContain("private description");
+  });
+});
+
 describe("a Notion connection with a tool list of the real size", () => {
   it("stores every tool, tells the Owner, and writes the Journal Entry", async () => {
     fakeMcpServer.useTools(fakeNotionTools);

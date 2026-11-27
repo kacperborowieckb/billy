@@ -1,6 +1,7 @@
 import { DateTime, Effect, Option } from "effect";
 
 import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
+import { approvalPathLog } from "../approval/approval-log.ts";
 import {
   conversationEntryOf,
   lateNoticeOf,
@@ -117,9 +118,23 @@ const answerThenRunOutsideTransaction = Effect.fnUntraced(
       answerPending(event, approval)
     );
     if (!answered) {
+      yield* approvalPathLog({
+        pendingApprovalId: approval.pendingApprovalId,
+        step: "answer_lost_to_another_press",
+      });
       return;
     }
+    const startedAt = yield* DateTime.now;
     const outcome = yield* runApprovedCall(settings, approval);
+    yield* approvalPathLog({
+      pendingApprovalId: approval.pendingApprovalId,
+      step: "run_finished",
+      toolName: approval.toolName,
+      result: outcome.result,
+      durationMillis:
+        DateTime.toEpochMillis(yield* DateTime.now) -
+        DateTime.toEpochMillis(startedAt),
+    });
     yield* database.transaction(() =>
       recordRunAndStatus(event.eventId, approval, outcome)
     );
@@ -150,6 +165,10 @@ const settleLostRun = Effect.fnUntraced(function* settleLostRun(
   const pendingApprovals = yield* PendingApprovals;
   const approval = yield* pendingApprovals.byId(event.pendingApprovalId);
   if (Option.isSome(approval) && approval.value.state === "approved") {
+    yield* approvalPathLog({
+      pendingApprovalId: event.pendingApprovalId,
+      step: "lost_run_set_unconfirmed",
+    });
     yield* database.transaction(() =>
       recordRunAndStatus(event.eventId, approval.value, {
         result: "unconfirmed",
@@ -187,6 +206,10 @@ const answerPress = Effect.fnUntraced(function* answerPress(
     });
   }
   if (notice !== undefined || Option.isNone(approval)) {
+    yield* approvalPathLog({
+      pendingApprovalId: event.pendingApprovalId,
+      step: "press_found_no_open_approval",
+    });
     return false;
   }
   yield* answerAndRun(settings, event, approval.value);

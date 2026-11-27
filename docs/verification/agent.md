@@ -232,6 +232,8 @@ Decision [0036](../decisions/0036-mcp-connections.md), ticket #158. `test/mcp-ca
 
 `test/mcp-notion-connect.test.ts` connects the Notion entry through the Edge with a fake server that lists all 74 tools with long descriptions (about 300,000 characters) and input schemas that follow the documented parameters, and checks the stored copy, the state, the Journal Entry, and the "Connected Notion" message. `test/mcp-failure.test.ts` and `test/mcp-oauth-callback.test.ts` check that a failure log names the phase and the reason and holds no secret. The real descriptions and input schemas of Notion are not published, so the fake ones are modeled.
 
+`test/mcp-approval.test.ts` and `test/mcp-notion-connect.test.ts` also check the `MCP call`, `Approval path`, and `MCP tool catalog` log lines, with no argument and no description in them.
+
 `pnpm control mcp-flow` proves the whole path on the local Worker with the Notion entry and no network: the Connect button, the consent page and the OAuth start through the Edge (DCR, PKCE S256), the callback, "Connected Notion (account Acme Workspace)", `find_mcp_tools`, a search and a fetch with no Approval, a page create that waits with the template line, Details (the file with the full arguments), Approve (one call with the exact arguments), disconnect (revocation at the token endpoint), and the Journal. It fails when a step does not happen, when the create runs before Approve, or when a fake token, code, or client secret is in the Journal or in the chat.
 
 Known limits: the fake Notion server, model, and Telegram stand in for the real ones. The tests cannot prove the real argument names of Notion tools, the real token response, or real revocation. They stay unproven until the real run of #158, which is not done yet.

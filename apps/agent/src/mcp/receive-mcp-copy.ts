@@ -17,6 +17,7 @@ import {
 } from "./mcp-failure.ts";
 import type { McpFailure } from "./mcp-failure.ts";
 import type { McpRevocation } from "./mcp-hub-contract.ts";
+import { mcpToolCatalogLog } from "./mcp-tool-catalog-log.ts";
 import { McpToolCatalogCopySchema } from "./mcp-tool-copy.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 
@@ -33,6 +34,10 @@ export const receiveMcpToolCatalog = (
         )(tools);
         const connections = yield* McpConnections;
         yield* connections.replaceTools(catalogId, copy);
+        const entry = mcpEntryOf(catalog, catalogId);
+        if (entry !== undefined) {
+          yield* mcpToolCatalogLog(entry, copy);
+        }
       }).pipe(Effect.orDie);
 
 export const changeMcpConnectionState = Effect.fnUntraced(
@@ -160,6 +165,7 @@ export const receiveMcpConnected = Effect.fnUntraced(
     if (!isFirstTime) {
       return;
     }
+    yield* mcpToolCatalogLog(entry, tools);
     yield* announceConnected(entry.displayName, accountLabel).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("The Connected message was not sent", cause)

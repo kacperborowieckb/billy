@@ -1,5 +1,6 @@
 import { Data, DateTime, Duration, Effect, Option, Schedule } from "effect";
 
+import { approvalPathLog } from "../approval/approval-log.ts";
 import { shownStatusOf } from "../approval/approval-status.ts";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
 import type { PendingApproval } from "../approval/pending-approvals.ts";
@@ -45,6 +46,10 @@ export const editApprovalMessage = Effect.fnUntraced(
     const channel = yield* Channel;
     const approval = yield* pendingApprovals.byId(target.pendingApprovalId);
     if (Option.isNone(approval) || approval.value.channelMessageId === null) {
+      yield* approvalPathLog({
+        pendingApprovalId: target.pendingApprovalId,
+        step: "message_has_nothing_to_edit",
+      });
       return;
     }
     const { channelMessageId } = approval.value;
