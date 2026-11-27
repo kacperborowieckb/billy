@@ -1,10 +1,11 @@
 import { Effect, Option } from "effect";
 
 import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
+import type { AdmittedCall } from "./mcp-admitted-call.ts";
 import { authorizedFetch } from "./mcp-authorized-fetch.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpConnectionHealth } from "./mcp-connection-health.ts";
-import type { McpCallOutcome, McpCallRequest } from "./mcp-hub-contract.ts";
+import type { McpCallOutcome } from "./mcp-hub-contract.ts";
 import { resultTextOf, toolCopyOf } from "./mcp-hub-results.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
@@ -29,11 +30,6 @@ export interface ConnectOptions {
   readonly timeoutMillis: number;
   readonly holdsEntryQueue?: boolean;
   readonly epoch?: number;
-}
-
-export interface AdmittedCall {
-  readonly request: McpCallRequest;
-  readonly epoch: number;
 }
 
 export class McpServerConnector {
@@ -242,6 +238,9 @@ export class McpServerConnector {
         })) === "timed_out"
       ) {
         return { _tag: "Failed", reason: "timed_out" };
+      }
+      if (this.epochOf(request.catalogId) !== epoch) {
+        return { _tag: "Failed", reason: "not_connected" };
       }
       const result = await within(
         this.dependencies.manager.callTool(

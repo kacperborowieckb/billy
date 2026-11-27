@@ -218,6 +218,26 @@ describe("the connector of a Connection that is removed", () => {
     expect(registerServer).not.toHaveBeenCalled();
   });
 
+  it("does not use a ready connection for a call that was admitted before the removal", async () => {
+    const manager = {
+      mcpConnections: { c: { connectionState: "ready" } },
+      callTool: vi.fn(),
+      closeConnection: () => Promise.resolve(),
+    };
+    const connector = connectorOver(manager);
+    const epoch = connector.epochOf("c");
+
+    await connector.forget("c", 50);
+    manager.mcpConnections = { c: { connectionState: "ready" } };
+    const outcome = await connector.callTool(entry as never, "owner", {
+      request,
+      epoch,
+    });
+
+    expect(outcome).toEqual({ _tag: "Failed", reason: "not_connected" });
+    expect(manager.callTool).not.toHaveBeenCalled();
+  });
+
   it("gives up a close that never ends when the deadline comes", async () => {
     const connector = connectorOver({
       mcpConnections: { c: {} },
