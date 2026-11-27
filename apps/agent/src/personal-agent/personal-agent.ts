@@ -15,6 +15,7 @@ import {
   receiveMcpConnectionState,
   receiveMcpToolCatalog,
 } from "../mcp/receive-mcp-copy.ts";
+import type { McpConnectedCopy } from "../mcp/receive-mcp-copy.ts";
 import { noTools } from "../model-gateway/agent-tool.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import type { ModelGateway } from "../model-gateway/model-gateway.ts";
@@ -123,17 +124,11 @@ export class PersonalAgent extends Agent<Env> {
     );
   }
 
-  async receiveMcpConnected(
-    catalogId: string,
-    tools: readonly McpToolCopy[],
-    accountLabel: string | undefined
-  ): Promise<void> {
+  async receiveMcpConnected(copy: McpConnectedCopy): Promise<void> {
     await this.runtime.runPromise(
-      receiveMcpConnected(this.mcpCatalog, {
-        catalogId,
-        tools,
-        accountLabel,
-      }).pipe(Effect.provide(this.turnServices(this.env, this.ownerId)))
+      receiveMcpConnected(this.mcpCatalog, copy).pipe(
+        Effect.provide(this.turnServices(this.env, this.ownerId))
+      )
     );
   }
 

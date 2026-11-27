@@ -22,15 +22,20 @@ const settledLifetimeMillis = 15 * 60 * 1000;
 
 const nowMillis = () => DateTime.toEpochMillis(DateTime.nowUnsafe());
 
+export interface McpCompletion {
+  readonly entry: McpCatalogEntry;
+  readonly ownerId: string;
+  readonly completionId: string;
+  readonly accountLabel: string | undefined;
+}
+
 export interface McpOAuthCompleterDependencies {
   readonly catalog: McpCatalog;
   readonly send: FetchFunction;
   readonly storage: DurableObjectStorage;
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
   readonly connect: (
-    entry: McpCatalogEntry,
-    ownerId: string,
-    accountLabel: string | undefined
+    completion: McpCompletion
   ) => Promise<"connected" | "failed">;
   readonly markFailed: (ownerId: string, catalogId: string) => Promise<void>;
 }
@@ -79,11 +84,12 @@ export class McpOAuthCompleter {
     if (recorded === true) {
       return { outcome: "connected", serverName };
     }
-    const connected = await this.dependencies.connect(
+    const connected = await this.dependencies.connect({
       entry,
-      settled.ownerId,
-      undefined
-    );
+      ownerId: settled.ownerId,
+      completionId: nonce,
+      accountLabel: settled.accountLabel,
+    });
     return { outcome: connected, serverName };
   }
 
@@ -116,11 +122,12 @@ export class McpOAuthCompleter {
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "failed", serverName };
     }
-    const connected = await this.dependencies.connect(
+    const connected = await this.dependencies.connect({
       entry,
-      pending.ownerId,
-      exchanged.label
-    );
+      ownerId: pending.ownerId,
+      completionId: returned.nonce,
+      accountLabel: exchanged.label,
+    });
     if (connected === "failed") {
       return { outcome: "failed", serverName };
     }
@@ -161,6 +168,9 @@ export class McpOAuthCompleter {
         {
           ownerId: pending.ownerId,
           catalogId: entry.catalogId,
+          ...(exchanged.accountLabel === undefined
+            ? {}
+            : { accountLabel: exchanged.accountLabel }),
           expiresAtMillis: nowMillis() + settledLifetimeMillis,
         }
       );

@@ -52,11 +52,12 @@ export interface McpConnectedCopy {
   readonly catalogId: string;
   readonly tools: readonly McpToolCopy[];
   readonly accountLabel: string | undefined;
+  readonly completionId: string;
 }
 
 export const receiveMcpConnected = (
   catalog: McpCatalog,
-  { catalogId, tools, accountLabel }: McpConnectedCopy
+  { catalogId, tools, accountLabel, completionId }: McpConnectedCopy
 ) => {
   const entry = mcpEntryOf(catalog, catalogId);
   return entry === undefined
@@ -69,9 +70,13 @@ export const receiveMcpConnected = (
         yield* connections.replaceTools(catalogId, copy);
         yield* connections.setState(catalogId, "ready");
         const journal = yield* Journal;
+        const eventId = `mcp-connection-added:${completionId}`;
+        if ((yield* journal.readForEvent(eventId)).length > 0) {
+          return;
+        }
         yield* journal.append({
           _tag: "McpConnectionAdded",
-          eventId: crypto.randomUUID(),
+          eventId,
           catalogId,
         });
         const conversation = yield* (yield* OwnerChannelConversation).current;

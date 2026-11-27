@@ -8,7 +8,7 @@ import { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
-import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
+import type { McpCatalog } from "./mcp-catalog.ts";
 import type {
   McpAddConnectionOutcome,
   McpCallbackOutcome,
@@ -21,6 +21,7 @@ import type {
   McpOAuthStartOutcome,
 } from "./mcp-hub-contract.ts";
 import { McpOAuthCompleter } from "./mcp-oauth-completer.ts";
+import type { McpCompletion } from "./mcp-oauth-completer.ts";
 import { McpOAuthStarter } from "./mcp-oauth-starter.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
@@ -79,8 +80,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     send: this.guardedSend,
     storage: this.ctx.storage,
     credentials: (ownerId) => this.credentialsOf(ownerId),
-    connect: (entry, ownerId, accountLabel) =>
-      this.connectAfterConsent(entry, ownerId, accountLabel),
+    connect: (completion) => this.connectAfterConsent(completion),
     markFailed: (ownerId, catalogId) =>
       this.tellState(ownerId, catalogId, "failed"),
   });
@@ -124,11 +124,12 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     await agent.receiveMcpConnectionState(catalogId, state);
   }
 
-  private async connectAfterConsent(
-    entry: McpCatalogEntry,
-    ownerId: string,
-    accountLabel: string | undefined
-  ): Promise<"connected" | "failed"> {
+  private async connectAfterConsent({
+    entry,
+    ownerId,
+    completionId,
+    accountLabel,
+  }: McpCompletion): Promise<"connected" | "failed"> {
     try {
       if (
         (await this.connector.ensureConnected(
@@ -140,11 +141,12 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
         throw new Error("The MCP server did not connect in time");
       }
       const agent = await this.agentOf(ownerId);
-      await agent.receiveMcpConnected(
-        entry.catalogId,
-        this.connector.toolCopiesOf(entry.catalogId),
-        accountLabel
-      );
+      await agent.receiveMcpConnected({
+        catalogId: entry.catalogId,
+        tools: this.connector.toolCopiesOf(entry.catalogId),
+        accountLabel,
+        completionId,
+      });
       await this.ctx.storage.put(`connection:${entry.catalogId}`, true);
       return "connected";
     } catch {

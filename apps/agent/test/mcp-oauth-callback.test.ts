@@ -409,7 +409,26 @@ describe("a replay of a good callback", () => {
       { catalogId: testMcpCatalogId, state: "ready" },
     ]);
     expect(await addedEntryCountOf(ownerId)).toBe(1);
-    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Connected Test server");
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(
+      "Connected Test server (account Pat Reader)"
+    );
+  });
+
+  it("sends one message and writes one Journal Entry when the Personal Agent hears the same completion twice", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9991);
+    const agent = await agentOf(ownerId);
+    const completion = {
+      catalogId: testMcpCatalogId,
+      tools: [],
+      accountLabel: undefined,
+      completionId: "completion-1",
+    };
+
+    await agent.receiveMcpConnected(completion);
+    await agent.receiveMcpConnected(completion);
+
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+    expect(fakeTelegram.sent).toHaveLength(2);
   });
 
   it("makes one token request for two callbacks at the same time", async () => {
