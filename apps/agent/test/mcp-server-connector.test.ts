@@ -139,6 +139,64 @@ describe("the revocation of a token", () => {
   });
 });
 
+const holdFirst = (
+  storage: ReturnType<typeof storageStub>,
+  operation: "get" | "put"
+) => {
+  const release = Promise.withResolvers<undefined>();
+  const held = Promise.withResolvers<undefined>();
+  const original = storage[operation].bind(storage) as (
+    ...args: unknown[]
+  ) => Promise<unknown>;
+  let isFirst = true;
+  Reflect.set(storage, operation, async (...args: unknown[]) => {
+    if (isFirst) {
+      isFirst = false;
+      held.resolve(undefined);
+      await release.promise;
+    }
+    return original(...args);
+  });
+  return { held: held.promise, release: () => release.resolve(undefined) };
+};
+
+describe("a connect that was removed while it tracked its id", () => {
+  it("registers nothing when the removal ran during the tracking", async () => {
+    const { manager, registered } = fakeSdkManager();
+    const storage = storageStub();
+    const tracking = holdFirst(storage, "put");
+    const connector = connectorOver(manager, storage);
+
+    const calling = callOf(connector, connector.epochOf("c"));
+    await tracking.held;
+    const forgetting = connector.forget("c", 20);
+    await forgetting;
+    tracking.release();
+
+    expect(await calling).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(registered).toEqual([]);
+  });
+
+  it("retires nothing of the replacement when the old connect was still reading the tracked ids", async () => {
+    const { manager, registered } = fakeSdkManager();
+    const storage = storageStub();
+    const reading = holdFirst(storage, "get");
+    const connector = connectorOver(manager, storage);
+
+    const old = callOf(connector, connector.epochOf("c"));
+    await reading.held;
+    await connector.forget("c", 20);
+    const replacement = await callOf(connector, connector.epochOf("c"));
+    reading.release();
+    await old;
+
+    expect(replacement._tag).toBe("Result");
+    expect(connector.epochOf("c")).toBe(1);
+    expect(registered).toEqual(["c:1"]);
+    expect(Object.keys(manager.mcpConnections)).toEqual(["c:1"]);
+  });
+});
+
 describe("the connector of a Connection that is removed", () => {
   it("does not open a connection for a call that was admitted before the removal", async () => {
     const { manager, registered } = fakeSdkManager();

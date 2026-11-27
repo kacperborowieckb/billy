@@ -69,11 +69,10 @@ export class McpServerConnector {
     const { catalogId } = entry;
     const sdkId = sdkIdOf(catalogId, epoch);
     const sealedCredentials = await credentials(ownerId);
-    if (this.epochOf(catalogId) !== epoch) {
-      throw new Error("The MCP Connection was removed before it connected");
-    }
+    this.servers.refuseWhenRetired(catalogId, epoch);
     await this.servers.dropStale(catalogId, sdkId);
     await this.servers.track(catalogId, sdkId);
+    this.servers.refuseWhenRetired(catalogId, epoch);
     await manager.registerServer(
       sdkId,
       serverRegistrationOf({

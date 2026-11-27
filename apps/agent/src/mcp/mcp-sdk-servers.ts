@@ -32,6 +32,12 @@ export class McpSdkServers {
     return this.epochs.get(catalogId) ?? 0;
   }
 
+  refuseWhenRetired(catalogId: string, epoch: number) {
+    if (this.epochOf(catalogId) !== epoch) {
+      throw new Error("The MCP Connection was removed before it connected");
+    }
+  }
+
   currentId(catalogId: string) {
     return sdkIdOf(catalogId, this.epochOf(catalogId));
   }
@@ -100,6 +106,9 @@ export class McpSdkServers {
 
   async dropStale(catalogId: string, currentSdkId: string) {
     const ids = await this.trackedIds(catalogId);
+    if (this.currentId(catalogId) !== currentSdkId) {
+      return;
+    }
     for (const id of ids) {
       if (id !== currentSdkId) {
         this.retire(catalogId, id);
