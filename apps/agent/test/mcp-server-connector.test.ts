@@ -297,6 +297,25 @@ describe("one owner for each SDK operation", () => {
     await vi.waitFor(() => expect(rows.size).toBe(0));
   });
 
+  it("leaves no connection and no record when a disconnect follows a connect timeout with no reconnect", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager, rows, closeAttempts } = fakeSdkManager({
+      connectOf: hangUntil(release.promise),
+    });
+    const connector = connectorOver(manager);
+    await connector.callTool(entry as never, "owner", {
+      request: { ...request, connectTimeoutMillis: 20 },
+      epoch: connector.epochOf("c"),
+    });
+
+    await connector.forget("c", 20);
+
+    expect(closeAttempts).toContain("c:0");
+    await vi.waitFor(() => expect(rows.size).toBe(0));
+    expect(Object.keys(manager.mcpConnections)).toEqual([]);
+    release.resolve(undefined);
+  });
+
   it("retires the id of a call that passes its deadline, so the next call uses a new id", async () => {
     const release = Promise.withResolvers<undefined>();
     const { manager, calledIds, registered } = fakeSdkManager({
