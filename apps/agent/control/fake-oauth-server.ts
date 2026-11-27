@@ -7,7 +7,8 @@ export const createFakeOAuthServer = () => {
       | "root"
       | "challenged_tenant"
       | "root_metadata_only"
-      | "invalid_challenge",
+      | "invalid_challenge"
+      | "hanging_metadata",
   };
 
   const metadataOf = (issuer: string) => ({
@@ -49,6 +50,12 @@ export const createFakeOAuthServer = () => {
   };
 
   const answer = async (request: Request) => {
+    if (
+      state.layout === "hanging_metadata" &&
+      /oauth-protected-resource|openid-configuration/u.test(request.url)
+    ) {
+      return new Response(new ReadableStream(), { status: 200 });
+    }
     if (state.layout === "invalid_challenge") {
       const url = new URL(request.url);
       if (request.method === "POST" && url.pathname === "/mcp") {

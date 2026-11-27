@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import { refusedReasonOf } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
@@ -46,20 +46,30 @@ const wellKnownUrls = (base: URL, suffix: string) => {
   ];
 };
 
+const discoveryRequestTimeoutMillis = 3000;
+
+const withinDeadline = <Value>(run: (signal: AbortSignal) => Promise<Value>) =>
+  Effect.runPromise(
+    Effect.tryPromise((signal) => run(signal)).pipe(
+      Effect.timeout(discoveryRequestTimeoutMillis)
+    )
+  );
+
 const fetchJson = async (send: FetchFunction, url: string) => {
   try {
-    const response = await send(url, {
-      headers: { Accept: "application/json" },
+    return await withinDeadline(async (signal) => {
+      const response = await send(url, {
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      return response.ok
+        ? Option.some(await response.json<unknown>())
+        : Option.none<unknown>();
     });
-    return response.ok
-      ? Option.some(await response.json<unknown>())
-      : Option.none<unknown>();
   } catch {
     return Option.none<unknown>();
   }
 };
-
-const challengeProbeTimeoutMillis = 5000;
 
 const resourceMetadataPattern = /resource_metadata="(?<url>[^"]+)"/iu;
 
@@ -76,15 +86,17 @@ const initializeBody = JSON.stringify({
 
 const challengedMetadataUrl = async (send: FetchFunction, serverUrl: URL) => {
   try {
-    const response = await send(serverUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json, text/event-stream",
-      },
-      body: initializeBody,
-      signal: AbortSignal.timeout(challengeProbeTimeoutMillis),
-    });
+    const response = await withinDeadline((signal) =>
+      send(serverUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+        body: initializeBody,
+        signal,
+      })
+    );
     const challenge = response.headers.get("WWW-Authenticate") ?? "";
     const url = resourceMetadataPattern.exec(challenge)?.groups?.["url"];
     return url !== undefined && URL.canParse(url) ? [url] : [];

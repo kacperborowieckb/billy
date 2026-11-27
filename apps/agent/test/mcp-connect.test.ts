@@ -275,6 +275,17 @@ describe("discovering the authorization server", () => {
     expect(location.pathname).toBe("/authorize");
   });
 
+  it("finishes discovery when metadata endpoints send headers and never end the body", async () => {
+    const ownerId = await addOwner(9966);
+    fakeMcpServer.oauth.useLayout("hanging_metadata");
+
+    const response = await postConsent(await loginOf(9966, ownerId));
+
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get("Location") ?? "");
+    expect(location.pathname).toBe("/authorize");
+  }, 15_000);
+
   it("registers a client at the tenant registration endpoint", async () => {
     const ownerId = await addOwner(9964);
     fakeMcpServer.oauth.useLayout("challenged_tenant");
