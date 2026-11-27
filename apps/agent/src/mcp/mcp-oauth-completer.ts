@@ -45,31 +45,58 @@ export interface McpOAuthCompleterDependencies {
 const hasText = (value: string | undefined): value is string =>
   value !== undefined && value.length > 0;
 
-const issuerAgrees = (
-  pending: Pick<PendingOAuth, "issuer" | "issuerIsRequired">,
+type IssuerRule = Pick<PendingOAuth, "issuer" | "issuerIsRequired">;
+
+interface RunningCallback {
+  readonly issuerRule: Promise<IssuerRule | undefined>;
+  readonly outcome: Promise<McpCallbackOutcome>;
+}
+
+const issuerAgrees = (pending: IssuerRule, iss: string | undefined) =>
+  iss === undefined ? !pending.issuerIsRequired : iss === pending.issuer;
+
+const joinRunning = async (
+  running: RunningCallback,
   iss: string | undefined
-) => (iss === undefined ? !pending.issuerIsRequired : iss === pending.issuer);
+): Promise<McpCallbackOutcome> => {
+  const rule = await running.issuerRule;
+  return rule !== undefined && !issuerAgrees(rule, iss)
+    ? { outcome: "not_started" }
+    : running.outcome;
+};
 
 export class McpOAuthCompleter {
   private readonly dependencies: McpOAuthCompleterDependencies;
 
-  private readonly running = new Map<string, Promise<McpCallbackOutcome>>();
+  private readonly running = new Map<string, RunningCallback>();
 
   constructor(dependencies: McpOAuthCompleterDependencies) {
     this.dependencies = dependencies;
   }
 
   complete(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
-    const runKey = JSON.stringify([returned.nonce, returned.iss ?? null]);
-    const running = this.running.get(runKey);
+    const { nonce } = returned;
+    const running = this.running.get(nonce);
     if (running !== undefined) {
-      return running;
+      return joinRunning(running, returned.iss);
     }
-    const started = this.run(returned).finally(() => {
-      this.running.delete(runKey);
+    const issuerRule = this.issuerRuleOf(nonce);
+    const outcome = this.run(returned).finally(() => {
+      this.running.delete(nonce);
     });
-    this.running.set(runKey, started);
-    return started;
+    this.running.set(nonce, { issuerRule, outcome });
+    return outcome;
+  }
+
+  private async issuerRuleOf(nonce: string): Promise<IssuerRule | undefined> {
+    const { storage } = this.dependencies;
+    const pending = pendingOAuthOf(
+      await storage.get(`${pendingOAuthKeyPrefix}${nonce}`)
+    );
+    return (
+      pending ??
+      settledOAuthOf(await storage.get(`${settledOAuthKeyPrefix}${nonce}`))
+    );
   }
 
   private async replayOf(

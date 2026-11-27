@@ -463,6 +463,20 @@ describe("a replay of a good callback", () => {
     expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
   });
 
+  it("shares one run between a callback with iss and one without when the server promised none", async () => {
+    fakeMcpServer.oauth.sendIssuer(false);
+    const ownerId = await ownerWhoWroteToTheAgent(9993);
+    const { state } = await startedConsent(9993, ownerId);
+
+    const answers = await Promise.all([
+      goodCallback(state),
+      callbackWith({ code: fakeOAuthSecrets.authorizationCode, state }),
+    ]);
+
+    expect(answers.map(({ status }) => status)).toEqual([200, 200]);
+    expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
+  });
+
   it("makes one token request for two callbacks at the same time", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9982);
     const { state } = await startedConsent(9982, ownerId);
