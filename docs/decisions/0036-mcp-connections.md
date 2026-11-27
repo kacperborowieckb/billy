@@ -57,6 +57,9 @@ Ticket [#151](https://github.com/kacperborowieckb/billy/issues/151) of spec [#15
 - **Argument names.** The documentation does not give the argument names of every tool, and the tool list needs a signed-in connection. A template lists the names that the documentation and the public Notion examples show, as alternatives where they differ. A name that is wrong shows `...` or drops an optional part, and Details always has the full arguments. Check the lines of the main tools in real use.
 - **Proof flow.** `pnpm control mcp-flow` runs the Notion entry on the local Worker against a fake Notion server. The flow Worker (`apps/agent/mcp-flow`) is the real Edge, Personal Agent, and MCP Hub plus a Journal route behind the Operator token, and a Hub whose outbound requests go to the fake. The deployed Worker does not include it.
 - **Known limit: removal of a Catalog entry.** A Connection of an entry that the Catalog no longer holds, for example after a revert, cannot be disconnected: the tool refuses an unknown entry, so the sealed tokens stay and nothing is revoked. Disconnect every Owner before you remove an entry. If the entry is already gone, put it back, then disconnect.
+- **One statement for each tool copy (#158).** Durable Object SQLite accepts 100 bound parameters in one statement. One insert for all tools passed it with more than 20 tools, so the first real Notion connection ended `failed` after the token exchange. The Personal Agent writes each tool with its own statement, inside the same transaction.
+- **Failure logs (#158).** Every failed or unavailable end of an OAuth start, a callback, a token exchange, a connect, and a completion writes one `MCP failure` warning with the phase, a reason code, and, when known, the catalog id, the HTTP status, the tool count, and the size of the tool copy. A reason is a code or the class names of the cause chain. It never holds a message, a value, a token, a code, an account name, or text from a server.
+- **Known limit: a callback that wakes the hub.** The callback finds the hub by its routing id, so an instance that this request creates has no name, and the Agents SDK Lifecycle refuses to start without one. The connect then fails with the reason `durable_object_has_no_name`. A local test showed it after a forced eviction. The real behavior of an eviction between the consent and the callback is not proven. A change is open.
 
 ## Why
 
@@ -68,6 +71,7 @@ The spec of #150 says that the gate rules apply with no MCP exceptions and that 
 - The number of Approval taps for MCP calls is a problem. Then consider more `change`-class tools in the catalog.
 - The Agents SDK adds a switch for the restore on wake. Then drop the subclass of the manager.
 - A server uses ids that no shape of the catalog covers.
+- A log shows `durable_object_has_no_name`. Then let the callback address the hub by its name, for example through a lookup of routing ids in the Directory.
 - A reply names a Connect button again with no call of the tool. Then let code refuse such a reply, or let code offer the button from the words of the Owner.
 - The Approval lines of Notion tools show `...` in real use. Then correct the argument names from the tool list.
 - The Approval taps of read-only Notion tools (for example comments) are a problem. Then consider the class `read` for them.

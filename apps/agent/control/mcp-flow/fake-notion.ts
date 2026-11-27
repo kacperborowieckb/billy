@@ -1,5 +1,6 @@
-import { createFakeMcpServer, textResult } from "../fake-mcp-server.ts";
-import type { FakeMcpTool } from "../fake-mcp-tools.ts";
+import { textResult } from "../fake-mcp-options.ts";
+import { createFakeMcpServer } from "../fake-mcp-server.ts";
+import { fakeNotionTools } from "./fake-notion-tools.ts";
 
 export const fakeNotionOrigin = "https://mcp.notion.com";
 
@@ -24,46 +25,6 @@ const pages = [
 ] as const;
 
 const urlOf = (id: string) => `https://www.notion.so/${id.replaceAll("-", "")}`;
-
-const objectSchema = (
-  properties: Record<string, unknown>,
-  required: readonly string[]
-) => ({ type: "object", properties, required });
-
-const text = { type: "string" };
-
-const parent = { type: "object" };
-
-export const fakeNotionTools: readonly FakeMcpTool[] = [
-  {
-    name: "notion-search",
-    description: "Search pages and databases by topic or title",
-    inputSchema: objectSchema({ query: text }, ["query"]),
-    annotations: { readOnlyHint: true },
-  },
-  {
-    name: "notion-fetch",
-    description: "Open a page or database by its id",
-    inputSchema: objectSchema({ id: text }, ["id"]),
-    annotations: { readOnlyHint: true },
-  },
-  {
-    name: "notion-create-pages",
-    description: "Create one or more pages",
-    inputSchema: objectSchema(
-      { parent, pages: { type: "array", items: { type: "object" } } },
-      ["pages"]
-    ),
-  },
-  {
-    name: "notion-update-page",
-    description: "Update the properties or content of a page",
-    inputSchema: objectSchema({ page_id: text, command: text }, [
-      "page_id",
-      "command",
-    ]),
-  },
-];
 
 const created = {
   id: "4c1d7f90-8a3b-4e62-b5d1-2f9a6c0b7e44",

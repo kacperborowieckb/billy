@@ -468,6 +468,31 @@ describe("a callback that fails after the nonce is used", () => {
     expect(await statusOfGoodCallback(state)).toBe(403);
   });
 
+  it("logs the phase and the HTTP status of a refused code, with no secret", async () => {
+    const lines: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts) => {
+      lines.push(parts.map(String).join(" "));
+    });
+    fakeMcpServer.oauth.refuseCodes(true);
+    const telegramUserId = newTelegramUserId();
+    const ownerId = await ownerWhoWroteToTheAgent(telegramUserId);
+    const { state } = await startedConsent(telegramUserId, ownerId);
+
+    await goodCallback(state);
+    log.mockRestore();
+
+    const failures = lines.filter((line) => line.includes("MCP failure"));
+    expect(failures.join("\n")).toContain(
+      '"phase":"token_exchange","catalogId":"test_server","reason":"refused","httpStatus":400'
+    );
+    expect(failures.join("\n")).toContain(
+      '"phase":"callback","reason":"outcome_failed"'
+    );
+    for (const secret of Object.values(fakeOAuthSecrets)) {
+      expect(lines.join("\n")).not.toContain(secret);
+    }
+  });
+
   it("marks the Connection failed when the token endpoint refuses the code", async () => {
     fakeMcpServer.oauth.refuseCodes(true);
     const ownerId = await ownerWhoWroteToTheAgent(9980);

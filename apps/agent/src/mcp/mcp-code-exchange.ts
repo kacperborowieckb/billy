@@ -1,13 +1,17 @@
 import { DateTime } from "effect";
 
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
+import { failureReasonOf, logMcpFailure } from "./mcp-failure.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
 import {
   latestExchangeKey,
   settledOAuthKeyPrefix,
 } from "./oauth-storage-keys.ts";
-import { exchangeCode } from "./oauth-token-exchange.ts";
+import {
+  exchangeCode,
+  TokenExchangeFailedError,
+} from "./oauth-token-exchange.ts";
 import type { SealedCredentials } from "./sealed-credentials.ts";
 
 const settledLifetimeMillis = 15 * 60 * 1000;
@@ -92,7 +96,19 @@ export const exchangeAndStore = async (
       },
     });
     return { _tag: "Exchanged", label: exchanged.accountLabel };
-  } catch {
+  } catch (error) {
+    await logMcpFailure({
+      phase: "token_exchange",
+      catalogId: entry.catalogId,
+      ...(error instanceof TokenExchangeFailedError
+        ? {
+            reason: error.reason,
+            ...(error.httpStatus === undefined
+              ? {}
+              : { httpStatus: error.httpStatus }),
+          }
+        : { reason: failureReasonOf(error) }),
+    });
     return { _tag: "Failed" };
   }
 };

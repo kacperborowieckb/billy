@@ -86,17 +86,18 @@ const makeMcpConnections = (catalog: McpCatalog) =>
           yield* database
             .delete(mcpTools)
             .where(eq(mcpTools.catalogId, catalogId));
-          if (copy.length > 0) {
-            yield* database.insert(mcpTools).values(
-              copy.map((tool) => ({
+          yield* Effect.forEach(
+            copy,
+            (tool) =>
+              database.insert(mcpTools).values({
                 catalogId,
                 name: tool.name,
                 description: tool.description,
                 inputSchema: encodeInputSchema(tool.inputSchema),
                 annotations: encodeAnnotations(tool.annotations),
-              }))
-            );
-          }
+              }),
+            { discard: true }
+          );
         })
       );
 

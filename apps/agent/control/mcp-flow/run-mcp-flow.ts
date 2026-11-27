@@ -86,7 +86,7 @@ const findAndRead = Effect.fnUntraced(function* findAndRead({
   owner,
 }: FlowRun) {
   yield* Console.log("\n== 2. Find");
-  yield* owner.say("notion find page");
+  yield* owner.say("notion find create pages");
   yield* expectText(
     "find",
     yield* owner.nextMessage("find"),

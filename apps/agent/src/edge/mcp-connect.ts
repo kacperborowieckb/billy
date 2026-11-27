@@ -2,6 +2,7 @@ import { Effect, Option } from "effect";
 
 import { telegramIdentity } from "../directory/channel-identity.ts";
 import { Directory } from "../directory/directory.ts";
+import { failureReasonOf, mcpFailureLog } from "../mcp/mcp-failure.ts";
 import type { OwnerId } from "../owner-id.ts";
 import {
   alreadyConnectedPage,
@@ -113,6 +114,12 @@ const refusalPageFor = (outcome: RefusedOutcome) => {
   }
 };
 
+const rejectedStartLog = (error: unknown) =>
+  mcpFailureLog({
+    phase: "start",
+    reason: `rejected: ${failureReasonOf(error)}`,
+  });
+
 export const handleMcpConnect = Effect.fnUntraced(function* handleMcpConnect(
   request: Request,
   env: Env
@@ -130,7 +137,7 @@ export const handleMcpConnect = Effect.fnUntraced(function* handleMcpConnect(
   if (request.method === "GET") {
     const consent = yield* Effect.tryPromise(
       async () => await hub.describeConsent(oauthRequest)
-    ).pipe(Effect.option);
+    ).pipe(Effect.tapError(rejectedStartLog), Effect.option);
     if (Option.isNone(consent)) {
       return notAvailablePage();
     }
@@ -140,7 +147,7 @@ export const handleMcpConnect = Effect.fnUntraced(function* handleMcpConnect(
   }
   const started = yield* Effect.tryPromise(
     async () => await hub.startOAuth(oauthRequest)
-  ).pipe(Effect.option);
+  ).pipe(Effect.tapError(rejectedStartLog), Effect.option);
   if (Option.isNone(started)) {
     return notAvailablePage();
   }
