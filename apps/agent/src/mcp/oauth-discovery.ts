@@ -1,7 +1,8 @@
-import { Effect, Option, Schema } from "effect";
+import { Option, Schema } from "effect";
 
 import { refusedReasonOf } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
+import { withinDeadline } from "./oauth-deadline.ts";
 
 const ProtectedResourceSchema = Schema.Struct({
   authorization_servers: Schema.optionalKey(Schema.Array(Schema.String)),
@@ -10,6 +11,10 @@ const ProtectedResourceSchema = Schema.Struct({
 const AuthorizationServerSchema = Schema.Struct({
   issuer: Schema.String,
   authorization_endpoint: Schema.String,
+  token_endpoint: Schema.String,
+  authorization_response_iss_parameter_supported: Schema.optionalKey(
+    Schema.Boolean
+  ),
   registration_endpoint: Schema.optionalKey(Schema.String),
   code_challenge_methods_supported: Schema.optionalKey(
     Schema.Array(Schema.String)
@@ -45,15 +50,6 @@ const wellKnownUrls = (base: URL, suffix: string) => {
     `${origin}/.well-known/${suffix}`,
   ];
 };
-
-const discoveryRequestTimeoutMillis = 3000;
-
-const withinDeadline = <Value>(run: (signal: AbortSignal) => Promise<Value>) =>
-  Effect.runPromise(
-    Effect.tryPromise((signal) => run(signal)).pipe(
-      Effect.timeout(discoveryRequestTimeoutMillis)
-    )
-  );
 
 const fetchJson = async (send: FetchFunction, url: string) => {
   try {
@@ -191,15 +187,22 @@ export const discoverOAuth = async ({
       "The authorization server has no PKCE S256"
     );
   }
+  const endpoints = [
+    server.value.authorization_endpoint,
+    server.value.token_endpoint,
+    ...(server.value.registration_endpoint === undefined
+      ? []
+      : [server.value.registration_endpoint]),
+  ];
   if (
-    !URL.canParse(server.value.authorization_endpoint) ||
-    refusedReasonOf(
-      new URL(server.value.authorization_endpoint),
-      allowedOrigins
-    ) !== undefined
+    endpoints.some(
+      (endpoint) =>
+        !URL.canParse(endpoint) ||
+        refusedReasonOf(new URL(endpoint), allowedOrigins) !== undefined
+    )
   ) {
     throw new OAuthDiscoveryFailedError(
-      "The authorization endpoint is not a public HTTPS address"
+      "An endpoint of the authorization server is not a public HTTPS address"
     );
   }
   const clientMode = modeFor(server.value, clientMetadataUrl);

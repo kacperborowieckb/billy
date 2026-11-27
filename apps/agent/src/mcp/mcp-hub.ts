@@ -1,33 +1,36 @@
 import { Lifecycle } from "agents/lifecycle";
 import { DurableObject } from "cloudflare:workers";
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
+import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import { OwnerIdSchema } from "../owner-id.ts";
 import { personalAgentFor } from "../personal-agent/personal-agent.ts";
+import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type {
   McpAddConnectionOutcome,
+  McpCallbackOutcome,
   McpCallOutcome,
   McpCallRequest,
   McpConsentOutcome,
   McpHubRpc,
+  McpOAuthCallback,
   McpOAuthRequest,
   McpOAuthStartOutcome,
 } from "./mcp-hub-contract.ts";
-import { resultTextOf, toolCopyOf } from "./mcp-hub-results.ts";
+import { McpOAuthCompleter } from "./mcp-oauth-completer.ts";
 import { McpOAuthStarter } from "./mcp-oauth-starter.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
+import { McpServerConnector } from "./mcp-server-connector.ts";
 import { mcpCatalogFor } from "./mcp-test-catalog.ts";
+import { SealedCredentials } from "./sealed-credentials.ts";
+import { parseSealKeyring } from "./token-seal.ts";
+import type { SealKeyring } from "./token-seal.ts";
 
 const sendFromWorker: FetchFunction = (input, init) => fetch(input, init);
-
-const within = <Value>(work: Promise<Value>, millis: number) =>
-  Effect.runPromise(
-    Effect.tryPromise(() => work).pipe(Effect.timeoutOption(millis))
-  );
 
 const allowedOriginsOf = (env: Env): readonly string[] =>
   env.MCP_TEST_SERVER_URL === ""
@@ -45,77 +48,109 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   readonly lifecycle = Lifecycle.install(this).use(this.manager);
 
+  private keyring: Promise<SealKeyring> | undefined;
+
+  private readonly guardedSend: FetchFunction = (input, init) =>
+    guardedFetch(this.send, this.allowedOrigins)(input, init);
+
+  private readonly connector = new McpServerConnector({
+    manager: this.manager,
+    start: () => this.lifecycle.start(),
+    send: (input, init) => this.send(input, init),
+    allowedOrigins: this.allowedOrigins,
+    credentials: (ownerId) => this.credentialsOf(ownerId),
+  });
+
   private readonly oauth = new McpOAuthStarter({
     catalog: this.catalog,
-    send: (input, init) =>
-      guardedFetch(this.send, this.allowedOrigins)(input, init),
+    send: this.guardedSend,
     allowedOrigins: this.allowedOrigins,
     storage: this.ctx.storage,
     routingId: this.ctx.id.toString(),
+    ownerId: () => this.ownerName(),
+    credentials: (ownerId) => this.credentialsOf(ownerId),
     isRecorded: (catalogId) => this.isRecorded(catalogId),
-    markAuthenticating: async (catalogId) => {
-      const agent = await personalAgentFor(
-        this.env.PERSONAL_AGENT,
-        OwnerIdSchema.make(this.ctx.id.name ?? "")
-      );
-      await agent.receiveMcpConnectionState(catalogId, "authenticating");
-    },
+    markAuthenticating: (catalogId) =>
+      this.tellState(this.ownerName(), catalogId, "authenticating"),
+  });
+
+  private readonly completer = new McpOAuthCompleter({
+    catalog: this.catalog,
+    send: this.guardedSend,
+    storage: this.ctx.storage,
+    credentials: (ownerId) => this.credentialsOf(ownerId),
+    connect: (entry, ownerId, accountLabel) =>
+      this.connectAfterConsent(entry, ownerId, accountLabel),
+    markFailed: (ownerId, catalogId) =>
+      this.tellState(ownerId, catalogId, "failed"),
   });
 
   private readonly setups = new Map<string, Promise<McpAddConnectionOutcome>>();
 
-  private readonly connecting = new Map<string, Promise<void>>();
+  private ownerName() {
+    return this.ctx.id.name ?? "";
+  }
 
-  private async registerAndConnect({
-    catalogId,
-    serverUrl,
-    displayName,
-  }: McpCatalogEntry) {
-    await this.manager.registerServer(catalogId, {
-      url: serverUrl,
-      name: displayName,
-      transport: {
-        type: "streamable-http",
-        fetch: guardedFetch(this.send, this.allowedOrigins),
-      },
-    });
-    const connected = await this.manager.connectToServer(catalogId);
-    if (connected.state !== "connected") {
-      throw new Error("The MCP server is not connected");
-    }
-    const discovered = await this.manager.discoverIfConnected(catalogId);
-    if (discovered?.success !== true) {
-      throw new Error("The MCP server did not list its tools");
+  private async credentialsOf(ownerId: string) {
+    this.keyring ??= parseSealKeyring(this.env.MCP_SEALING_KEYS);
+    try {
+      return new SealedCredentials(
+        this.ctx.storage,
+        await this.keyring,
+        ownerId
+      );
+    } catch (error) {
+      this.keyring = undefined;
+      await Effect.runPromise(
+        Effect.logError("The MCP sealing key is missing or invalid")
+      );
+      throw error;
     }
   }
 
-  private connectOnce(entry: McpCatalogEntry) {
-    const existing = this.connecting.get(entry.catalogId);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const started = this.registerAndConnect(entry).finally(() => {
-      this.connecting.delete(entry.catalogId);
-    });
-    this.connecting.set(entry.catalogId, started);
-    return started;
-  }
-
-  private async ensureConnected(
-    entry: McpCatalogEntry,
-    connectTimeoutMillis: number
-  ): Promise<"connected" | "timed_out"> {
-    await this.lifecycle.start();
-    if (
-      this.manager.mcpConnections[entry.catalogId]?.connectionState === "ready"
-    ) {
-      return "connected";
-    }
-    const connected = await within(
-      this.connectOnce(entry),
-      connectTimeoutMillis
+  private agentOf(ownerId: string) {
+    return personalAgentFor(
+      this.env.PERSONAL_AGENT,
+      OwnerIdSchema.make(ownerId)
     );
-    return Option.isSome(connected) ? "connected" : "timed_out";
+  }
+
+  private async tellState(
+    ownerId: string,
+    catalogId: string,
+    state: McpConnectionState
+  ) {
+    const agent = await this.agentOf(ownerId);
+    await agent.receiveMcpConnectionState(catalogId, state);
+  }
+
+  private async connectAfterConsent(
+    entry: McpCatalogEntry,
+    ownerId: string,
+    accountLabel: string | undefined
+  ): Promise<"connected" | "failed"> {
+    try {
+      if (
+        (await this.connector.ensureConnected(
+          entry,
+          ownerId,
+          defaultBehaviorConfig.mcpConnectTimeoutMillis
+        )) === "timed_out"
+      ) {
+        throw new Error("The MCP server did not connect in time");
+      }
+      const agent = await this.agentOf(ownerId);
+      await agent.receiveMcpConnected(
+        entry.catalogId,
+        this.connector.toolCopiesOf(entry.catalogId),
+        accountLabel
+      );
+      await this.ctx.storage.put(`connection:${entry.catalogId}`, true);
+      return "connected";
+    } catch {
+      await this.tellState(ownerId, entry.catalogId, "failed");
+      return "failed";
+    }
   }
 
   private isRecorded(catalogId: string) {
@@ -130,6 +165,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   startOAuth(request: McpOAuthRequest): Promise<McpOAuthStartOutcome> {
     return this.oauth.startOAuth(request);
+  }
+
+  completeOAuth(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
+    return this.completer.complete(returned);
   }
 
   addConnection(
@@ -152,20 +191,20 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     if (entry === undefined) {
       return { outcome: "unknown_catalog_entry" };
     }
-    const agent = await personalAgentFor(
-      this.env.PERSONAL_AGENT,
-      OwnerIdSchema.make(this.ctx.id.name ?? "")
-    );
+    const agent = await this.agentOf(this.ownerName());
     try {
       if (
-        (await this.ensureConnected(entry, connectTimeoutMillis)) ===
-        "timed_out"
+        (await this.connector.ensureConnected(
+          entry,
+          this.ownerName(),
+          connectTimeoutMillis
+        )) === "timed_out"
       ) {
         throw new Error("The MCP server did not connect in time");
       }
       await agent.receiveMcpToolCatalog(
         catalogId,
-        this.manager.listTools({ serverId: catalogId }).map(toolCopyOf)
+        this.connector.toolCopiesOf(catalogId)
       );
       await agent.receiveMcpConnectionState(catalogId, "ready");
       await this.ctx.storage.put(`connection:${catalogId}`, true);
@@ -182,38 +221,6 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     if (entry === undefined || !(await this.isRecorded(request.catalogId))) {
       return { _tag: "Failed", reason: "not_connected" };
     }
-    try {
-      if (
-        (await this.ensureConnected(entry, request.connectTimeoutMillis)) ===
-        "timed_out"
-      ) {
-        return { _tag: "Failed", reason: "timed_out" };
-      }
-      const result = await within(
-        this.manager.callTool(
-          {
-            serverId: request.catalogId,
-            name: request.tool,
-            arguments: { ...request.arguments },
-          },
-          { timeout: request.callTimeoutMillis }
-        ),
-        request.callTimeoutMillis
-      );
-      if (Option.isNone(result)) {
-        return { _tag: "Failed", reason: "timed_out" };
-      }
-      return {
-        _tag: "Result",
-        isError: result.value.isError === true,
-        text: resultTextOf(
-          result.value.content,
-          result.value.structuredContent
-        ),
-        structured: result.value.structuredContent ?? null,
-      };
-    } catch {
-      return { _tag: "Failed", reason: "failed" };
-    }
+    return this.connector.callTool(entry, this.ownerName(), request);
   }
 }

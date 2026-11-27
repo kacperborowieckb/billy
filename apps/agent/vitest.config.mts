@@ -7,6 +7,8 @@ const testSecrets = {
   MCP_TEST_SERVER_URL: "https://mcp.test.example/mcp",
   EDGE_PUBLIC_URL: "https://edge.test.example",
   AI_GATEWAY_TOKEN: "test-ai-gateway-token",
+  MCP_SEALING_KEYS:
+    "test-1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=,test-0:Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA=",
   OPERATOR_TOKEN: "test-operator-token",
   TELEGRAM_BOT_TOKEN: "test-telegram-bot-token",
   TELEGRAM_WEBHOOK_SECRET: "test-telegram-webhook-secret",

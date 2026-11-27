@@ -1,8 +1,24 @@
+export const fakeOAuthSecrets = {
+  authorizationCode: "fake-authorization-code-7c1e",
+  accessToken: "fake-access-token-4b9d",
+  refreshToken: "fake-refresh-token-a82f",
+  clientSecret: "fake-dcr-client-secret-3e65",
+} as const;
+
+export const fakeOAuthAccountName = "Pat Reader";
+
 export const createFakeOAuthServer = () => {
   const registrations: unknown[] = [];
+  const tokenRequests: Record<string, string>[] = [];
   const state = {
     supportsClientIdMetadata: true,
     supportsPkce: true,
+    sendsIssuer: true,
+    tokenLoginRefused: false,
+    withRefreshToken: true,
+    withAccountName: true,
+    requiresToken: false,
+    tokenEndpoint: undefined as string | undefined,
     layout: "root" as
       | "root"
       | "challenged_tenant"
@@ -15,6 +31,8 @@ export const createFakeOAuthServer = () => {
     issuer,
     authorization_endpoint: `${issuer}/authorize`,
     registration_endpoint: `${issuer}/register`,
+    token_endpoint: state.tokenEndpoint ?? `${issuer}/token`,
+    authorization_response_iss_parameter_supported: state.sendsIssuer,
     code_challenge_methods_supported: state.supportsPkce ? ["S256"] : [],
     client_id_metadata_document_supported: state.supportsClientIdMetadata,
   });
@@ -49,7 +67,34 @@ export const createFakeOAuthServer = () => {
     return new Response(null, { status: 404 });
   };
 
+  const answerToken = async (request: Request) => {
+    const form = new URLSearchParams(await request.text());
+    tokenRequests.push(Object.fromEntries(form));
+    if (
+      state.tokenLoginRefused ||
+      form.get("grant_type") !== "authorization_code" ||
+      form.get("code") !== fakeOAuthSecrets.authorizationCode
+    ) {
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    }
+    return Response.json({
+      access_token: fakeOAuthSecrets.accessToken,
+      token_type: "Bearer",
+      expires_in: 3600,
+      ...(state.withRefreshToken
+        ? { refresh_token: fakeOAuthSecrets.refreshToken }
+        : {}),
+      ...(state.withAccountName ? { account_name: fakeOAuthAccountName } : {}),
+    });
+  };
+
   const answer = async (request: Request) => {
+    if (
+      request.method === "POST" &&
+      new URL(request.url).pathname === "/token"
+    ) {
+      return answerToken(request);
+    }
     if (
       state.layout === "hanging_metadata" &&
       /oauth-protected-resource|openid-configuration/u.test(request.url)
@@ -90,7 +135,13 @@ export const createFakeOAuthServer = () => {
     }
     if (url.pathname.endsWith("/register") && request.method === "POST") {
       registrations.push(await request.json());
-      return Response.json({ client_id: "fake-dcr-client" }, { status: 201 });
+      return Response.json(
+        {
+          client_id: "fake-dcr-client",
+          client_secret: fakeOAuthSecrets.clientSecret,
+        },
+        { status: 201 }
+      );
     }
     return null;
   };
@@ -98,6 +149,28 @@ export const createFakeOAuthServer = () => {
   return {
     answer,
     registrations,
+    tokenRequests,
+    get requiresToken() {
+      return state.requiresToken;
+    },
+    requireToken: (required: boolean) => {
+      state.requiresToken = required;
+    },
+    useTokenEndpoint: (endpoint: string) => {
+      state.tokenEndpoint = endpoint;
+    },
+    sendIssuer: (sent: boolean) => {
+      state.sendsIssuer = sent;
+    },
+    refuseCodes: (refused: boolean) => {
+      state.tokenLoginRefused = refused;
+    },
+    sendRefreshToken: (sent: boolean) => {
+      state.withRefreshToken = sent;
+    },
+    sendAccountName: (sent: boolean) => {
+      state.withAccountName = sent;
+    },
     supportClientIdMetadata: (supported: boolean) => {
       state.supportsClientIdMetadata = supported;
     },
@@ -111,7 +184,14 @@ export const createFakeOAuthServer = () => {
       state.supportsClientIdMetadata = true;
       state.supportsPkce = true;
       state.layout = "root";
+      state.sendsIssuer = true;
+      state.tokenLoginRefused = false;
+      state.withRefreshToken = true;
+      state.withAccountName = true;
+      state.requiresToken = false;
+      state.tokenEndpoint = undefined;
       registrations.length = 0;
+      tokenRequests.length = 0;
     },
   };
 };

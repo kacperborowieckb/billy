@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { Effect } from "effect";
 import { createTestHarness, experimental_readRawConfig } from "wrangler";
@@ -11,6 +11,7 @@ export interface LocalWorkerSecrets {
   readonly TELEGRAM_WEBHOOK_SECRET: string;
   readonly AI_GATEWAY_TOKEN: string;
   readonly OPERATOR_TOKEN: string;
+  readonly MCP_SEALING_KEYS: string;
 }
 
 export const temporarySecrets = (): LocalWorkerSecrets => ({
@@ -18,6 +19,7 @@ export const temporarySecrets = (): LocalWorkerSecrets => ({
   TELEGRAM_WEBHOOK_SECRET: randomUUID(),
   AI_GATEWAY_TOKEN: `local-${randomUUID()}`,
   OPERATOR_TOKEN: randomUUID(),
+  MCP_SEALING_KEYS: `local:${randomBytes(32).toString("base64")}`,
 });
 
 export interface LocalWorkerOptions {

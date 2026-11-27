@@ -54,6 +54,7 @@ export default defineConfig({
         "apps/agent/src/personal-agent/**/*.ts",
         "apps/agent/src/mcp/mcp-hub.ts",
         "apps/agent/src/mcp/lazy-mcp-client-manager.ts",
+        "apps/agent/src/mcp/sealed-oauth-provider.ts",
       ],
       rules: { "no-restricted-imports": "off" },
     },

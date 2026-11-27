@@ -1,6 +1,8 @@
 import { Schema } from "effect";
 
+import { base64UrlOf } from "./base64-url.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
+import { withinDeadline } from "./oauth-deadline.ts";
 import { OAuthDiscoveryFailedError } from "./oauth-discovery.ts";
 import type { OAuthDiscovery } from "./oauth-discovery.ts";
 
@@ -8,27 +10,25 @@ const RegistrationSchema = Schema.Struct({ client_id: Schema.String });
 
 const decodeRegistration = Schema.decodeUnknownSync(RegistrationSchema);
 
-const base64Url = (bytes: Uint8Array) =>
-  btoa(String.fromCodePoint(...bytes))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-
-const randomToken = () => base64Url(crypto.getRandomValues(new Uint8Array(32)));
+const randomToken = () =>
+  base64UrlOf(crypto.getRandomValues(new Uint8Array(32)));
 
 const challengeOf = async (verifier: string) =>
-  base64Url(
+  base64UrlOf(
     new Uint8Array(
       await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))
     )
   );
 
 export interface PendingOAuth {
+  readonly ownerId: string;
   readonly catalogId: string;
-  readonly codeVerifier: string;
+  readonly sealedCodeVerifier: string;
   readonly clientId: string;
   readonly redirectUrl: string;
   readonly issuer: string;
+  readonly issuerIsRequired: boolean;
+  readonly tokenEndpoint: string;
   readonly expiresAtMillis: number;
 }
 
@@ -40,7 +40,9 @@ export interface OAuthStartInput {
   readonly redirectUrl: string;
   readonly clientMetadataUrl: string | undefined;
   readonly clientName: string;
+  readonly ownerId: string;
   readonly routingId: string;
+  readonly sealVerifier: (nonce: string, verifier: string) => Promise<string>;
   readonly nowMillis: number;
   readonly lifetimeMillis: number;
 }
@@ -61,21 +63,26 @@ const registeredClientId = async ({
       "The authorization server accepts no client"
     );
   }
-  const response = await send(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_name: clientName,
-      redirect_uris: [redirectUrl],
-      grant_types: ["authorization_code", "refresh_token"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    }),
+  return await withinDeadline(async (signal) => {
+    const response = await send(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_name: clientName,
+        redirect_uris: [redirectUrl],
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }),
+      signal,
+    });
+    if (!response.ok) {
+      throw new OAuthDiscoveryFailedError(
+        "The client registration was refused"
+      );
+    }
+    return decodeRegistration(await response.json<unknown>()).client_id;
   });
-  if (!response.ok) {
-    throw new OAuthDiscoveryFailedError("The client registration was refused");
-  }
-  return decodeRegistration(await response.json<unknown>()).client_id;
 };
 
 export interface StartedOAuth {
@@ -102,11 +109,16 @@ export const startOAuth = async (
     nonce,
     authorizationUrl: url.toString(),
     pending: {
+      ownerId: input.ownerId,
       catalogId: input.catalogId,
-      codeVerifier,
+      sealedCodeVerifier: await input.sealVerifier(nonce, codeVerifier),
       clientId,
       redirectUrl: input.redirectUrl,
       issuer: input.discovery.server.issuer,
+      issuerIsRequired:
+        input.discovery.server
+          .authorization_response_iss_parameter_supported === true,
+      tokenEndpoint: input.discovery.server.token_endpoint,
       expiresAtMillis: input.nowMillis + input.lifetimeMillis,
     },
   };

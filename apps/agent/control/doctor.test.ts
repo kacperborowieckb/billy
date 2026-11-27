@@ -15,6 +15,7 @@ import { hitRateSourceOf, readHitRate } from "./hit-rate.ts";
 import { wranglerConfigPath } from "./workspace.ts";
 
 const secretValues = {
+  MCP_SEALING_KEYS: "value-of-sealing-keys-5d1e",
   AI_GATEWAY_TOKEN: "value-of-ai-gateway-token-7f3a",
   OPERATOR_TOKEN: "value-of-operator-token-2b6c",
   TELEGRAM_BOT_TOKEN: "value-of-telegram-bot-token-91c2",

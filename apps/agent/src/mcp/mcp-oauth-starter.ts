@@ -11,10 +11,13 @@ import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { discoverOAuth } from "./oauth-discovery.ts";
 import { startOAuth } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
-
-const pendingOAuthKeyPrefix = "oauth:";
-
-const usedProofKeyPrefix = "proof:";
+import {
+  pendingOAuthKeyPrefix,
+  settledOAuthKeyPrefix,
+  usedProofKeyPrefix,
+} from "./oauth-storage-keys.ts";
+import type { SettledOAuth } from "./oauth-storage-keys.ts";
+import type { SealedCredentials } from "./sealed-credentials.ts";
 
 const oauthStartLifetimeMillis = 10 * 60 * 1000;
 
@@ -28,6 +31,8 @@ export interface McpOAuthStarterDependencies {
   readonly allowedOrigins: readonly string[];
   readonly storage: DurableObjectStorage;
   readonly routingId: string;
+  readonly ownerId: () => string;
+  readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
   readonly isRecorded: (catalogId: string) => Promise<boolean>;
   readonly markAuthenticating: (catalogId: string) => Promise<void>;
 }
@@ -96,6 +101,8 @@ export class McpOAuthStarter {
     const { entry } = checked;
     try {
       const discovery = await this.discover(entry, request);
+      const ownerId = this.dependencies.ownerId();
+      const credentials = await this.dependencies.credentials(ownerId);
       if (!(await this.useUpProof(request.proofId))) {
         return { outcome: "proof_used" };
       }
@@ -107,7 +114,10 @@ export class McpOAuthStarter {
         redirectUrl: request.redirectUrl,
         clientMetadataUrl: request.clientMetadataUrl,
         clientName: "Billy",
+        ownerId,
         routingId: this.dependencies.routingId,
+        sealVerifier: (nonce, verifier) =>
+          credentials.sealVerifier(entry.catalogId, nonce, verifier),
         nowMillis: nowMillis(),
         lifetimeMillis: oauthStartLifetimeMillis,
       });
@@ -142,6 +152,9 @@ export class McpOAuthStarter {
       prefix: pendingOAuthKeyPrefix,
     });
     const proofs = await storage.list<number>({ prefix: usedProofKeyPrefix });
+    const settled = await storage.list<SettledOAuth>({
+      prefix: settledOAuthKeyPrefix,
+    });
     const now = nowMillis();
     const expired = [
       ...[...pending]
@@ -149,6 +162,9 @@ export class McpOAuthStarter {
         .map(([key]) => key),
       ...[...proofs]
         .filter(([, expiresAtMillis]) => expiresAtMillis <= now)
+        .map(([key]) => key),
+      ...[...settled]
+        .filter(([, value]) => value.expiresAtMillis <= now)
         .map(([key]) => key),
     ];
     if (expired.length > 0) {

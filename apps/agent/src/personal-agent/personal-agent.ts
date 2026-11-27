@@ -11,6 +11,7 @@ import type { McpHubPort } from "../mcp/mcp-hub-contract.ts";
 import { mcpCatalogFor } from "../mcp/mcp-test-catalog.ts";
 import type { McpToolCopy } from "../mcp/mcp-tool-copy.ts";
 import {
+  receiveMcpConnected,
   receiveMcpConnectionState,
   receiveMcpToolCatalog,
 } from "../mcp/receive-mcp-copy.ts";
@@ -119,6 +120,20 @@ export class PersonalAgent extends Agent<Env> {
   ): Promise<void> {
     await this.runtime.runPromise(
       receiveMcpToolCatalog(this.mcpCatalog, catalogId, tools)
+    );
+  }
+
+  async receiveMcpConnected(
+    catalogId: string,
+    tools: readonly McpToolCopy[],
+    accountLabel: string | undefined
+  ): Promise<void> {
+    await this.runtime.runPromise(
+      receiveMcpConnected(this.mcpCatalog, {
+        catalogId,
+        tools,
+        accountLabel,
+      }).pipe(Effect.provide(this.turnServices(this.env, this.ownerId)))
     );
   }
 
