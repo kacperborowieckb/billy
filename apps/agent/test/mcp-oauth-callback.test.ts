@@ -11,6 +11,7 @@ import { parseSealKeyring } from "../src/mcp/token-seal.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import {
+  fakeCompletion,
   fakeMcpServer,
   fakeTelegram,
   resetFakes,
@@ -591,6 +592,28 @@ describe("a replay of a good callback", () => {
     expect(await statesOf(ownerId)).toEqual([
       { catalogId: testMcpCatalogId, state: "ready" },
     ]);
+  });
+
+  it("connects a second authorization with its own tokens after the completion failed once", async () => {
+    fakeMcpServer.oauth.issueFreshTokens(true);
+    fakeMcpServer.oauth.requireToken(true);
+    const ownerId = await ownerWhoWroteToTheAgent(9967);
+    const { state: first } = await startedConsent(9967, ownerId);
+    const second = await secondConsent(9967, ownerId);
+    fakeCompletion.failures = 1;
+
+    const failed = await goodCallback(first);
+    const connected = await goodCallback(second);
+
+    expect(failed.status).toBe(502);
+    expect(connected.status).toBe(200);
+    expect(fakeMcpServer.authorizations.at(-1)).toBe(
+      `Bearer ${fakeOAuthSecrets.accessToken}-2`
+    );
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
   });
 
   it("serializes two completions of one entry so only one exchanges a code", async () => {

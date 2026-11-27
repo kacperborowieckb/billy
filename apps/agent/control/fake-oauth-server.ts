@@ -16,6 +16,8 @@ export const createFakeOAuthServer = () => {
     sendsIssuer: true,
     tokenLoginRefused: false,
     requiresClientSecret: false,
+    freshTokens: false,
+    exchanges: 0,
     registeredMethod: "client_secret_post" as string,
     tokenHold: Promise.resolve(undefined) as Promise<undefined>,
     withRefreshToken: true,
@@ -70,6 +72,11 @@ export const createFakeOAuthServer = () => {
     return new Response(null, { status: 404 });
   };
 
+  const currentAccessToken = () =>
+    state.freshTokens
+      ? `${fakeOAuthSecrets.accessToken}-${state.exchanges}`
+      : fakeOAuthSecrets.accessToken;
+
   const hasClientSecret = (request: Request, form: URLSearchParams) =>
     state.registeredMethod === "client_secret_basic"
       ? request.headers.get("Authorization") ===
@@ -88,8 +95,9 @@ export const createFakeOAuthServer = () => {
     ) {
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     }
+    state.exchanges += 1;
     return Response.json({
-      access_token: fakeOAuthSecrets.accessToken,
+      access_token: currentAccessToken(),
       token_type: "Bearer",
       expires_in: 3600,
       ...(state.withRefreshToken
@@ -174,6 +182,10 @@ export const createFakeOAuthServer = () => {
     sendIssuer: (sent: boolean) => {
       state.sendsIssuer = sent;
     },
+    currentAccessToken,
+    issueFreshTokens: (fresh: boolean) => {
+      state.freshTokens = fresh;
+    },
     holdTokenRequests: () => {
       const { promise, resolve } = Promise.withResolvers<undefined>();
       state.tokenHold = promise;
@@ -210,6 +222,8 @@ export const createFakeOAuthServer = () => {
       state.sendsIssuer = true;
       state.tokenLoginRefused = false;
       state.requiresClientSecret = false;
+      state.freshTokens = false;
+      state.exchanges = 0;
       state.registeredMethod = "client_secret_post";
       state.tokenHold = Promise.resolve(undefined);
       state.withRefreshToken = true;

@@ -1,10 +1,7 @@
 import { Effect } from "effect";
 
 import { fakeMcpTools } from "./fake-mcp-tools.ts";
-import {
-  createFakeOAuthServer,
-  fakeOAuthSecrets,
-} from "./fake-oauth-server.ts";
+import { createFakeOAuthServer } from "./fake-oauth-server.ts";
 
 export const fakeMcpPages = [
   {
@@ -122,7 +119,7 @@ export const createFakeMcpServer = () => {
     if (
       oauth.requiresToken &&
       request.headers.get("Authorization") !==
-        `Bearer ${fakeOAuthSecrets.accessToken}`
+        `Bearer ${oauth.currentAccessToken()}`
     ) {
       return new Response(null, { status: 401 });
     }
