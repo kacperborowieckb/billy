@@ -18,6 +18,7 @@ import {
 } from "./fakes.ts";
 import {
   loginOf,
+  nowSeconds,
   pendingOAuthCountOf,
   postConsent,
 } from "./mcp-connect-requests.ts";
@@ -251,6 +252,80 @@ describe("a good callback", () => {
   });
 });
 
+const secondConsent = async (telegramUserId: number, ownerId: string) => {
+  const response = await postConsent(
+    await loginOf(telegramUserId, ownerId, { authDate: nowSeconds() - 5 })
+  );
+  expect(response.status).toBe(303);
+  const location = new URL(response.headers.get("Location") ?? "");
+  return location.searchParams.get("state") ?? "";
+};
+
+describe("client authentication and tenants", () => {
+  it("sends the registered client secret when the server issues one", async () => {
+    fakeMcpServer.oauth.supportClientIdMetadata(false);
+    fakeMcpServer.oauth.requireClientSecret(true);
+    const ownerId = await ownerWhoWroteToTheAgent(9995);
+    const { state } = await startedConsent(9995, ownerId);
+
+    const response = await goodCallback(state);
+
+    expect(response.status).toBe(200);
+    expect(fakeMcpServer.oauth.tokenRequests[0]?.["client_secret"]).toBe(
+      fakeOAuthSecrets.clientSecret
+    );
+  });
+
+  it("posts the code to the token endpoint of a tenant issuer", async () => {
+    fakeMcpServer.oauth.useLayout("challenged_tenant");
+    const ownerId = await ownerWhoWroteToTheAgent(9996);
+    const { state } = await startedConsent(9996, ownerId);
+
+    const response = await callbackWith({
+      code: fakeOAuthSecrets.authorizationCode,
+      state,
+      iss: `${issuer}/tenant1`,
+    });
+
+    expect(response.status).not.toBe(403);
+    expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
+  });
+});
+
+describe("two authorizations for one Connection", () => {
+  it("refuses the second completion when the Connection is ready", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9997);
+    const { state: first } = await startedConsent(9997, ownerId);
+    const second = await secondConsent(9997, ownerId);
+
+    const firstAnswer = await goodCallback(first);
+    const secondAnswer = await goodCallback(second);
+
+    expect(firstAnswer.status).toBe(200);
+    expect(secondAnswer.status).toBe(200);
+    expect(await secondAnswer.text()).toContain("already connected");
+    expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+  });
+
+  it("refuses the replay of an earlier attempt after a later one saved new tokens", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9998);
+    const { state: first } = await startedConsent(9998, ownerId);
+    const second = await secondConsent(9998, ownerId);
+    fakeMcpServer.beUnavailable(true);
+
+    await goodCallback(first);
+    await goodCallback(second);
+    fakeMcpServer.beUnavailable(false);
+    const replayOfFirst = await goodCallback(first);
+    const replayOfSecond = await goodCallback(second);
+
+    expect(replayOfFirst.status).toBe(403);
+    expect(replayOfSecond.status).toBe(200);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+  });
+});
+
 describe("a callback that must change nothing", () => {
   it.each([
     ["a wrong nonce", (state: string) => `${state.split(".")[0]}.wrong-nonce`],
@@ -439,6 +514,25 @@ describe("a replay of a good callback", () => {
 
     expect(await statesOf(ownerId)).toEqual([
       { catalogId: testMcpCatalogId, state: "failed" },
+    ]);
+
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+    expect(fakeTelegram.sent).toHaveLength(2);
+  });
+
+  it("makes one Journal Entry for two completions that arrive together", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9999);
+    const agent = await agentOf(ownerId);
+    const completion = {
+      catalogId: testMcpCatalogId,
+      tools: [],
+      accountLabel: undefined,
+      completionId: "completion-2",
+    };
+
+    await Promise.all([
+      agent.receiveMcpConnected(completion),
+      agent.receiveMcpConnected(completion),
     ]);
 
     expect(await addedEntryCountOf(ownerId)).toBe(1);

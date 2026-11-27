@@ -15,6 +15,7 @@ export type StoredTokens = typeof StoredTokensSchema.Type;
 
 export const StoredClientSchema = Schema.Struct({
   client_id: Schema.String,
+  client_secret: Schema.optionalKey(Schema.String),
   redirectUrl: Schema.String,
 });
 
@@ -65,6 +66,22 @@ export class SealedCredentials {
       this.keyring,
       sealed,
       this.contextOf(catalogId, `verifier:${nonce}`)
+    );
+  }
+
+  sealClientSecret(catalogId: string, nonce: string, secret: string) {
+    return seal(
+      this.keyring,
+      secret,
+      this.contextOf(catalogId, `client-secret:${nonce}`)
+    );
+  }
+
+  openClientSecret(catalogId: string, nonce: string, sealed: string) {
+    return open(
+      this.keyring,
+      sealed,
+      this.contextOf(catalogId, `client-secret:${nonce}`)
     );
   }
 

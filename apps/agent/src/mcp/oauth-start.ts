@@ -6,7 +6,10 @@ import { withinDeadline } from "./oauth-deadline.ts";
 import { OAuthDiscoveryFailedError } from "./oauth-discovery.ts";
 import type { OAuthDiscovery } from "./oauth-discovery.ts";
 
-const RegistrationSchema = Schema.Struct({ client_id: Schema.String });
+const RegistrationSchema = Schema.Struct({
+  client_id: Schema.String,
+  client_secret: Schema.optionalKey(Schema.String),
+});
 
 const decodeRegistration = Schema.decodeUnknownSync(RegistrationSchema);
 
@@ -25,6 +28,7 @@ export const PendingOAuthSchema = Schema.Struct({
   catalogId: Schema.String,
   sealedCodeVerifier: Schema.String,
   clientId: Schema.String,
+  sealedClientSecret: Schema.optionalKey(Schema.String),
   redirectUrl: Schema.String,
   issuer: Schema.String,
   issuerIsRequired: Schema.Boolean,
@@ -48,19 +52,25 @@ export interface OAuthStartInput {
   readonly ownerId: string;
   readonly routingId: string;
   readonly sealVerifier: (nonce: string, verifier: string) => Promise<string>;
+  readonly sealClientSecret: (nonce: string, secret: string) => Promise<string>;
   readonly nowMillis: number;
   readonly lifetimeMillis: number;
 }
 
-const registeredClientId = async ({
+interface RegisteredClient {
+  readonly clientId: string;
+  readonly clientSecret: string | undefined;
+}
+
+const registeredClient = async ({
   send,
   discovery,
   redirectUrl,
   clientName,
   clientMetadataUrl,
-}: OAuthStartInput) => {
+}: OAuthStartInput): Promise<RegisteredClient> => {
   if (discovery.clientMode === "CIMD" && clientMetadataUrl !== undefined) {
-    return clientMetadataUrl;
+    return { clientId: clientMetadataUrl, clientSecret: undefined };
   }
   const endpoint = discovery.server.registration_endpoint;
   if (endpoint === undefined) {
@@ -86,7 +96,11 @@ const registeredClientId = async ({
         "The client registration was refused"
       );
     }
-    return decodeRegistration(await response.json<unknown>()).client_id;
+    const registration = decodeRegistration(await response.json<unknown>());
+    return {
+      clientId: registration.client_id,
+      clientSecret: registration.client_secret,
+    };
   });
 };
 
@@ -99,7 +113,7 @@ export interface StartedOAuth {
 export const startOAuth = async (
   input: OAuthStartInput
 ): Promise<StartedOAuth> => {
-  const clientId = await registeredClientId(input);
+  const { clientId, clientSecret } = await registeredClient(input);
   const codeVerifier = randomToken();
   const nonce = randomToken();
   const url = new URL(input.discovery.server.authorization_endpoint);
@@ -118,6 +132,14 @@ export const startOAuth = async (
       catalogId: input.catalogId,
       sealedCodeVerifier: await input.sealVerifier(nonce, codeVerifier),
       clientId,
+      ...(clientSecret === undefined
+        ? {}
+        : {
+            sealedClientSecret: await input.sealClientSecret(
+              nonce,
+              clientSecret
+            ),
+          }),
       redirectUrl: input.redirectUrl,
       issuer: input.discovery.server.issuer,
       issuerIsRequired:

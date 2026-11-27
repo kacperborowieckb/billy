@@ -188,6 +188,9 @@ Decision [0036](../decisions/0036-mcp-connections.md), ticket #155. `test/mcp-oa
 - The Personal Agent that hears the same completion twice writes one Journal Entry, sends one message, and does not undo a later `failed` state.
 - After a full connect (with a DCR client secret), no hub table, no hub key-value entry, no Personal Agent table (Journal, Trace, Conversation), and no console line has the access token, the refresh token, the client secret, the authorization code, or the code verifier in plain text.
 - A sealed record opens only for its own Owner and Connection. A record sealed by an older key opens after a rotation. A save of tokens with no refresh token keeps the old one.
+- A DCR server that issues a client secret gets it back in the token request. The token endpoint of a tenant issuer (`/tenant1/token`) receives the code.
+- A completion for an entry that already has a Connection is refused with no token request. The replay of an earlier attempt is refused after a later attempt saved new tokens.
+- Two completions with the same completion id that arrive together write one Journal Entry and send one message, and a failed message send keeps the Connection `ready`.
 - A sealing key list with a repeated key id, a key of the wrong length, or no key id is refused.
 - A token endpoint at a private or `http` address makes discovery fail and starts nothing.
 

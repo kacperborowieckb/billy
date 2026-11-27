@@ -24,6 +24,7 @@ export interface TokenExchangeInput {
   readonly send: FetchFunction;
   readonly tokenEndpoint: string;
   readonly clientId: string;
+  readonly clientSecret: string | undefined;
   readonly redirectUrl: string;
   readonly serverUrl: string;
   readonly code: string;
@@ -50,6 +51,7 @@ export const exchangeCode = async ({
   send,
   tokenEndpoint,
   clientId,
+  clientSecret,
   redirectUrl,
   serverUrl,
   code,
@@ -68,6 +70,9 @@ export const exchangeCode = async ({
           code,
           redirect_uri: redirectUrl,
           client_id: clientId,
+          ...(clientSecret === undefined
+            ? {}
+            : { client_secret: clientSecret }),
           code_verifier: codeVerifier,
           resource: serverUrl,
         }),

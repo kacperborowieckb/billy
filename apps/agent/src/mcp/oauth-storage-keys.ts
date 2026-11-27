@@ -32,3 +32,6 @@ export const connectionRecordKey = (catalogId: string) =>
 
 export const isConnectionRecorded = (stored: unknown) =>
   Option.isSome(decodeRecorded(stored));
+
+export const latestExchangeKey = (catalogId: string) =>
+  `latest-exchange:${catalogId}`;

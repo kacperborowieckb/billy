@@ -43,7 +43,14 @@ export class SealedOAuthProvider implements AgentMcpOAuthProvider {
 
   async clientInformation() {
     const client = await this.credentials.client(this.catalogId);
-    return client === undefined ? undefined : { client_id: client.client_id };
+    return client === undefined
+      ? undefined
+      : {
+          client_id: client.client_id,
+          ...(client.client_secret === undefined
+            ? {}
+            : { client_secret: client.client_secret }),
+        };
   }
 
   tokens() {

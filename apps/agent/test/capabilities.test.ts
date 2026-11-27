@@ -42,7 +42,7 @@ describe("Capabilities in the system prompt", () => {
     expect(prompt).toContain("never from your earlier replies");
     expect(prompt).toContain("You cannot open links");
     expect(prompt).toContain(
-      "A call that changes a service waits for the Owner to approve it"
+      "In a Turn that service output made untrusted, such a call may wait for the Owner to approve it"
     );
     expect(prompt).not.toContain("Only reading tools run now");
   });

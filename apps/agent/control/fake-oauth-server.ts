@@ -15,6 +15,7 @@ export const createFakeOAuthServer = () => {
     supportsPkce: true,
     sendsIssuer: true,
     tokenLoginRefused: false,
+    requiresClientSecret: false,
     withRefreshToken: true,
     withAccountName: true,
     requiresToken: false,
@@ -72,6 +73,8 @@ export const createFakeOAuthServer = () => {
     tokenRequests.push(Object.fromEntries(form));
     if (
       state.tokenLoginRefused ||
+      (state.requiresClientSecret &&
+        form.get("client_secret") !== fakeOAuthSecrets.clientSecret) ||
       form.get("grant_type") !== "authorization_code" ||
       form.get("code") !== fakeOAuthSecrets.authorizationCode
     ) {
@@ -91,7 +94,7 @@ export const createFakeOAuthServer = () => {
   const answer = async (request: Request) => {
     if (
       request.method === "POST" &&
-      new URL(request.url).pathname === "/token"
+      new URL(request.url).pathname.endsWith("/token")
     ) {
       return answerToken(request);
     }
@@ -162,6 +165,9 @@ export const createFakeOAuthServer = () => {
     sendIssuer: (sent: boolean) => {
       state.sendsIssuer = sent;
     },
+    requireClientSecret: (required: boolean) => {
+      state.requiresClientSecret = required;
+    },
     refuseCodes: (refused: boolean) => {
       state.tokenLoginRefused = refused;
     },
@@ -186,6 +192,7 @@ export const createFakeOAuthServer = () => {
       state.layout = "root";
       state.sendsIssuer = true;
       state.tokenLoginRefused = false;
+      state.requiresClientSecret = false;
       state.withRefreshToken = true;
       state.withAccountName = true;
       state.requiresToken = false;

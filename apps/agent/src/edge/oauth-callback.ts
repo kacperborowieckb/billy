@@ -2,6 +2,7 @@ import { Effect, Option, Schema } from "effect";
 
 import type { McpCallbackOutcome } from "../mcp/mcp-hub-contract.ts";
 import {
+  alreadyConnectedPage,
   connectRefusedPage,
   escapeHtml,
   notAvailablePage,
@@ -46,6 +47,9 @@ const pageFor = (outcome: McpCallbackOutcome) => {
         "Not connected",
         `<p>The sign-in with ${escapeHtml(outcome.serverName)} did not finish. Ask Billy to connect it again if you want to.</p>`
       );
+    }
+    case "already_connected": {
+      return alreadyConnectedPage();
     }
     case "failed": {
       return notAvailablePage();

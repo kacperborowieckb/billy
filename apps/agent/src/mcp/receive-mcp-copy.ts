@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 
 import { Channel } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
+import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { OwnerChannelConversation } from "../personal-agent/owner-channel-conversation.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
@@ -65,19 +66,28 @@ export const receiveMcpConnected = Effect.fnUntraced(
     if (entry === undefined) {
       return;
     }
+    const { database } = yield* AgentStorage;
     const journal = yield* Journal;
+    const connections = yield* McpConnections;
     const eventId = `mcp-connection-added:${completionId}`;
-    if ((yield* journal.readForEvent(eventId)).length > 0) {
+    const isFirstTime = yield* database.transaction(() =>
+      Effect.gen(function* recordCompletion() {
+        if ((yield* journal.readForEvent(eventId)).length > 0) {
+          return false;
+        }
+        yield* connections.replaceTools(catalogId, tools);
+        yield* connections.setState(catalogId, "ready");
+        yield* journal.append({
+          _tag: "McpConnectionAdded",
+          eventId,
+          catalogId,
+        });
+        return true;
+      })
+    );
+    if (!isFirstTime) {
       return;
     }
-    const connections = yield* McpConnections;
-    yield* connections.replaceTools(catalogId, tools);
-    yield* connections.setState(catalogId, "ready");
-    yield* journal.append({
-      _tag: "McpConnectionAdded",
-      eventId,
-      catalogId,
-    });
     const conversation = yield* (yield* OwnerChannelConversation).current;
     if (conversation !== undefined) {
       const channel = yield* Channel;

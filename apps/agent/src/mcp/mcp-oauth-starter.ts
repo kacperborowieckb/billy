@@ -119,6 +119,8 @@ export class McpOAuthStarter {
         routingId: this.dependencies.routingId,
         sealVerifier: (nonce, verifier) =>
           credentials.sealVerifier(entry.catalogId, nonce, verifier),
+        sealClientSecret: (nonce, secret) =>
+          credentials.sealClientSecret(entry.catalogId, nonce, secret),
         nowMillis: nowMillis(),
         lifetimeMillis: oauthStartLifetimeMillis,
       });

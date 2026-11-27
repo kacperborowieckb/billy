@@ -66,7 +66,7 @@ export interface McpOAuthCallback {
 export type McpCallbackOutcome =
   | { readonly outcome: "connected"; readonly serverName: string }
   | {
-      readonly outcome: "denied" | "failed";
+      readonly outcome: "denied" | "failed" | "already_connected";
       readonly serverName: string;
     }
   | { readonly outcome: "not_started" };
