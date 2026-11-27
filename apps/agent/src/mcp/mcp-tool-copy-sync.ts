@@ -42,11 +42,12 @@ export class McpToolCopySync {
 
   async sendWhenChanged(catalogId: string) {
     const copies = this.dependencies.copiesOf(catalogId);
-    if (this.sent.get(catalogId) === JSON.stringify(copies)) {
+    const serialized = JSON.stringify(copies);
+    if (this.sent.get(catalogId) === serialized) {
       return;
     }
     await this.dependencies.deliver(catalogId, copies);
-    this.remember(catalogId);
+    this.sent.set(catalogId, serialized);
   }
 
   private async syncOne(catalogId: string) {

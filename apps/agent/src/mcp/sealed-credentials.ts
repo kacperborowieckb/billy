@@ -19,7 +19,7 @@ export const StoredClientSchema = Schema.Struct({
   client_secret: Schema.optionalKey(Schema.String),
   client_auth_method: Schema.optionalKey(Schema.Literals(["basic", "post"])),
   redirectUrl: Schema.String,
-  tokenEndpoint: Schema.String,
+  tokenEndpoint: Schema.optionalKey(Schema.String),
 });
 
 export type StoredClient = typeof StoredClientSchema.Type;

@@ -142,6 +142,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   private readonly calls = new McpCallGateway({
     catalog: this.catalog,
+    entryQueue: this.entryQueue,
     ledger: this.ledger,
     connector: this.connector,
     ownerId: () => this.ownerName(),
@@ -152,6 +153,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
   private readonly setup = new McpConnectionSetup({
     catalog: this.catalog,
     entryQueue: this.entryQueue,
+    health: this.health,
     connector: this.connector,
     ledger: this.ledger,
     toolCopies: this.toolCopies,

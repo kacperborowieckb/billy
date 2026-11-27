@@ -49,6 +49,9 @@ export const createFakeRefreshGrant = (initialRefreshToken: string) => {
 
   return {
     answer,
+    accept: (token: string) => {
+      state.validTokens.add(token);
+    },
     controls: {
       rotateRefreshTokens: (rotate: boolean) => {
         state.rotates = rotate;

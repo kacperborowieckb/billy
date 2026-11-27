@@ -63,6 +63,9 @@ export const createFakeOAuthServer = () => {
     const form = new URLSearchParams(await request.text());
     tokenRequests.push(Object.fromEntries(form));
     await state.tokenHold;
+    if (state.requiresClientSecret && !hasClientSecret(request, form)) {
+      return Response.json({ error: "invalid_client" }, { status: 401 });
+    }
     if (form.get("grant_type") === "refresh_token") {
       return refresh.answer(form, () => {
         state.exchanges += 1;
@@ -78,6 +81,7 @@ export const createFakeOAuthServer = () => {
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     }
     state.exchanges += 1;
+    refresh.accept(fakeOAuthSecrets.refreshToken);
     return Response.json({
       access_token: currentAccessToken(),
       token_type: "Bearer",

@@ -1,3 +1,4 @@
+import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
@@ -6,6 +7,7 @@ import type { McpServerConnector } from "./mcp-server-connector.ts";
 
 export interface McpCallGatewayDependencies {
   readonly catalog: McpCatalog;
+  readonly entryQueue: KeyedQueue;
   readonly ledger: McpConnectionLedger;
   readonly connector: McpServerConnector;
   readonly ownerId: () => string;
@@ -22,17 +24,22 @@ export class McpCallGateway {
     this.dependencies = dependencies;
   }
 
-  private async signInFailure(catalogId: string): Promise<McpCallOutcome> {
-    const { ledger, tellNeedsSignIn, ownerId } = this.dependencies;
-    await tellNeedsSignIn(ownerId(), catalogId);
-    const lastError = await ledger.lastErrorOf(catalogId);
-    return {
-      _tag: "Failed",
-      reason:
-        lastError?.reason === "insufficient_scope"
-          ? "insufficient_scope"
-          : "needs_sign_in",
-    };
+  private signInFailure(catalogId: string): Promise<McpCallOutcome> {
+    const { entryQueue, ledger, tellNeedsSignIn, ownerId } = this.dependencies;
+    return entryQueue.run(catalogId, async (): Promise<McpCallOutcome> => {
+      if ((await ledger.stateOf(catalogId)) !== "needs_sign_in") {
+        return { _tag: "Failed", reason: "failed" };
+      }
+      await tellNeedsSignIn(ownerId(), catalogId);
+      const lastError = await ledger.lastErrorOf(catalogId);
+      return {
+        _tag: "Failed",
+        reason:
+          lastError?.reason === "insufficient_scope"
+            ? "insufficient_scope"
+            : "needs_sign_in",
+      };
+    });
   }
 
   async callTool(request: McpCallRequest): Promise<McpCallOutcome> {

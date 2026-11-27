@@ -73,6 +73,13 @@ export class McpConnectionHealth {
     );
   }
 
+  refreshWhileQueueHeld(
+    entry: McpCatalogEntry,
+    ownerId: string
+  ): Promise<AccessOutcome> {
+    return this.refreshInQueue(entry, ownerId, undefined);
+  }
+
   async storedAccessToken(
     entry: McpCatalogEntry,
     ownerId: string
@@ -157,7 +164,10 @@ export class McpConnectionHealth {
       return token(tokens.access_token);
     }
     const client = await credentials.client(catalogId);
-    if (tokens.refresh_token === undefined || client === undefined) {
+    if (
+      tokens.refresh_token === undefined ||
+      client?.tokenEndpoint === undefined
+    ) {
       return this.enterNeedsSignIn(entry, ownerId, {
         phase: "refresh",
         reason: "no_refresh_token",
@@ -166,6 +176,7 @@ export class McpConnectionHealth {
     const outcome = await refreshTokens({
       send: this.dependencies.send,
       client,
+      tokenEndpoint: client.tokenEndpoint,
       refreshToken: tokens.refresh_token,
       serverUrl: entry.serverUrl,
     });

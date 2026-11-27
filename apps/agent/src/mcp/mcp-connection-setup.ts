@@ -3,6 +3,7 @@ import type { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
+import type { McpConnectionHealth } from "./mcp-connection-health.ts";
 import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
 import type { McpAddConnectionOutcome } from "./mcp-hub-contract.ts";
 import type { McpCompletion } from "./mcp-oauth-completer.ts";
@@ -14,6 +15,7 @@ type PersonalAgentStub = Awaited<ReturnType<typeof personalAgentFor>>;
 export interface McpConnectionSetupDependencies {
   readonly catalog: McpCatalog;
   readonly entryQueue: KeyedQueue;
+  readonly health: McpConnectionHealth;
   readonly connector: McpServerConnector;
   readonly ledger: McpConnectionLedger;
   readonly toolCopies: McpToolCopySync;
@@ -97,12 +99,17 @@ export class McpConnectionSetup {
     catalogId: string,
     connectTimeoutMillis: number
   ): Promise<McpAddConnectionOutcome> {
-    const { catalog, connector, ledger, ownerId, agentOf } = this.dependencies;
+    const { catalog, connector, ledger, ownerId, agentOf, health } =
+      this.dependencies;
     const entry = mcpEntryOf(catalog, catalogId);
     if (entry === undefined) {
       return { outcome: "unknown_catalog_entry" };
     }
     if ((await ledger.stateOf(catalogId)) === "needs_sign_in") {
+      return { outcome: "failed" };
+    }
+    const fresh = await health.refreshWhileQueueHeld(entry, ownerId());
+    if (fresh._tag === "SignInRequired") {
       return { outcome: "failed" };
     }
     const agent = await agentOf(ownerId());

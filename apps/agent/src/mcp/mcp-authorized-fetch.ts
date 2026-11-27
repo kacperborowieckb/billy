@@ -17,11 +17,22 @@ export interface McpAuthorizedFetchInput {
   readonly queueWaitsOnConnect: () => boolean;
 }
 
-const insufficientScopePattern = /error="?insufficient_scope"?/u;
+const challengeParameterPattern =
+  /(?<name>[\w-]+)\s*=\s*(?:"(?<quoted>(?:[^"\\]|\\.)*)"|(?<bare>[^\s,"]*))/gu;
 
 const isInsufficientScope = (response: Response) =>
   response.status === 403 &&
-  insufficientScopePattern.test(response.headers.get("WWW-Authenticate") ?? "");
+  [
+    ...(response.headers.get("WWW-Authenticate") ?? "").matchAll(
+      challengeParameterPattern
+    ),
+  ].some(({ groups }) => {
+    const { name, quoted, bare } = groups ?? {};
+    return (
+      name?.toLowerCase() === "error" &&
+      (quoted ?? bare) === "insufficient_scope"
+    );
+  });
 
 const tokenFrom = (outcome: AccessOutcome) => {
   if (outcome._tag === "SignInRequired") {
@@ -92,7 +103,7 @@ export const authorizedFetch =
       return first;
     }
     await first.body?.cancel();
-    if (holdsQueue) {
+    if (queueWaitsOnConnect()) {
       throw new McpRefreshUnavailableError("The MCP server refused the tokens");
     }
     const recovered = tokenFrom(

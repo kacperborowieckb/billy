@@ -146,7 +146,6 @@ describe("one refresh at a time", () => {
           expires_in: 1,
         });
       });
-      oauth.expireAccessToken();
 
       expect(await tagOf(searchOf(ownerId))).toBe("Result");
       expect(oauth.refreshRequests).toHaveLength(1);

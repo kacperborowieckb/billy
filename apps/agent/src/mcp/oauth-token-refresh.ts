@@ -8,6 +8,7 @@ import type { StoredClient, StoredTokens } from "./sealed-credentials.ts";
 export interface TokenRefreshInput {
   readonly send: FetchFunction;
   readonly client: StoredClient;
+  readonly tokenEndpoint: string;
   readonly refreshToken: string;
   readonly serverUrl: string;
 }
@@ -104,7 +105,7 @@ export const refreshTokens = async (
   try {
     answer = await withinDeadline(async (signal) => {
       const response = await input.send(
-        input.client.tokenEndpoint,
+        input.tokenEndpoint,
         requestOf(input, signal)
       );
       return { status: response.status, text: await response.text() };
