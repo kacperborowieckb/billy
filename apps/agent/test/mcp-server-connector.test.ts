@@ -8,46 +8,65 @@ interface FakeConnection {
   close: () => Promise<void>;
 }
 
-const fakeSdkManager = (
-  closeOf: (id: string) => Promise<void> = () => Promise.resolve()
-) => {
+interface FakeBehavior {
+  readonly closeOf?: (id: string) => Promise<void>;
+  readonly connectOf?: (id: string) => Promise<void>;
+}
+
+const fakeSdkManager = ({ closeOf, connectOf }: FakeBehavior = {}) => {
   const mcpConnections: Record<string, FakeConnection> = {};
+  const rows = new Set<string>();
   const registered: string[] = [];
   const removed: string[] = [];
   const closeAttempts: string[] = [];
+  const closeConnection = async (id: string) => {
+    closeAttempts.push(id);
+    const connection = mcpConnections[id];
+    if (connection === undefined) {
+      throw new Error("no such connection");
+    }
+    try {
+      await connection.close();
+    } finally {
+      Reflect.deleteProperty(mcpConnections, id);
+    }
+  };
   const manager = {
     mcpConnections,
     registerServer: (id: string) => {
       registered.push(id);
+      rows.add(id);
       mcpConnections[id] = {
         connectionState: "ready",
-        close: () => closeOf(id),
+        close: () => closeOf?.(id) ?? Promise.resolve(),
       };
       return Promise.resolve(id);
     },
-    connectToServer: () => Promise.resolve({ state: "connected" }),
+    connectToServer: async (id: string) => {
+      await connectOf?.(id);
+      return { state: "connected" };
+    },
     discoverIfConnected: () => Promise.resolve({ success: true }),
     listTools: () => [],
     callTool: () => Promise.resolve({ content: [], isError: false }),
-    closeConnection: async (id: string) => {
-      closeAttempts.push(id);
-      const connection = mcpConnections[id];
-      if (connection === undefined) {
-        throw new Error("no such connection");
-      }
-      try {
-        await connection.close();
-      } finally {
-        Reflect.deleteProperty(mcpConnections, id);
-      }
-    },
-    removeServer: (id: string) => {
+    closeConnection,
+    removeServer: async (id: string) => {
       removed.push(id);
-      return Promise.resolve();
+      if (mcpConnections[id] !== undefined) {
+        try {
+          await closeConnection(id);
+        } catch {
+          rows.delete(id);
+        }
+      }
+      rows.delete(id);
     },
   };
-  return { manager, registered, removed, closeAttempts };
+  return { manager, rows, registered, removed, closeAttempts };
 };
+
+const hangUntil = (release: Promise<undefined>) => () =>
+  release as Promise<void>;
 
 const storageStub = (initial: Record<string, unknown> = {}) => {
   const stored = new Map(Object.entries(initial));
@@ -57,6 +76,7 @@ const storageStub = (initial: Record<string, unknown> = {}) => {
       stored.set(key, value);
       return Promise.resolve();
     },
+    delete: (key: string) => Promise.resolve(stored.delete(key)),
     stored,
   } as unknown as DurableObjectStorage & {
     stored: Map<string, unknown>;
@@ -148,47 +168,103 @@ describe("the connector of a Connection that is removed", () => {
     expect(await calling).toEqual({ _tag: "Failed", reason: "failed" });
     expect(registered).toEqual([]);
   });
-
-  it("gives up a close that never ends when the deadline comes", async () => {
-    const { manager } = fakeSdkManager(
-      () => Promise.withResolvers<undefined>().promise as Promise<void>
-    );
-    const connector = connectorOver(manager);
-    await callOf(connector, connector.epochOf("c"));
-
-    await expect(connector.forget("c", 20)).resolves.toBeUndefined();
-  });
 });
 
-describe("a close that hangs past its deadline", () => {
-  it("lets a reconnect register under a new SDK id, and the late cleanup of the old id leaves the new connection registered", async () => {
-    const lateClose = Promise.withResolvers<undefined>();
-    const { manager, registered, removed, closeAttempts } = fakeSdkManager(
-      (id) =>
-        id === "c:0" ? (lateClose.promise as Promise<void>) : Promise.resolve()
+describe("one owner for each SDK operation", () => {
+  it("removes the record of a close that hangs past its deadline, also after repeated disconnects", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager, rows, removed } = fakeSdkManager({
+      closeOf: hangUntil(release.promise),
+    });
+    const storage = storageStub();
+    const connector = connectorOver(manager, storage);
+
+    await callOf(connector, connector.epochOf("c"));
+    await connector.forget("c", 20);
+    await callOf(connector, connector.epochOf("c"));
+    await connector.forget("c", 20);
+    expect(removed).toEqual(expect.arrayContaining(["c:0", "c:1"]));
+    release.resolve(undefined);
+
+    await vi.waitFor(() => expect(rows.size).toBe(0));
+    await vi.waitFor(() =>
+      expect(storage.stored.get("sdk-servers:c")).toBeUndefined()
     );
+  });
+
+  it("lets a reconnect register under a new SDK id after a hung close, and the late settle leaves the new connection registered", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager, registered, rows } = fakeSdkManager({
+      closeOf: (id) =>
+        id === "c:0" ? (release.promise as Promise<void>) : Promise.resolve(),
+    });
     const storage = storageStub();
     const connector = connectorOver(manager, storage);
     await callOf(connector, connector.epochOf("c"));
 
     await connector.forget("c", 20);
     const reconnected = await callOf(connector, connector.epochOf("c"));
-    lateClose.resolve(undefined);
-    await vi.waitFor(() => expect(removed).toContain("c:0"));
+    release.resolve(undefined);
+    await vi.waitFor(() => expect(rows).toEqual(new Set(["c:1"])));
     const afterLateSettle = await callOf(connector, connector.epochOf("c"));
 
     expect(reconnected._tag).toBe("Result");
     expect(afterLateSettle._tag).toBe("Result");
     expect(Object.keys(manager.mcpConnections)).toEqual(["c:1"]);
     expect(registered).toEqual(["c:0", "c:1"]);
-    expect(closeAttempts).toEqual(["c:0"]);
-    expect(removed).not.toContain("c:1");
     expect(storage.stored.get("sdk-servers:c")).toEqual(["c:1"]);
   });
-});
 
-describe("the SDK server records after a restart", () => {
-  it("removes the records of old ids through the public API and keeps the current one", async () => {
+  it("retires a connect that passes its deadline, so a reconnect registers its own id and the late settle of the old connect does not fail it", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager, registered, rows } = fakeSdkManager({
+      connectOf: (id) =>
+        id === "c:0" ? (release.promise as Promise<void>) : Promise.resolve(),
+    });
+    const connector = connectorOver(manager);
+    const short = { ...request, connectTimeoutMillis: 20 };
+
+    const timedOut = await connector.callTool(entry as never, "owner", {
+      request: short,
+      epoch: connector.epochOf("c"),
+    });
+    const reconnected = await callOf(connector, connector.epochOf("c"));
+    release.resolve(undefined);
+    await vi.waitFor(() => expect(rows).toEqual(new Set(["c:1"])));
+    const afterLateSettle = await callOf(connector, connector.epochOf("c"));
+
+    expect(timedOut).toEqual({ _tag: "Failed", reason: "timed_out" });
+    expect(reconnected._tag).toBe("Result");
+    expect(afterLateSettle._tag).toBe("Result");
+    expect(registered).toEqual(["c:0", "c:1"]);
+    expect(Object.keys(manager.mcpConnections)).toEqual(["c:1"]);
+  });
+
+  it("lets a late failure of a retired connect fail only itself", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager } = fakeSdkManager({
+      connectOf: (id) =>
+        id === "c:0"
+          ? (release.promise.then(() => {
+              throw new Error("late failure");
+            }) as Promise<void>)
+          : Promise.resolve(),
+    });
+    const connector = connectorOver(manager);
+    await connector.callTool(entry as never, "owner", {
+      request: { ...request, connectTimeoutMillis: 20 },
+      epoch: connector.epochOf("c"),
+    });
+    const reconnected = await callOf(connector, connector.epochOf("c"));
+
+    release.resolve(undefined);
+    const afterLateFailure = await callOf(connector, connector.epochOf("c"));
+
+    expect(reconnected._tag).toBe("Result");
+    expect(afterLateFailure._tag).toBe("Result");
+  });
+
+  it("removes every tracked id that is not current when a connect starts, through the public API", async () => {
     const { manager, registered, removed } = fakeSdkManager();
     const storage = storageStub({ "sdk-servers:c": ["c:0", "c:1", "c:2"] });
     const connector = connectorOver(manager, storage);
@@ -197,7 +273,9 @@ describe("the SDK server records after a restart", () => {
 
     expect(outcome._tag).toBe("Result");
     expect(registered).toEqual(["c:0"]);
-    expect(removed.toSorted()).toEqual(["c:1", "c:2"]);
-    expect(storage.stored.get("sdk-servers:c")).toEqual(["c:0"]);
+    await vi.waitFor(() => expect(removed.toSorted()).toEqual(["c:1", "c:2"]));
+    await vi.waitFor(() =>
+      expect(storage.stored.get("sdk-servers:c")).toEqual(["c:0"])
+    );
   });
 });

@@ -15,6 +15,8 @@ import { within } from "./mcp-within.ts";
 import type { SealedCredentials } from "./sealed-credentials.ts";
 import { SealedOAuthProvider } from "./sealed-oauth-provider.ts";
 
+const closeDeadlineMillis = 3000;
+
 export interface McpServerConnectorDependencies {
   readonly manager: LazyMcpClientManager;
   readonly storage: DurableObjectStorage;
@@ -34,11 +36,7 @@ export interface ConnectOptions {
 export class McpServerConnector {
   private readonly dependencies: McpServerConnectorDependencies;
 
-  private readonly connecting = new Map<string, Promise<void>>();
-
   private readonly queueHolds = new McpQueueHolds();
-
-  private readonly epochs = new Map<string, number>();
 
   private readonly servers: McpSdkServers;
 
@@ -51,15 +49,11 @@ export class McpServerConnector {
   }
 
   epochOf(catalogId: string) {
-    return this.epochs.get(catalogId) ?? 0;
-  }
-
-  private currentSdkId(catalogId: string) {
-    return sdkIdOf(catalogId, this.epochOf(catalogId));
+    return this.servers.epochOf(catalogId);
   }
 
   isLive(catalogId: string) {
-    return this.servers.isReady(this.currentSdkId(catalogId));
+    return this.servers.isReady(this.servers.currentId(catalogId));
   }
 
   private async registerAndConnect(
@@ -75,7 +69,7 @@ export class McpServerConnector {
     if (this.epochOf(catalogId) !== epoch) {
       throw new Error("The MCP Connection was removed before it connected");
     }
-    await this.servers.dropRowsWithoutConnection(catalogId, sdkId);
+    await this.servers.dropStale(catalogId, sdkId);
     await this.servers.track(catalogId, sdkId);
     await manager.registerServer(sdkId, {
       url: entry.serverUrl,
@@ -105,27 +99,9 @@ export class McpServerConnector {
       throw new Error("The MCP server did not list its tools");
     }
     if (this.epochOf(catalogId) !== epoch) {
-      await this.servers.close(catalogId, sdkId);
+      await this.servers.closeWithin(catalogId, sdkId, closeDeadlineMillis);
       throw new Error("The MCP Connection was removed while it connected");
     }
-  }
-
-  private connectOnce(entry: McpCatalogEntry, ownerId: string, epoch: number) {
-    const existing = this.connecting.get(entry.catalogId);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const started: Promise<void> = this.registerAndConnect(
-      entry,
-      ownerId,
-      epoch
-    ).finally(() => {
-      if (this.connecting.get(entry.catalogId) === started) {
-        this.connecting.delete(entry.catalogId);
-      }
-    });
-    this.connecting.set(entry.catalogId, started);
-    return started;
   }
 
   ensureConnected(
@@ -162,10 +138,16 @@ export class McpServerConnector {
       return "connected";
     }
     const connected = await within(
-      this.connectOnce(entry, ownerId, epoch),
+      this.servers.connectOnce(sdkIdOf(entry.catalogId, epoch), () =>
+        this.registerAndConnect(entry, ownerId, epoch)
+      ),
       connectTimeoutMillis
     );
-    return Option.isSome(connected) ? "connected" : "timed_out";
+    if (Option.isSome(connected)) {
+      return "connected";
+    }
+    this.servers.advanceFrom(entry.catalogId, epoch);
+    return "timed_out";
   }
 
   async refreshTools(
@@ -181,7 +163,7 @@ export class McpServerConnector {
         return "timed_out";
       }
       const discovered = await this.dependencies.manager.discoverIfConnected(
-        this.currentSdkId(entry.catalogId)
+        this.servers.currentId(entry.catalogId)
       );
       return discovered?.success === true ? "refreshed" : "failed";
     } catch {
@@ -190,13 +172,13 @@ export class McpServerConnector {
   }
 
   close(catalogId: string) {
-    return this.servers.close(catalogId, this.currentSdkId(catalogId));
+    return this.closeWhileQueueHeld(catalogId, closeDeadlineMillis);
   }
 
   closeWhileQueueHeld(catalogId: string, deadlineMillis: number) {
     return this.closeSdkServerWhileQueueHeld(
       catalogId,
-      this.currentSdkId(catalogId),
+      this.servers.currentId(catalogId),
       deadlineMillis
     );
   }
@@ -212,9 +194,9 @@ export class McpServerConnector {
   }
 
   async forget(catalogId: string, deadlineMillis: number) {
-    const closedSdkId = this.currentSdkId(catalogId);
-    this.epochs.set(catalogId, this.epochOf(catalogId) + 1);
-    const running = this.connecting.get(catalogId);
+    const closedSdkId = this.servers.currentId(catalogId);
+    this.servers.advanceFrom(catalogId, this.epochOf(catalogId));
+    const running = this.servers.connectOf(closedSdkId);
     if (running !== undefined) {
       await within(
         running.catch(() => null),
@@ -230,7 +212,7 @@ export class McpServerConnector {
 
   toolCopiesOf(catalogId: string) {
     return this.dependencies.manager
-      .listTools({ serverId: this.currentSdkId(catalogId) })
+      .listTools({ serverId: this.servers.currentId(catalogId) })
       .map(toolCopyOf);
   }
 
@@ -254,7 +236,7 @@ export class McpServerConnector {
       const result = await within(
         this.dependencies.manager.callTool(
           {
-            serverId: this.currentSdkId(request.catalogId),
+            serverId: this.servers.currentId(request.catalogId),
             name: request.tool,
             arguments: { ...request.arguments },
           },
