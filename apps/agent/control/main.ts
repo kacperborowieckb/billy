@@ -22,6 +22,7 @@ import {
   writeFeatureMap,
 } from "./feature-map.ts";
 import { hitRateSourceOf, readHitRate } from "./hit-rate.ts";
+import { runMcpFlow } from "./mcp-flow/run-mcp-flow.ts";
 import {
   addOwner,
   localWorkerUrl,
@@ -141,6 +142,12 @@ const request = Command.make(
   )
 );
 
+const mcpFlow = Command.make("mcp-flow", {}, () => runMcpFlow).pipe(
+  Command.withDescription(
+    "Prove MCP Connections on the local Worker with the Notion catalog entry: connect through the Edge, find, read, propose a create, Details, Approve, disconnect, and read the Journal. Telegram, the model, and Notion are fakes. No network."
+  )
+);
+
 const evalCommand = Command.make(
   "eval",
   {
@@ -220,6 +227,7 @@ const control = Command.make("control").pipe(
     dev,
     owner,
     request,
+    mcpFlow,
     evalCommand,
     map,
     bundle,

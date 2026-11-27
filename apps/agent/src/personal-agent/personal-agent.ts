@@ -8,7 +8,7 @@ import type { Channel } from "../channels/channel.ts";
 import type { Event } from "../event.ts";
 import type { McpCatalog } from "../mcp/mcp-catalog.ts";
 import type { McpHubPort } from "../mcp/mcp-hub-contract.ts";
-import { mcpCatalogFor } from "../mcp/mcp-test-catalog.ts";
+import { mcpCatalogFor } from "../mcp/mcp-production-catalog.ts";
 import type { McpToolCopy } from "../mcp/mcp-tool-copy.ts";
 import {
   receiveMcpConnected,

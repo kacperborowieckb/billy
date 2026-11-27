@@ -1,7 +1,13 @@
+const isRevocationForm = async (request: Request) => {
+  const form = new URLSearchParams(await request.text());
+  return !form.has("grant_type") && form.has("token");
+};
+
 export const createFakeRevocationEndpoint = () => {
   const requests: Record<string, string>[] = [];
   const state = {
     advertised: true,
+    atTokenEndpoint: false,
     hold: Promise.resolve(undefined) as Promise<undefined>,
     status: undefined as number | undefined,
     bodyNeverEnds: false,
@@ -19,11 +25,28 @@ export const createFakeRevocationEndpoint = () => {
 
   return {
     answer,
-    isRevocation: (request: Request) =>
-      request.method === "POST" &&
-      new URL(request.url).pathname.endsWith("/revoke"),
-    isAdvertised: () => state.advertised,
+    takes: async (request: Request) => {
+      const { pathname } = new URL(request.url);
+      if (request.method !== "POST") {
+        return false;
+      }
+      return (
+        pathname.endsWith("/revoke") ||
+        (state.atTokenEndpoint &&
+          pathname.endsWith("/token") &&
+          (await isRevocationForm(request.clone())))
+      );
+    },
+    metadataOf: (issuer: string) =>
+      state.advertised
+        ? {
+            revocation_endpoint: `${issuer}/${state.atTokenEndpoint ? "token" : "revoke"}`,
+          }
+        : {},
     exposed: {
+      revokeAtTokenEndpoint: (enabled: boolean) => {
+        state.atTokenEndpoint = enabled;
+      },
       revocationRequests: requests,
       advertiseRevocation: (advertised: boolean) => {
         state.advertised = advertised;
@@ -42,6 +65,7 @@ export const createFakeRevocationEndpoint = () => {
     },
     reset: () => {
       state.advertised = true;
+      state.atTokenEndpoint = false;
       state.hold = Promise.resolve(undefined);
       state.status = undefined;
       state.bodyNeverEnds = false;

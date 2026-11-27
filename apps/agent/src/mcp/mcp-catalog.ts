@@ -4,6 +4,8 @@ import { riskClasses } from "../approval/risk-class.ts";
 import type { RiskClass } from "../approval/risk-class.ts";
 import {
   summaryFieldPattern,
+  summaryOptionalPartPattern,
+  summaryPathsOf,
   summaryPlaceholderPattern,
 } from "./mcp-summary-template.ts";
 
@@ -93,6 +95,27 @@ export type McpCatalog = readonly McpCatalogEntry[];
 
 const decodeEntry = Schema.decodeUnknownResult(McpCatalogEntrySchema);
 
+const summaryProblemsOf = (catalogId: string, tool: McpCatalogTool) => {
+  const template = tool.summary ?? "";
+  const problems = [...template.matchAll(summaryPlaceholderPattern)]
+    .map(([, placeholder]) => placeholder ?? "")
+    .filter((placeholder) =>
+      summaryPathsOf(placeholder).some(
+        (path) => !summaryFieldPattern.test(path)
+      )
+    )
+    .map(
+      (placeholder) =>
+        `${catalogId} has a summary template for ${tool.name} with the invalid placeholder {${placeholder}}`
+    );
+  if (/[[\]]/u.test(template.replaceAll(summaryOptionalPartPattern, ""))) {
+    problems.push(
+      `${catalogId} has a summary template for ${tool.name} with an unmatched bracket`
+    );
+  }
+  return problems;
+};
+
 export const mcpCatalogProblems = (entries: readonly unknown[]) => {
   const problems: string[] = [];
   const seen = new Set<string>();
@@ -113,15 +136,7 @@ export const mcpCatalogProblems = (entries: readonly unknown[]) => {
         problems.push(`${catalogId} lists the tool ${tool.name} twice`);
       }
       names.add(tool.name);
-      for (const [, field] of (tool.summary ?? "").matchAll(
-        summaryPlaceholderPattern
-      )) {
-        if (field === undefined || !summaryFieldPattern.test(field)) {
-          problems.push(
-            `${catalogId} has a summary template for ${tool.name} with the invalid placeholder {${field ?? ""}}`
-          );
-        }
-      }
+      problems.push(...summaryProblemsOf(catalogId, tool));
       if (tool.resultIds !== undefined && tool.riskClass !== "read") {
         problems.push(
           `${catalogId} declares result ids for ${tool.name}, which is not a read tool`

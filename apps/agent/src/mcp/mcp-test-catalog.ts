@@ -1,5 +1,4 @@
-import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
-import { mcpCatalogProblems } from "./mcp-catalog.ts";
+import type { McpCatalogEntry } from "./mcp-catalog.ts";
 
 export const testMcpCatalogId = "test_server";
 
@@ -47,19 +46,3 @@ export const testMcpCatalogEntry = (serverUrl: string): McpCatalogEntry => ({
     { name: "wipe_workspace", riskClass: "blocked" },
   ],
 });
-
-export const productionMcpCatalog: McpCatalog = [];
-
-export const mcpCatalogFor = (env: {
-  readonly MCP_TEST_SERVER_URL: string;
-}): McpCatalog => {
-  const catalog =
-    env.MCP_TEST_SERVER_URL === ""
-      ? productionMcpCatalog
-      : [...productionMcpCatalog, testMcpCatalogEntry(env.MCP_TEST_SERVER_URL)];
-  const problems = mcpCatalogProblems(catalog);
-  if (problems.length > 0) {
-    throw new Error(`The MCP Catalog is invalid: ${problems.join("; ")}`);
-  }
-  return catalog;
-};

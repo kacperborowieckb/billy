@@ -2,12 +2,16 @@ import { Predicate } from "effect";
 
 export const summaryPlaceholderPattern = /\{(?<field>[^{}]*)\}/gu;
 
+export const summaryOptionalPartPattern = /\[(?<part>[^[\]]*)\]/gu;
+
 export const summaryFieldPattern =
   /^[A-Za-z][A-Za-z0-9_]{0,31}(?:\.[A-Za-z][A-Za-z0-9_]{0,31})*$/u;
 
 const maxShownValueLength = 60;
 
 const unknownValue = "...";
+
+export const summaryPathsOf = (placeholder: string) => placeholder.split("|");
 
 const wellFormedPrefix = (text: string, length: number) => {
   const prefix = text.slice(0, length);
@@ -31,24 +35,62 @@ export const shownScalar = (value: string | number | boolean) =>
     ? JSON.stringify(shortened(oneLine(value)))
     : String(value);
 
-const valueAt = (value: unknown, path: string): unknown => {
-  let current = value;
+interface FoundValue {
+  readonly value: unknown;
+  readonly others: number;
+}
+
+const firstOf = ({ value, others }: FoundValue): FoundValue =>
+  Array.isArray(value)
+    ? { value: value[0], others: others + Math.max(0, value.length - 1) }
+    : { value, others };
+
+const memberOf = (value: unknown, key: string) =>
+  typeof value === "object" && value !== null && Object.hasOwn(value, key)
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+
+const valueAt = (args: unknown, path: string) => {
+  let found: FoundValue = { value: args, others: 0 };
   for (const key of path.split(".")) {
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      Array.isArray(current) ||
-      !Object.hasOwn(current, key)
-    ) {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[key];
+    const { value, others } = firstOf(found);
+    found = { value: memberOf(value, key), others };
   }
-  return current;
+  return firstOf(found);
 };
 
+const withOthers = (shown: string, others: number) =>
+  others === 0 ? shown : `${shown} and ${others} more`;
+
+const filledPlaceholder = (placeholder: string, args: unknown) => {
+  const found = summaryPathsOf(placeholder).map((path) => valueAt(args, path));
+  for (const { value, others } of found) {
+    if (isScalar(value)) {
+      return withOthers(shownScalar(value as string), others);
+    }
+  }
+  return withOthers(
+    unknownValue,
+    Math.max(0, ...found.map(({ others }) => others))
+  );
+};
+
+const isGiven = (placeholder: string, args: unknown) =>
+  summaryPathsOf(placeholder).some(
+    (path) => valueAt(args, path).value !== undefined
+  );
+
+const withoutAbsentParts = (template: string, args: unknown) =>
+  template.replaceAll(summaryOptionalPartPattern, (_match, part: string) =>
+    [...part.matchAll(summaryPlaceholderPattern)].some(([, placeholder]) =>
+      isGiven(placeholder ?? "", args)
+    )
+      ? part
+      : ""
+  );
+
 export const filledSummaryTemplate = (template: string, args: unknown) =>
-  template.replaceAll(summaryPlaceholderPattern, (_match, field: string) => {
-    const value = valueAt(args, field);
-    return isScalar(value) ? shownScalar(value) : unknownValue;
-  });
+  withoutAbsentParts(template, args).replaceAll(
+    summaryPlaceholderPattern,
+    (_match, placeholder: string) => filledPlaceholder(placeholder, args)
+  );

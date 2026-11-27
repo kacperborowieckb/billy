@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import { createFakeNotificationStream } from "./fake-mcp-notifications.ts";
 import { fakeMcpTools } from "./fake-mcp-tools.ts";
+import type { FakeMcpTool } from "./fake-mcp-tools.ts";
 import { createFakeOAuthServer } from "./fake-oauth-server.ts";
 
 export const fakeMcpPages = [
@@ -47,12 +48,23 @@ interface JsonRpcMessage {
 const result = (id: number | string | undefined, value: unknown) =>
   Response.json({ jsonrpc: "2.0", id, result: value });
 
-const textResult = (text: string, isError = false) => ({
+export const textResult = (text: string, isError = false) => ({
   content: [{ type: "text", text }],
   ...(isError ? { isError: true } : {}),
 });
 
-export const createFakeMcpServer = () => {
+export interface FakeMcpServerOptions {
+  readonly tools?: readonly FakeMcpTool[];
+  readonly answerTool?: (
+    name: string,
+    args: Record<string, unknown>
+  ) => ReturnType<typeof textResult> | undefined;
+}
+
+export const createFakeMcpServer = ({
+  tools = fakeMcpTools,
+  answerTool,
+}: FakeMcpServerOptions = {}) => {
   const oauth = createFakeOAuthServer();
   const notifications = createFakeNotificationStream();
   const calls: FakeMcpCall[] = [];
@@ -73,6 +85,10 @@ export const createFakeMcpServer = () => {
     const name = message.params?.name ?? "";
     const args = message.params?.arguments ?? {};
     calls.push({ tool: name, arguments: args });
+    const answered = answerTool?.(name, args);
+    if (answered !== undefined) {
+      return answered;
+    }
     switch (name) {
       case "search": {
         return textResult(
@@ -166,8 +182,8 @@ export const createFakeMcpServer = () => {
       case "tools/list": {
         return result(message.id, {
           tools: state.hiddenTools
-            ? fakeMcpTools
-            : fakeMcpTools.filter((tool) => tool.name !== "hidden_new_tool"),
+            ? tools
+            : tools.filter((tool) => tool.name !== "hidden_new_tool"),
         });
       }
       case "tools/call": {
