@@ -116,6 +116,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     credentials: (ownerId) => this.credentialsOf(ownerId),
     isReady: (catalogId) => this.ledger.isReady(catalogId),
     isBeingRemoved: (catalogId) => this.ledger.isBeingRemoved(catalogId),
+    entryEpochOf: (catalogId) => this.connector.epochOf(catalogId),
     markAuthenticating: async (catalogId) => {
       if ((await this.ledger.stateOf(catalogId)) === undefined) {
         await this.tellState(this.ownerName(), catalogId, "authenticating");

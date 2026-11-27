@@ -38,6 +38,7 @@ export interface McpOAuthStarterDependencies {
   readonly entryQueue: KeyedQueue;
   readonly isReady: (catalogId: string) => Promise<boolean>;
   readonly isBeingRemoved: (catalogId: string) => Promise<boolean>;
+  readonly entryEpochOf: (catalogId: string) => number;
   readonly markAuthenticating: (catalogId: string) => Promise<void>;
 }
 
@@ -104,6 +105,7 @@ export class McpOAuthStarter {
   }
 
   async startOAuth(request: McpOAuthRequest): Promise<McpOAuthStartOutcome> {
+    const epoch = this.dependencies.entryEpochOf(request.catalogId);
     const checked = await this.check(request);
     if (checked._tag === "Refused") {
       return { outcome: checked.outcome };
@@ -140,7 +142,10 @@ export class McpOAuthStarter {
           if (await this.dependencies.isReady(entry.catalogId)) {
             return { outcome: "already_connected" } as const;
           }
-          if (await this.dependencies.isBeingRemoved(entry.catalogId)) {
+          if (
+            (await this.dependencies.isBeingRemoved(entry.catalogId)) ||
+            this.dependencies.entryEpochOf(entry.catalogId) !== epoch
+          ) {
             return { outcome: "unavailable" } as const;
           }
           await this.dependencies.storage.put<PendingOAuth>(

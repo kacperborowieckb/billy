@@ -670,6 +670,36 @@ describe("an OAuth start that was running", () => {
   );
 
   it(
+    "stores no pending request when a disconnect and its acknowledgement both finish during the start",
+    async () => {
+      const userId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(userId);
+      const release = oauth.holdMetadataRequests();
+      const starting = postConsent(
+        await loginOf(userId, ownerId, { authDate: nowSeconds() - 101 })
+      );
+      await vi.waitFor(() =>
+        expect(oauth.heldMetadataRequests).toBeGreaterThan(0)
+      );
+
+      expect(await outcomeOf(disconnectOf(ownerId))).toBe("disconnected");
+      await hubOf(ownerId).acknowledgeRemoval(testMcpCatalogId);
+      release();
+
+      expect(await statusOf(starting)).not.toBe(303);
+      const keys = await hubKeysOf(ownerId);
+      expect(keys.filter((key) => key.startsWith("oauth:"))).toEqual([]);
+      const { state } = await startedConsent(
+        userId,
+        ownerId,
+        nowSeconds() - 103
+      );
+      expect(await statusOf(goodCallback(state))).toBe(200);
+    },
+    slowTest
+  );
+
+  it(
     "makes the Operator add fail while the Personal Agent removal is not acknowledged",
     async () => {
       const { ownerId } = await connectedOwner();
