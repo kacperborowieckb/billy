@@ -131,8 +131,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
   private async closeQuietly(catalogId: string) {
     try {
       await this.connector.close(catalogId);
-    } catch {
-      return;
+    } catch (error) {
+      await Effect.runPromise(
+        Effect.logWarning("The MCP connection did not close", error)
+      );
     }
   }
 
