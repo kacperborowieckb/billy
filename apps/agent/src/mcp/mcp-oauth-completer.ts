@@ -1,6 +1,6 @@
 import { DateTime } from "effect";
 
-import { KeyedQueue } from "./keyed-queue.ts";
+import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import { exchangeAndStore } from "./mcp-code-exchange.ts";
@@ -34,6 +34,7 @@ export interface McpOAuthCompleterDependencies {
   readonly catalog: McpCatalog;
   readonly send: FetchFunction;
   readonly storage: DurableObjectStorage;
+  readonly entryQueue: KeyedQueue;
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
   readonly connect: (
     completion: McpCompletion
@@ -69,14 +70,12 @@ export class McpOAuthCompleter {
 
   private readonly running = new Map<string, RunningCallback>();
 
-  private readonly entryQueue = new KeyedQueue();
-
   constructor(dependencies: McpOAuthCompleterDependencies) {
     this.dependencies = dependencies;
   }
 
   completionsWaitingFor(catalogId: string) {
-    return this.entryQueue.waitingCount(catalogId);
+    return this.dependencies.entryQueue.waitingCount(catalogId);
   }
 
   complete(returned: McpOAuthCallback): Promise<McpCallbackOutcome> {
@@ -130,7 +129,7 @@ export class McpOAuthCompleter {
       return { outcome: "not_started" };
     }
     const serverName = entry.displayName;
-    return this.entryQueue.run(entry.catalogId, async () => {
+    return this.dependencies.entryQueue.run(entry.catalogId, async () => {
       const latest = await storage.get(latestExchangeKey(entry.catalogId));
       if (latest !== nonce) {
         return { outcome: "not_started" };
@@ -161,7 +160,7 @@ export class McpOAuthCompleter {
       return { outcome: "not_started" };
     }
     await storage.delete(key);
-    return this.entryQueue.run(entry.catalogId, () =>
+    return this.dependencies.entryQueue.run(entry.catalogId, () =>
       this.finish(entry, pending, returned)
     );
   }

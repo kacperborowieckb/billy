@@ -6,6 +6,7 @@ import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import { OwnerIdSchema } from "../owner-id.ts";
 import { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
+import { KeyedQueue } from "./keyed-queue.ts";
 import { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
@@ -66,7 +67,10 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     credentials: (ownerId) => this.credentialsOf(ownerId),
   });
 
+  private readonly entryQueue = new KeyedQueue();
+
   private readonly oauth = new McpOAuthStarter({
+    entryQueue: this.entryQueue,
     catalog: this.catalog,
     send: this.guardedSend,
     allowedOrigins: this.allowedOrigins,
@@ -80,6 +84,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
   });
 
   protected readonly completer = new McpOAuthCompleter({
+    entryQueue: this.entryQueue,
     catalog: this.catalog,
     send: this.guardedSend,
     storage: this.ctx.storage,

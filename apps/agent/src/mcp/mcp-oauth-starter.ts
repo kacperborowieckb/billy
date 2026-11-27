@@ -1,5 +1,6 @@
 import { DateTime } from "effect";
 
+import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type {
@@ -34,6 +35,7 @@ export interface McpOAuthStarterDependencies {
   readonly routingId: string;
   readonly ownerId: () => string;
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
+  readonly entryQueue: KeyedQueue;
   readonly isRecorded: (catalogId: string) => Promise<boolean>;
   readonly markAuthenticating: (catalogId: string) => Promise<void>;
 }
@@ -124,16 +126,24 @@ export class McpOAuthStarter {
         nowMillis: nowMillis(),
         lifetimeMillis: oauthStartLifetimeMillis,
       });
-      await this.dependencies.storage.put<PendingOAuth>(
-        `${pendingOAuthKeyPrefix}${started.nonce}`,
-        started.pending
+      return await this.dependencies.entryQueue.run(
+        entry.catalogId,
+        async () => {
+          if (await this.dependencies.isRecorded(entry.catalogId)) {
+            return { outcome: "already_connected" } as const;
+          }
+          await this.dependencies.storage.put<PendingOAuth>(
+            `${pendingOAuthKeyPrefix}${started.nonce}`,
+            started.pending
+          );
+          await this.forgetExpired();
+          await this.dependencies.markAuthenticating(entry.catalogId);
+          return {
+            outcome: "redirect",
+            authorizationUrl: started.authorizationUrl,
+          } as const;
+        }
       );
-      await this.forgetExpired();
-      await this.dependencies.markAuthenticating(entry.catalogId);
-      return {
-        outcome: "redirect",
-        authorizationUrl: started.authorizationUrl,
-      };
     } catch {
       return { outcome: "unavailable" };
     }

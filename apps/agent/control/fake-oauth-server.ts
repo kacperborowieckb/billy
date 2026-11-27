@@ -20,6 +20,8 @@ export const createFakeOAuthServer = () => {
     exchanges: 0,
     registeredMethod: "client_secret_post" as string,
     tokenHold: Promise.resolve(undefined) as Promise<undefined>,
+    metadataHold: Promise.resolve(undefined) as Promise<undefined>,
+    heldMetadata: 0,
     withRefreshToken: true,
     withAccountName: true,
     requiresToken: false,
@@ -108,6 +110,10 @@ export const createFakeOAuthServer = () => {
   };
 
   const answer = async (request: Request) => {
+    if (new URL(request.url).pathname.includes("/.well-known/")) {
+      state.heldMetadata += 1;
+      await state.metadataHold;
+    }
     if (
       request.method === "POST" &&
       new URL(request.url).pathname.endsWith("/token")
@@ -186,6 +192,15 @@ export const createFakeOAuthServer = () => {
     issueFreshTokens: (fresh: boolean) => {
       state.freshTokens = fresh;
     },
+    get heldMetadataRequests() {
+      return state.heldMetadata;
+    },
+    holdMetadataRequests: () => {
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      state.metadataHold = promise;
+      state.heldMetadata = 0;
+      return () => resolve(undefined);
+    },
     holdTokenRequests: () => {
       const { promise, resolve } = Promise.withResolvers<undefined>();
       state.tokenHold = promise;
@@ -226,6 +241,7 @@ export const createFakeOAuthServer = () => {
       state.exchanges = 0;
       state.registeredMethod = "client_secret_post";
       state.tokenHold = Promise.resolve(undefined);
+      state.metadataHold = Promise.resolve(undefined);
       state.withRefreshToken = true;
       state.withAccountName = true;
       state.requiresToken = false;

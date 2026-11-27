@@ -648,6 +648,30 @@ describe("a replay of a good callback", () => {
     expect(fakeTelegram.sent).toHaveLength(2);
   });
 
+  it("does not let a second start overwrite ready after the first callback completed", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9965);
+    const { state: first } = await startedConsent(9965, ownerId);
+    const releaseDiscovery = fakeMcpServer.oauth.holdMetadataRequests();
+
+    const secondStart = postConsent(
+      await loginOf(9965, ownerId, { authDate: nowSeconds() - 5 })
+    );
+    await vi.waitFor(() =>
+      expect(fakeMcpServer.oauth.heldMetadataRequests).toBeGreaterThan(0)
+    );
+    releaseDiscovery();
+    const completed = await goodCallback(first);
+    const started = await secondStart;
+
+    expect(completed.status).toBe(200);
+    expect(started.status).toBe(200);
+    expect(await started.text()).toContain("already connected");
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await pendingOAuthCountOf(ownerId)).toBe(0);
+  });
+
   it("serializes two completions of one entry so only one exchanges a code", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9987);
     const { state: first } = await startedConsent(9987, ownerId);
