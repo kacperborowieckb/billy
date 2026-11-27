@@ -16,6 +16,7 @@ import { OperatorMetrics } from "../src/tracing/operator-metrics.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
 import {
   fakeBurstWait,
+  fakeCompletion,
   fakeMcpLimits,
   fakeMetrics,
   fakeModel,
@@ -85,6 +86,20 @@ const useFakeTurnServices = (_env: Env, ownerId: OwnerId) =>
   fakeTurnServicesOf(ownerId);
 
 export class PersonalAgent extends LivePersonalAgent {
+  override async receiveMcpConnected(
+    ...args: Parameters<LivePersonalAgent["receiveMcpConnected"]>
+  ) {
+    if (fakeCompletion.failures > 0) {
+      fakeCompletion.failures -= 1;
+      throw new Error("The completion failed on purpose");
+    }
+    await super.receiveMcpConnected(...args);
+    if (fakeCompletion.failuresAfterCommit > 0) {
+      fakeCompletion.failuresAfterCommit -= 1;
+      throw new Error("The completion result was lost");
+    }
+  }
+
   protected override readonly turnServices = useFakeTurnServices;
   protected override readonly turnTools = fakeTools;
 

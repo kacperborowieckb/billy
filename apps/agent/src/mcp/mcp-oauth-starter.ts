@@ -1,5 +1,6 @@
 import { DateTime } from "effect";
 
+import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type {
@@ -9,12 +10,16 @@ import type {
 } from "./mcp-hub-contract.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { discoverOAuth } from "./oauth-discovery.ts";
-import { startOAuth } from "./oauth-start.ts";
+import { pendingOAuthOf, startOAuth } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
-
-const pendingOAuthKeyPrefix = "oauth:";
-
-const usedProofKeyPrefix = "proof:";
+import {
+  pendingOAuthKeyPrefix,
+  expiryOf,
+  settledOAuthKeyPrefix,
+  settledOAuthOf,
+  usedProofKeyPrefix,
+} from "./oauth-storage-keys.ts";
+import type { SealedCredentials } from "./sealed-credentials.ts";
 
 const oauthStartLifetimeMillis = 10 * 60 * 1000;
 
@@ -28,6 +33,9 @@ export interface McpOAuthStarterDependencies {
   readonly allowedOrigins: readonly string[];
   readonly storage: DurableObjectStorage;
   readonly routingId: string;
+  readonly ownerId: () => string;
+  readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
+  readonly entryQueue: KeyedQueue;
   readonly isRecorded: (catalogId: string) => Promise<boolean>;
   readonly markAuthenticating: (catalogId: string) => Promise<void>;
 }
@@ -96,6 +104,8 @@ export class McpOAuthStarter {
     const { entry } = checked;
     try {
       const discovery = await this.discover(entry, request);
+      const ownerId = this.dependencies.ownerId();
+      const credentials = await this.dependencies.credentials(ownerId);
       if (!(await this.useUpProof(request.proofId))) {
         return { outcome: "proof_used" };
       }
@@ -107,20 +117,33 @@ export class McpOAuthStarter {
         redirectUrl: request.redirectUrl,
         clientMetadataUrl: request.clientMetadataUrl,
         clientName: "Billy",
+        ownerId,
         routingId: this.dependencies.routingId,
+        sealVerifier: (nonce, verifier) =>
+          credentials.sealVerifier(entry.catalogId, nonce, verifier),
+        sealClientSecret: (nonce, secret) =>
+          credentials.sealClientSecret(entry.catalogId, nonce, secret),
         nowMillis: nowMillis(),
         lifetimeMillis: oauthStartLifetimeMillis,
       });
-      await this.dependencies.storage.put<PendingOAuth>(
-        `${pendingOAuthKeyPrefix}${started.nonce}`,
-        started.pending
+      return await this.dependencies.entryQueue.run(
+        entry.catalogId,
+        async () => {
+          if (await this.dependencies.isRecorded(entry.catalogId)) {
+            return { outcome: "already_connected" } as const;
+          }
+          await this.dependencies.storage.put<PendingOAuth>(
+            `${pendingOAuthKeyPrefix}${started.nonce}`,
+            started.pending
+          );
+          await this.forgetExpired();
+          await this.dependencies.markAuthenticating(entry.catalogId);
+          return {
+            outcome: "redirect",
+            authorizationUrl: started.authorizationUrl,
+          } as const;
+        }
       );
-      await this.forgetExpired();
-      await this.dependencies.markAuthenticating(entry.catalogId);
-      return {
-        outcome: "redirect",
-        authorizationUrl: started.authorizationUrl,
-      };
     } catch {
       return { outcome: "unavailable" };
     }
@@ -138,18 +161,28 @@ export class McpOAuthStarter {
 
   private async forgetExpired() {
     const { storage } = this.dependencies;
-    const pending = await storage.list<PendingOAuth>({
-      prefix: pendingOAuthKeyPrefix,
-    });
-    const proofs = await storage.list<number>({ prefix: usedProofKeyPrefix });
     const now = nowMillis();
+    const isExpired = (expiresAtMillis: number | undefined) =>
+      expiresAtMillis === undefined || expiresAtMillis <= now;
+    const expiredKeysOf = async (
+      prefix: string,
+      readExpiry: (stored: unknown) => number | undefined
+    ) => {
+      const stored = await storage.list({ prefix });
+      return [...stored]
+        .filter(([, value]) => isExpired(readExpiry(value)))
+        .map(([key]) => key);
+    };
     const expired = [
-      ...[...pending]
-        .filter(([, value]) => value.expiresAtMillis <= now)
-        .map(([key]) => key),
-      ...[...proofs]
-        .filter(([, expiresAtMillis]) => expiresAtMillis <= now)
-        .map(([key]) => key),
+      ...(await expiredKeysOf(
+        pendingOAuthKeyPrefix,
+        (stored) => pendingOAuthOf(stored)?.expiresAtMillis
+      )),
+      ...(await expiredKeysOf(usedProofKeyPrefix, expiryOf)),
+      ...(await expiredKeysOf(
+        settledOAuthKeyPrefix,
+        (stored) => settledOAuthOf(stored)?.expiresAtMillis
+      )),
     ];
     if (expired.length > 0) {
       await storage.delete(expired);

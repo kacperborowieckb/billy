@@ -56,6 +56,21 @@ export type McpOAuthStartOutcome =
         | "unavailable";
     };
 
+export interface McpOAuthCallback {
+  readonly nonce: string;
+  readonly code: string | undefined;
+  readonly iss: string | undefined;
+  readonly error: string | undefined;
+}
+
+export type McpCallbackOutcome =
+  | { readonly outcome: "connected"; readonly serverName: string }
+  | {
+      readonly outcome: "denied" | "failed" | "already_connected";
+      readonly serverName: string;
+    }
+  | { readonly outcome: "not_started" };
+
 export interface McpHubRpc {
   readonly describeConsent: (
     request: McpOAuthRequest
@@ -63,6 +78,9 @@ export interface McpHubRpc {
   readonly startOAuth: (
     request: McpOAuthRequest
   ) => Promise<McpOAuthStartOutcome>;
+  readonly completeOAuth: (
+    callback: McpOAuthCallback
+  ) => Promise<McpCallbackOutcome>;
   readonly addConnection: (
     catalogId: string,
     connectTimeoutMillis: number

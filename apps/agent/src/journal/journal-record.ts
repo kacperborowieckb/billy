@@ -163,6 +163,10 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     riskClass: Schema.Literals(riskClasses),
     status: Schema.Literals(mcpCallStatuses),
   },
+  McpConnectionAdded: {
+    eventId: Schema.String,
+    catalogId: Schema.String,
+  },
   OwnerPreferenceChanged: {
     eventId: Schema.String,
     preference: Schema.Literals(ownerPreferenceKeys),

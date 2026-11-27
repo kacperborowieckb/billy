@@ -42,7 +42,7 @@ Use these terms with these meanings in code, docs, issues, and prompts. Use the 
 - **MCP Connection**: one Owner's link to one MCP Catalog server, with its state: `authenticating`, `ready`, `failed`, or `needs sign-in`. An Owner has at most one MCP Connection for each catalog entry.
 - **MCP Catalog**: the Operator's typed list of supported remote MCP servers, in code. Each entry fixes the server URL, the Risk Class of each known tool, and the shape of the ids in a result.
 - **Owner proof link**: a Channel capability. The Channel sends a button whose link proves to the Edge which Channel Identity pressed it. The Telegram Channel implements it with a `login_url` inline button. A link that the Owner forwards proves nothing for another person.
-- **MCP Hub**: the Durable Object for one Owner that owns the MCP Connections and the MCP client. It connects a server only on the first call for it. The Personal Agent calls it only through RPC.
+- **MCP Hub**: the Durable Object for one Owner that owns the MCP Connections and the MCP client. It connects a server only on the first call for it, and it keeps the OAuth tokens sealed at rest. The Personal Agent calls it only through RPC.
 - **Helper**: a durable workflow that does long or expensive work outside the chat Turn and returns only its result. Not in the MVP.
 
 ## Primitives

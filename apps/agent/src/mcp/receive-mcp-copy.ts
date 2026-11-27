@@ -1,5 +1,9 @@
 import { Effect, Schema } from "effect";
 
+import { Channel } from "../channels/channel.ts";
+import { Journal } from "../journal/journal.ts";
+import { AgentStorage } from "../personal-agent/agent-storage.ts";
+import { OwnerChannelConversation } from "../personal-agent/owner-channel-conversation.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
@@ -36,3 +40,75 @@ export const receiveMcpConnectionState = (
         const connections = yield* McpConnections;
         yield* connections.setState(catalogId, checked);
       }).pipe(Effect.orDie);
+
+export const connectedMessageOf = (
+  displayName: string,
+  accountLabel: string | undefined
+) =>
+  accountLabel === undefined
+    ? `Connected ${displayName}`
+    : `Connected ${displayName} (account ${accountLabel})`;
+
+const announceConnected = Effect.fnUntraced(function* announceConnected(
+  displayName: string,
+  accountLabel: string | undefined
+) {
+  const conversation = yield* (yield* OwnerChannelConversation).current;
+  if (conversation === undefined) {
+    return;
+  }
+  const channel = yield* Channel;
+  yield* channel.send({
+    conversationId: conversation.conversationId,
+    text: connectedMessageOf(displayName, accountLabel),
+  });
+});
+
+export const McpConnectedCopySchema = Schema.Struct({
+  catalogId: Schema.String,
+  tools: McpToolCatalogCopySchema,
+  accountLabel: Schema.UndefinedOr(Schema.String),
+  completionId: Schema.NonEmptyString,
+});
+
+export type McpConnectedCopy = typeof McpConnectedCopySchema.Type;
+
+export const receiveMcpConnected = Effect.fnUntraced(
+  function* receiveMcpConnected(catalog: McpCatalog, received: unknown) {
+    const { catalogId, tools, accountLabel, completionId } =
+      yield* Schema.decodeUnknownEffect(McpConnectedCopySchema)(received);
+    const entry = mcpEntryOf(catalog, catalogId);
+    if (entry === undefined) {
+      return;
+    }
+    const { database } = yield* AgentStorage;
+    const journal = yield* Journal;
+    const connections = yield* McpConnections;
+    const eventId = `mcp-connection-added:${completionId}`;
+    const isFirstTime = yield* database.transaction(() =>
+      Effect.gen(function* recordCompletion() {
+        if ((yield* journal.readForEvent(eventId)).length > 0) {
+          yield* connections.setState(catalogId, "ready");
+          return false;
+        }
+        yield* connections.replaceTools(catalogId, tools);
+        yield* connections.setState(catalogId, "ready");
+        yield* journal.append({
+          _tag: "McpConnectionAdded",
+          eventId,
+          catalogId,
+        });
+        return true;
+      })
+    );
+    if (!isFirstTime) {
+      return;
+    }
+    yield* announceConnected(entry.displayName, accountLabel).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("The Connected message was not sent", cause)
+      )
+    );
+  },
+  Effect.orDie
+);

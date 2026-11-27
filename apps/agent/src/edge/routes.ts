@@ -38,6 +38,14 @@ export const edgeRoutes = [
   },
   {
     method: "GET",
+    path: "/oauth/callback",
+    access:
+      "The state that the authorization server returns: the routing id of the Owner's MCP Hub and a single-use nonce",
+    purpose:
+      "Finds the MCP Hub from the routing id and asks it to check the nonce and the issuer, exchange the code, and finish the MCP Connection. A replay of a good callback shows the same result.",
+  },
+  {
+    method: "GET",
     path: "/oauth/client-metadata.json",
     access: "Public",
     purpose:

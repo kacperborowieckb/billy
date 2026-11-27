@@ -620,6 +620,8 @@ export const resetFakes = () => {
   fakeTelegramState.editsToRefuse = 0;
   fakeTelegramState.pressAnswers = [];
   fakeTelegramState.pressAnswerHold = Promise.resolve(undefined);
+  fakeCompletion.failures = 0;
+  fakeCompletion.failuresAfterCommit = 0;
   fakeModel.doGenerateCalls.length = 0;
   releaseModel = Promise.resolve();
   callsBeforeHold = 0;
@@ -642,3 +644,5 @@ const defaultFakeMcpLimits = {
 };
 
 export const fakeMcpLimits = { ...defaultFakeMcpLimits };
+
+export const fakeCompletion = { failures: 0, failuresAfterCommit: 0 };

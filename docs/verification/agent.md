@@ -174,6 +174,29 @@ Decision [0036](../decisions/0036-mcp-connections.md). The tests use a fake MCP 
 
 Decision [0036](../decisions/0036-mcp-connections.md), ticket #154. `test/mcp-connect.test.ts` and `test/telegram-channel.test.ts` check: a scripted `connect_mcp_server` call sends the reply and then a `login_url` button that code writes (the model writes no link); a login from the Owner reaches the consent page with the server name, the authorization server, and the client mode, and a GET starts nothing; a login from another Telegram account (unregistered, or another registered Owner whose routing id is not in the button URL), a bad signature, a signature from another bot token, and an old `auth_date` get an error page on a GET and on a POST and never reach a hub; the POST redirects to the fake authorization server (a second POST with the same login is refused) with PKCE S256 (the stored verifier matches the challenge) and a `state` that is the hub routing id (the Durable Object id of the hub) and a single-use nonce, with no Owner Id and no Channel Identity; DCR runs when the server has no client metadata document support; a server with no S256 starts nothing; an unknown catalog id gives 404; the client metadata document exists on HTTPS only; and the Channel test asserts the `login_url` request shape. Known limit: the tests cannot prove that BotFather accepts the Edge domain. That needs the real bot and the manual `/setdomain` step. The repository owner ran it on 2026-11-27 for the deployed `workers.dev` Edge domain, and BotFather accepted it.
 
+### MCP Connections: OAuth callback and sealed tokens
+
+Decision [0036](../decisions/0036-mcp-connections.md), ticket #155. `test/mcp-oauth-callback.test.ts` uses the fake authorization server of `control/fake-oauth-server.ts` (metadata, a token endpoint, DCR) and the fake MCP server, which can require the token. The tests run through the Edge and the Durable Objects. They check:
+
+- A good callback (CIMD) makes the Connection `ready` and fills the tool copy. It sends "Connected Test server (account Pat Reader)" to the Owner's chat and writes `McpConnectionAdded`.
+- The token request has the code, the client id, the redirect URI, `resource`, and a verifier that matches the challenge of the redirect. The next MCP request carries the new token.
+- DCR runs when the server has no client metadata documents. A token response with no account name gives "Connected Test server".
+- These callbacks change nothing and make no token request: a wrong or missing nonce, an unknown routing id, a routing id of the wrong shape or of another namespace, a wrong `iss`, a missing `iss` when the server promised one, an empty `code` or `error`, and a callback with neither code nor error. A wrong `iss` keeps the pending request, so the good callback still works.
+- An `error` callback and a refused code set the state `failed` and use up the nonce.
+- A replay of a good callback shows the same success page. It makes one token request, one Journal Entry, and one message. This holds for two callbacks at the same time, and a second callback with a wrong `iss` does not share the run of the first.
+- A replay after a failed first connect finishes the Connection with the saved tokens, keeps the account label, and makes no second token request. A replay with a wrong `iss` does not finish it.
+- The Personal Agent that hears the same completion twice writes one Journal Entry, sends one message, and sets the state `ready`. A completion that committed and lost its result ends `ready` after the replay.
+- After a full connect (with a DCR client secret), no hub table, no hub key-value entry, no Personal Agent table (Journal, Trace, Conversation), and no console line has the access token, the refresh token, the client secret, the authorization code, or the code verifier in plain text.
+- A sealed record opens only for its own Owner and Connection. A record sealed by an older key opens after a rotation. A save of tokens with no refresh token keeps the old one.
+- A registration that needs a client authentication method other than `client_secret_basic` or `client_secret_post` starts nothing. A DCR server that issues a client secret gets it back in the token request, in the body or in a Basic header as the registration says. Two completions of one entry that arrive together make one token request. A replay after the hub stopped with the Connection record written still delivers the completion. The token endpoint of a tenant issuer (`/tenant1/token`) receives the code.
+- A second start that paused during discovery while the first callback completed shows the already-connected page, stores no pending request, and leaves the state `ready`.
+- A completion for an entry that already has a Connection is refused with no token request. The replay of an earlier attempt is refused after a later attempt saved new tokens.
+- Two completions with the same completion id that arrive together write one Journal Entry and send one message, and a failed message send keeps the Connection `ready`.
+- A sealing key list with a repeated key id, a key of the wrong length, or no key id is refused.
+- A token endpoint at a private or `http` address makes discovery fail and starts nothing.
+
+Known limits: the tests use no real authorization server. They cannot prove how Notion names the account in its token response or how its refresh tokens rotate over days (both come with #156 and #158).
+
 ## Control CLI
 
 Run the commands from `apps/agent` with `pnpm control <command>`, or from the root with `pnpm --filter @repo/agent control <command>`.
@@ -286,6 +309,7 @@ The Model Gateway uses the AI Gateway REST endpoint, not the `/compat` endpoint,
 - `TELEGRAM_WEBHOOK_SECRET`
 - `AI_GATEWAY_TOKEN`: the Cloudflare API token for AI Gateway (Workers AI Read).
 - `OPERATOR_TOKEN`: the bearer token of the Operator route.
+- `MCP_SEALING_KEYS`: the keys that seal the MCP OAuth tokens at rest, one or more `<key id>:<base64 of 32 random bytes>` separated by commas. Create one with `openssl rand -base64 32`, for example `key-1:<output>`, and set it with `wrangler secret put MCP_SEALING_KEYS`. The first key seals new records and every listed key opens records. To rotate, put a new key first and keep the old key listed until the Owners have connected again. A key id has 1 to 32 letters, digits, `_`, or `-`. A lost key makes the sealed tokens unreadable, and the Owner must connect again.
 
 For local dev, put them in `apps/agent/.dev.vars`. Git ignores this file. Never commit, log, or paste secret values. Deploying and setting secrets on Cloudflare need the repository owner's approval (decision 0002).
 
