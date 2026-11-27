@@ -291,6 +291,18 @@ describe("client authentication and tenants", () => {
     ).toBeUndefined();
   });
 
+  it("refuses a registration that needs an unsupported client authentication method", async () => {
+    fakeMcpServer.oauth.supportClientIdMetadata(false);
+    fakeMcpServer.oauth.registerWithMethod("client_secret_jwt");
+    const telegramUserId = newTelegramUserId();
+    const ownerId = await ownerWhoWroteToTheAgent(telegramUserId);
+
+    const response = await postConsent(await loginOf(telegramUserId, ownerId));
+
+    expect(response.status).toBe(502);
+    expect(await pendingOAuthCountOf(ownerId)).toBe(0);
+  });
+
   it("posts the code to the token endpoint of a tenant issuer", async () => {
     fakeMcpServer.oauth.useLayout("challenged_tenant");
     const ownerId = await ownerWhoWroteToTheAgent(9996);
@@ -563,9 +575,18 @@ describe("a replay of a good callback", () => {
     fakeMcpServer.beUnavailable(true);
     await goodCallback(first);
     fakeMcpServer.beUnavailable(false);
+    const releaseExchange = fakeMcpServer.oauth.holdTokenRequests();
 
-    await Promise.all([goodCallback(second), goodCallback(first)]);
+    const laterAttempt = goodCallback(second);
+    await vi.waitFor(() =>
+      expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(2)
+    );
+    const earlierReplay = goodCallback(first);
+    releaseExchange();
+    const [later, earlier] = await Promise.all([laterAttempt, earlierReplay]);
 
+    expect(later.status).toBe(200);
+    expect(earlier.status).toBe(403);
     expect(await addedEntryCountOf(ownerId)).toBe(1);
     expect(await statesOf(ownerId)).toEqual([
       { catalogId: testMcpCatalogId, state: "ready" },

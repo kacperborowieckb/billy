@@ -61,8 +61,21 @@ export interface OAuthStartInput {
   readonly lifetimeMillis: number;
 }
 
-const authMethodOf = (method: string | undefined) =>
-  method === "client_secret_post" ? "post" : "basic";
+const authMethodOf = (method: string | undefined) => {
+  if (method === "client_secret_post") {
+    return "post";
+  }
+  if (
+    method === undefined ||
+    method === "client_secret_basic" ||
+    method === "none"
+  ) {
+    return "basic";
+  }
+  throw new OAuthDiscoveryFailedError(
+    "The authorization server needs a client authentication method that is not supported"
+  );
+};
 
 interface RegisteredClient {
   readonly clientId: string;

@@ -17,6 +17,7 @@ export const createFakeOAuthServer = () => {
     tokenLoginRefused: false,
     requiresClientSecret: false,
     registeredMethod: "client_secret_post" as string,
+    tokenHold: Promise.resolve(undefined) as Promise<undefined>,
     withRefreshToken: true,
     withAccountName: true,
     requiresToken: false,
@@ -78,6 +79,7 @@ export const createFakeOAuthServer = () => {
   const answerToken = async (request: Request) => {
     const form = new URLSearchParams(await request.text());
     tokenRequests.push(Object.fromEntries(form));
+    await state.tokenHold;
     if (
       state.tokenLoginRefused ||
       (state.requiresClientSecret && !hasClientSecret(request, form)) ||
@@ -172,6 +174,11 @@ export const createFakeOAuthServer = () => {
     sendIssuer: (sent: boolean) => {
       state.sendsIssuer = sent;
     },
+    holdTokenRequests: () => {
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      state.tokenHold = promise;
+      return () => resolve(undefined);
+    },
     registerWithMethod: (method: string) => {
       state.registeredMethod = method;
     },
@@ -204,6 +211,7 @@ export const createFakeOAuthServer = () => {
       state.tokenLoginRefused = false;
       state.requiresClientSecret = false;
       state.registeredMethod = "client_secret_post";
+      state.tokenHold = Promise.resolve(undefined);
       state.withRefreshToken = true;
       state.withAccountName = true;
       state.requiresToken = false;
