@@ -505,6 +505,72 @@ describe("other entries into the queue of the Connection", () => {
   );
 });
 
+describe("stored credentials and the Operator add", () => {
+  it(
+    "reads an old sealed client record with no token endpoint and moves to needs sign-in at the next refresh",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      const keyring = await parseSealKeyring(env.MCP_SEALING_KEYS);
+      const clientRead = await runInDurableObject(
+        hubOf(ownerId),
+        async (_i, { storage }) => {
+          const credentials = new SealedCredentials(storage, keyring, ownerId);
+          const tokens = await credentials.tokens(testMcpCatalogId);
+          if (tokens === undefined) {
+            throw new Error("no tokens");
+          }
+          await storage.put(
+            await credentials.sealedEntries(testMcpCatalogId, tokens, {
+              client_id: "old-client",
+              redirectUrl: "https://agent.test/oauth/callback",
+            })
+          );
+          return credentials.client(testMcpCatalogId);
+        }
+      );
+      oauth.expireAccessToken();
+
+      expect(clientRead?.client_id).toBe("old-client");
+      expect(await searchOf(ownerId)).toEqual({
+        _tag: "Failed",
+        reason: "needs_sign_in",
+      });
+      expect(oauth.refreshRequests).toHaveLength(0);
+      expect(await stateOf(ownerId)).toBe("needs_sign_in");
+    },
+    slowTest
+  );
+
+  it(
+    "refreshes stored tokens before an Operator add connects",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      const keyring = await parseSealKeyring(env.MCP_SEALING_KEYS);
+      await runInDurableObject(hubOf(ownerId), async (_i, { storage }) => {
+        const credentials = new SealedCredentials(storage, keyring, ownerId);
+        const tokens = await credentials.tokens(testMcpCatalogId);
+        if (tokens === undefined) {
+          throw new Error("no tokens");
+        }
+        await credentials.saveTokens(testMcpCatalogId, {
+          ...tokens,
+          expires_in: 1,
+        });
+      });
+      oauth.expireAccessToken();
+
+      const added = await hubOf(ownerId).addConnection(
+        testMcpCatalogId,
+        defaultBehaviorConfig.mcpConnectTimeoutMillis
+      );
+
+      expect(added).toEqual({ outcome: "added" });
+      expect(oauth.refreshRequests).toHaveLength(1);
+    },
+    slowTest
+  );
+});
+
 describe("the catalog copy follows the server", () => {
   it(
     "updates the copy when the server sends tools/list_changed",

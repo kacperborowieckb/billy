@@ -20,7 +20,7 @@ export interface McpAuthorizedFetchInput {
 const challengeParameterPattern =
   /(?<name>[\w-]+)\s*=\s*(?:"(?<quoted>(?:[^"\\]|\\.)*)"|(?<bare>[^\s,"]*))/gu;
 
-const isInsufficientScope = (response: Response) =>
+export const isInsufficientScope = (response: Response) =>
   response.status === 403 &&
   [
     ...(response.headers.get("WWW-Authenticate") ?? "").matchAll(
