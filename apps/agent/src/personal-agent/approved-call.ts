@@ -109,7 +109,7 @@ export const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
       Effect.catchCause((cause) =>
         approvalPathLog({
           pendingApprovalId: approval.pendingApprovalId,
-          step: "run_finished",
+          step: "run_failed_unexpectedly",
           toolName: approval.toolName,
           result: "failed",
           reason: failureReasonOf(Cause.squash(cause)),

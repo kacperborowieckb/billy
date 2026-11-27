@@ -7,6 +7,7 @@ export interface ApprovalPathStep {
     | "answer_lost_to_another_press"
     | "run_finished"
     | "run_could_not_start"
+    | "run_failed_unexpectedly"
     | "lost_run_set_unconfirmed"
     | "message_has_nothing_to_edit";
   readonly toolName?: string;

@@ -82,6 +82,10 @@ const answerAndRunInOneTransaction = Effect.fnUntraced(
     approval: PendingApproval
   ) {
     if (!(yield* answerPending(event, approval))) {
+      yield* approvalPathLog({
+        pendingApprovalId: approval.pendingApprovalId,
+        step: "answer_lost_to_another_press",
+      });
       return;
     }
     if (event.answer === "approve") {
