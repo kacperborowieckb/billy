@@ -13,11 +13,17 @@ export const whenActive = (
 ) => {
   let visible = false;
   let active: boolean | undefined;
+  let reduced = isReduced();
+  // Consumers hear about a change in the answer, and also about every change
+  // of the reduced-motion preference, even while the section stays inactive,
+  // so they can settle on their finished pictures.
   const update = () => {
-    const next = visible && !document.hidden && !isReduced();
+    const nowReduced = isReduced();
+    const next = visible && !document.hidden && !nowReduced;
     section.classList.toggle("is-paused", !next);
-    if (next !== active) {
+    if (next !== active || nowReduced !== reduced) {
       active = next;
+      reduced = nowReduced;
       change?.(next);
     }
   };

@@ -6,7 +6,7 @@ import { outfits } from "../art";
 import { createChat } from "./chat";
 import { today } from "./features";
 import { soon } from "./soon";
-import { whenActive } from "./watch";
+import { isReduced, whenActive } from "./watch";
 
 const features = [...today, ...soon];
 
@@ -92,11 +92,15 @@ export const startExplorer = () => {
 
   // The first time the section is active the picked feature plays; when it
   // leaves the screen (or the tab hides) playback stops on what it showed.
+  // Under reduced motion the phone shows the picked feature finished.
   let played = false;
   whenActive(section, (active) => {
     const feature = features[current];
     if (!active) {
       chat.stop();
+      if (feature && isReduced()) {
+        chat.fill(feature.script);
+      }
       return;
     }
     if (feature && !played) {
