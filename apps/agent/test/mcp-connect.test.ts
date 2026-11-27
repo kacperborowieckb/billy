@@ -219,6 +219,20 @@ describe("a forwarded button or link", () => {
     expect(await oauthKeyCountOf(otherOwnerId)).toBe(0);
   });
 
+  it("refuses a login with two hash fields", async () => {
+    const ownerId = await addOwner(9963);
+    const valid = await loginOf(9963, ownerId);
+    const doubled = new URLSearchParams([
+      ["hash", "0".repeat(64)],
+      ...valid.entries(),
+    ]);
+
+    const response = await postConsent(doubled);
+
+    expect(response.status).toBe(403);
+    expect(await oauthKeyCountOf(ownerId)).toBe(0);
+  });
+
   it("uses up the login proof at the first POST", async () => {
     const ownerId = await addOwner(9960);
     const params = await loginOf(9960, ownerId);
@@ -235,6 +249,29 @@ describe("a forwarded button or link", () => {
     expect(third.status).toBe(403);
     expect(second.headers.get("Location")).toBeNull();
     expect(await oauthKeyCountOf(ownerId)).toBe(1);
+  });
+});
+
+describe("discovering the authorization server", () => {
+  it("follows the resource_metadata challenge to a tenant issuer", async () => {
+    const ownerId = await addOwner(9961);
+    fakeMcpServer.oauth.useLayout("challenged_tenant");
+
+    const response = await postConsent(await loginOf(9961, ownerId));
+
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get("Location") ?? "");
+    expect(location.pathname).toBe("/tenant1/authorize");
+  });
+
+  it("refuses metadata whose issuer is not the selected issuer", async () => {
+    const ownerId = await addOwner(9962);
+    fakeMcpServer.oauth.useLayout("root_metadata_only");
+
+    const response = await postConsent(await loginOf(9962, ownerId));
+
+    expect(response.status).toBe(502);
+    expect(await oauthKeyCountOf(ownerId)).toBe(0);
   });
 });
 

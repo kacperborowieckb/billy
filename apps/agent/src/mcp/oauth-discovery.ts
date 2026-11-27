@@ -64,11 +64,42 @@ const firstJson = async (send: FetchFunction, urls: readonly string[]) => {
   return answers.find(Option.isSome) ?? Option.none<unknown>();
 };
 
+const resourceMetadataPattern = /resource_metadata="(?<url>[^"]+)"/u;
+
+const initializeBody = JSON.stringify({
+  jsonrpc: "2.0",
+  id: 1,
+  method: "initialize",
+  params: {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "billy-mcp-hub", version: "1.0.0" },
+  },
+});
+
+const challengedMetadataUrl = async (send: FetchFunction, serverUrl: URL) => {
+  try {
+    const response = await send(serverUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: initializeBody,
+    });
+    const challenge = response.headers.get("WWW-Authenticate") ?? "";
+    const url = resourceMetadataPattern.exec(challenge)?.groups?.["url"];
+    return url !== undefined && URL.canParse(url) ? [url] : [];
+  } catch {
+    return [];
+  }
+};
+
 const issuerOf = async (send: FetchFunction, serverUrl: URL) => {
-  const resource = await firstJson(
-    send,
-    wellKnownUrls(serverUrl, "oauth-protected-resource")
-  );
+  const resource = await firstJson(send, [
+    ...(await challengedMetadataUrl(send, serverUrl)),
+    ...wellKnownUrls(serverUrl, "oauth-protected-resource"),
+  ]);
   const listed = resource.pipe(
     Option.flatMap(decodeProtectedResource),
     Option.flatMap((metadata) =>
@@ -76,6 +107,20 @@ const issuerOf = async (send: FetchFunction, serverUrl: URL) => {
     )
   );
   return Option.getOrElse(listed, () => serverUrl.origin);
+};
+
+const matchingMetadata = async (
+  send: FetchFunction,
+  urls: readonly string[],
+  issuer: string
+) => {
+  const answers = await Promise.all(urls.map((url) => fetchJson(send, url)));
+  return answers
+    .map((answer) => answer.pipe(Option.flatMap(decodeAuthorizationServer)))
+    .find(
+      (candidate) =>
+        Option.isSome(candidate) && candidate.value.issuer === issuer
+    );
 };
 
 const isHttps = (value: string) =>
@@ -110,13 +155,18 @@ export const discoverOAuth = async ({
   serverUrl,
   clientMetadataUrl,
 }: OAuthDiscoveryInput): Promise<OAuthDiscovery> => {
-  const issuer = new URL(await issuerOf(send, new URL(serverUrl)));
-  const metadata = await firstJson(send, [
-    ...wellKnownUrls(issuer, "oauth-authorization-server"),
-    ...wellKnownUrls(issuer, "openid-configuration"),
-  ]);
-  const server = metadata.pipe(Option.flatMap(decodeAuthorizationServer));
-  if (Option.isNone(server)) {
+  const issuerText = await issuerOf(send, new URL(serverUrl));
+  const issuer = new URL(issuerText);
+  const server = await matchingMetadata(
+    send,
+    [
+      ...wellKnownUrls(issuer, "oauth-authorization-server"),
+      ...wellKnownUrls(issuer, "openid-configuration"),
+      `${issuerText.replace(/\/+$/u, "")}/.well-known/openid-configuration`,
+    ],
+    issuerText
+  );
+  if (server === undefined || Option.isNone(server)) {
     throw new OAuthDiscoveryFailedError(
       "The authorization server has no metadata"
     );

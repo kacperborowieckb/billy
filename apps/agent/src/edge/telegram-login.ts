@@ -66,8 +66,9 @@ const decodeLoginFields = Schema.decodeUnknownOption(LoginFieldsSchema);
 
 export const verifyTelegramLogin = Effect.fnUntraced(
   function* verifyTelegramLogin(params: URLSearchParams, botToken: string) {
+    const names = [...params.keys()];
     const fields = decodeLoginFields(Object.fromEntries(params));
-    if (Option.isNone(fields)) {
+    if (Option.isNone(fields) || new Set(names).size !== names.length) {
       return { _tag: "Refused", reason: "malformed" } satisfies TelegramLogin;
     }
     const { id, auth_date: authDate, hash: presented } = fields.value;
