@@ -81,10 +81,16 @@ export const receiveMcpConnected = Effect.fnUntraced(
     const conversation = yield* (yield* OwnerChannelConversation).current;
     if (conversation !== undefined) {
       const channel = yield* Channel;
-      yield* channel.send({
-        conversationId: conversation.conversationId,
-        text: connectedMessageOf(entry.displayName, accountLabel),
-      });
+      yield* channel
+        .send({
+          conversationId: conversation.conversationId,
+          text: connectedMessageOf(entry.displayName, accountLabel),
+        })
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("The Connected message was not sent", cause)
+          )
+        );
     }
   },
   Effect.orDie

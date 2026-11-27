@@ -445,6 +445,20 @@ describe("a replay of a good callback", () => {
     expect(fakeTelegram.sent).toHaveLength(2);
   });
 
+  it("keeps the Connection ready when the Connected message cannot be sent", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9994);
+    const { state } = await startedConsent(9994, ownerId);
+    fakeTelegram.refuseFromSend(1);
+
+    const response = await goodCallback(state);
+
+    expect(response.status).toBe(200);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+  });
+
   it("does not share a running callback with one that has a wrong iss", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9992);
     const { state } = await startedConsent(9992, ownerId);
