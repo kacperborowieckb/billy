@@ -117,7 +117,7 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
     }
   };
 
-  const press = async (selector: string) => {
+  const press = async (selector: string, live: () => boolean) => {
     const chip = lastGroup(thread)?.querySelector<HTMLElement>(selector);
     if (!chip) {
       return;
@@ -125,6 +125,10 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
     chip.classList.add("is-pressed");
     await wait(160);
     chip.classList.remove("is-pressed");
+    // A stop during the press leaves the reply unpicked.
+    if (!live()) {
+      return;
+    }
     pick(chip);
     await wait(520);
   };
@@ -183,7 +187,7 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
   // A step's actions: a quick reply, ticking tasks, a strike, a pause.
   const act = async (step: Step, live: () => boolean) => {
     if (step.tap && live()) {
-      await press(step.tap);
+      await press(step.tap, live);
     }
     if (step.tick !== undefined && live()) {
       await tickAll(step.tick, live);

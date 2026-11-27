@@ -38,6 +38,7 @@ export const startExplorer = () => {
   }
   const chat = createChat(thread);
   let current = 0;
+  let active = false;
 
   const place = () => {
     const tab = tabs[current];
@@ -62,7 +63,9 @@ export const startExplorer = () => {
     caption.textContent = feature.title;
     outfit.src = outfits[feature.outfit];
     place();
-    if (play) {
+    // Playback starts only while the section is active; otherwise the phone
+    // shows the feature finished.
+    if (play && active) {
       chat.play(feature.script);
     } else {
       chat.fill(feature.script);
@@ -81,12 +84,7 @@ export const startExplorer = () => {
       }
     });
   }
-  replay.addEventListener("click", () => {
-    const feature = features[current];
-    if (feature) {
-      chat.play(feature.script);
-    }
-  });
+  replay.addEventListener("click", () => select(current, true));
   window.addEventListener("resize", place);
   select(0, false);
 
@@ -94,9 +92,10 @@ export const startExplorer = () => {
   // leaves the screen (or the tab hides) playback stops on what it showed.
   // Under reduced motion the phone shows the picked feature finished.
   let played = false;
-  whenActive(section, (active) => {
+  whenActive(section, (isActive) => {
+    active = isActive;
     const feature = features[current];
-    if (!active) {
+    if (!isActive) {
       chat.stop();
       if (feature && isReduced()) {
         chat.fill(feature.script);
