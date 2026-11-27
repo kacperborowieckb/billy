@@ -159,7 +159,7 @@ export const handleMcpConnect = Effect.fnUntraced(function* handleMcpConnect(
   const hub = env.MCP_HUB.getByName(ownerId.value);
   const oauthRequest = {
     ...oauthRequestOf(request, params.get("c") ?? ""),
-    proofId: params.get("hash") ?? "",
+    proofId: (params.get("hash") ?? "").toLowerCase(),
   };
   if (request.method === "GET") {
     const consent = yield* Effect.tryPromise(

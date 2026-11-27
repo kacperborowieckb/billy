@@ -226,8 +226,13 @@ describe("a forwarded button or link", () => {
     const first = await postConsent(params);
     const second = await postConsent(params);
 
+    const shouted = new URLSearchParams(params);
+    shouted.set("hash", (params.get("hash") ?? "").toUpperCase());
+    const third = await postConsent(shouted);
+
     expect(first.status).toBe(303);
     expect(second.status).toBe(403);
+    expect(third.status).toBe(403);
     expect(second.headers.get("Location")).toBeNull();
     expect(await oauthKeyCountOf(ownerId)).toBe(1);
   });
