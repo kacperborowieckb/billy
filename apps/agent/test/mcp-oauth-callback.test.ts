@@ -526,7 +526,7 @@ describe("a replay of a good callback", () => {
     );
   });
 
-  it("sends one message and writes one Journal Entry when the Personal Agent hears the same completion twice", async () => {
+  it("sends one message, writes one Journal Entry, and sets ready when the Personal Agent hears the same completion twice", async () => {
     const ownerId = await ownerWhoWroteToTheAgent(9991);
     const agent = await agentOf(ownerId);
     const completion = {
@@ -541,7 +541,7 @@ describe("a replay of a good callback", () => {
     await agent.receiveMcpConnected(completion);
 
     expect(await statesOf(ownerId)).toEqual([
-      { catalogId: testMcpCatalogId, state: "failed" },
+      { catalogId: testMcpCatalogId, state: "ready" },
     ]);
 
     expect(await addedEntryCountOf(ownerId)).toBe(1);
@@ -615,6 +615,26 @@ describe("a replay of a good callback", () => {
       { catalogId: testMcpCatalogId, state: "ready" },
     ]);
     expect(await addedEntryCountOf(ownerId)).toBe(1);
+  });
+
+  it("ends ready when the completion committed and its result was lost", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9966);
+    const { state } = await startedConsent(9966, ownerId);
+    fakeCompletion.failuresAfterCommit = 1;
+
+    const lost = await goodCallback(state);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "failed" },
+    ]);
+    const replay = await goodCallback(state);
+
+    expect(lost.status).toBe(502);
+    expect(replay.status).toBe(200);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+    expect(fakeTelegram.sent).toHaveLength(2);
   });
 
   it("serializes two completions of one entry so only one exchanges a code", async () => {

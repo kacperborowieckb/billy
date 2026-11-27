@@ -88,6 +88,7 @@ export const receiveMcpConnected = Effect.fnUntraced(
     const isFirstTime = yield* database.transaction(() =>
       Effect.gen(function* recordCompletion() {
         if ((yield* journal.readForEvent(eventId)).length > 0) {
+          yield* connections.setState(catalogId, "ready");
           return false;
         }
         yield* connections.replaceTools(catalogId, tools);

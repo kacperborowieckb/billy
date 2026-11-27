@@ -94,6 +94,10 @@ export class PersonalAgent extends LivePersonalAgent {
       throw new Error("The completion failed on purpose");
     }
     await super.receiveMcpConnected(...args);
+    if (fakeCompletion.failuresAfterCommit > 0) {
+      fakeCompletion.failuresAfterCommit -= 1;
+      throw new Error("The completion result was lost");
+    }
   }
 
   protected override readonly turnServices = useFakeTurnServices;
