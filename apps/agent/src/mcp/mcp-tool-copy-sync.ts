@@ -61,24 +61,31 @@ export class McpToolCopySync {
     ownerId: string,
     connectTimeoutMillis: number
   ): Promise<McpRefreshOutcome> {
-    const { catalog, entryQueue, ledger, refreshTools } = this.dependencies;
+    const { catalog } = this.dependencies;
     if (mcpEntryOf(catalog, catalogId) === undefined) {
       return Promise.resolve({ outcome: "unknown_catalog_entry" });
     }
-    return entryQueue.run(catalogId, async () => {
-      if (!(await ledger.isReady(catalogId))) {
-        return { outcome: "not_ready" } as const;
-      }
-      const refreshed = await refreshTools(
-        catalogId,
-        ownerId,
-        connectTimeoutMillis
-      );
-      if (refreshed === "refreshed") {
-        await this.sendWhenChanged(catalogId);
-      }
-      return { outcome: refreshed } as const;
-    });
+    return this.refreshOutsideQueue(catalogId, ownerId, connectTimeoutMillis);
+  }
+
+  private async refreshOutsideQueue(
+    catalogId: string,
+    ownerId: string,
+    connectTimeoutMillis: number
+  ): Promise<McpRefreshOutcome> {
+    const { entryQueue, ledger, refreshTools } = this.dependencies;
+    if (!(await ledger.isReady(catalogId))) {
+      return { outcome: "not_ready" };
+    }
+    const refreshed = await refreshTools(
+      catalogId,
+      ownerId,
+      connectTimeoutMillis
+    );
+    if (refreshed === "refreshed") {
+      await entryQueue.run(catalogId, () => this.sendWhenChanged(catalogId));
+    }
+    return { outcome: refreshed };
   }
 
   async onServerStateChanged() {

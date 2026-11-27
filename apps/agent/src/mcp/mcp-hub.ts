@@ -151,6 +151,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   private readonly setup = new McpConnectionSetup({
     catalog: this.catalog,
+    entryQueue: this.entryQueue,
     connector: this.connector,
     ledger: this.ledger,
     toolCopies: this.toolCopies,

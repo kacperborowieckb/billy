@@ -126,7 +126,6 @@ export class McpServerConnector {
     ownerId: string,
     connectTimeoutMillis: number
   ): Promise<"refreshed" | "failed" | "timed_out"> {
-    this.queueWaitsOnConnect.add(entry.catalogId);
     try {
       const connected = await this.connectWhenNeeded(
         entry,
@@ -142,8 +141,6 @@ export class McpServerConnector {
       return discovered?.success === true ? "refreshed" : "failed";
     } catch {
       return "failed";
-    } finally {
-      this.queueWaitsOnConnect.delete(entry.catalogId);
     }
   }
 

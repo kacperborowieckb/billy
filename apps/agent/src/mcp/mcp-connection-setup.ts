@@ -1,5 +1,6 @@
 import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import type { personalAgentFor } from "../personal-agent/personal-agent.ts";
+import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
@@ -12,6 +13,7 @@ type PersonalAgentStub = Awaited<ReturnType<typeof personalAgentFor>>;
 
 export interface McpConnectionSetupDependencies {
   readonly catalog: McpCatalog;
+  readonly entryQueue: KeyedQueue;
   readonly connector: McpServerConnector;
   readonly ledger: McpConnectionLedger;
   readonly toolCopies: McpToolCopySync;
@@ -24,8 +26,6 @@ const connectTimedOut = "The MCP server did not connect in time";
 
 export class McpConnectionSetup {
   private readonly dependencies: McpConnectionSetupDependencies;
-
-  private readonly setups = new Map<string, Promise<McpAddConnectionOutcome>>();
 
   constructor(dependencies: McpConnectionSetupDependencies) {
     this.dependencies = dependencies;
@@ -77,12 +77,9 @@ export class McpConnectionSetup {
     catalogId: string,
     connectTimeoutMillis: number
   ): Promise<McpAddConnectionOutcome> {
-    const previous = this.setups.get(catalogId) ?? Promise.resolve();
-    const setup = previous
-      .catch(() => "earlier setup rejected")
-      .then(() => this.setUp(catalogId, connectTimeoutMillis));
-    this.setups.set(catalogId, setup);
-    return setup;
+    return this.dependencies.entryQueue.run(catalogId, () =>
+      this.setUp(catalogId, connectTimeoutMillis)
+    );
   }
 
   private async setUp(
@@ -94,11 +91,15 @@ export class McpConnectionSetup {
     if (entry === undefined) {
       return { outcome: "unknown_catalog_entry" };
     }
+    if ((await ledger.stateOf(catalogId)) === "needs_sign_in") {
+      return { outcome: "failed" };
+    }
     const agent = await agentOf(ownerId());
     try {
       if (
         (await connector.ensureConnected(entry, ownerId(), {
           timeoutMillis: connectTimeoutMillis,
+          holdsEntryQueue: true,
         })) === "timed_out"
       ) {
         throw new Error(connectTimedOut);

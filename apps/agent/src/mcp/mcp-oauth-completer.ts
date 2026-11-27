@@ -127,6 +127,10 @@ export class McpOAuthCompleter {
       if (latest !== nonce) {
         return { outcome: "not_started" };
       }
+      const credentials = await this.dependencies.credentials(settled.ownerId);
+      if ((await credentials.tokens(entry.catalogId)) === undefined) {
+        return { outcome: "not_started" };
+      }
       const connected = await this.dependencies.connect({
         entry,
         ownerId: settled.ownerId,

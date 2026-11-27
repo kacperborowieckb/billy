@@ -23,6 +23,8 @@ import {
   everythingStoredFor,
   goodCallback,
   hubOf,
+  newTelegramUserId,
+  ownerWhoWroteToTheAgent,
   searchOf,
   startedConsent,
   statesOf,
@@ -424,6 +426,65 @@ describe("a reconnect next to calls that are still running", () => {
         "needs_sign_in",
         "ready",
       ]);
+    },
+    slowTest
+  );
+});
+
+describe("other entries into the queue of the Connection", () => {
+  it(
+    "does not let a replay of the first callback bring back ready after the tokens were deleted",
+    async () => {
+      const telegramUserId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(telegramUserId);
+      const { state } = await startedConsent(telegramUserId, ownerId);
+      await goodCallback(state);
+      await driveToNeedsSignIn(ownerId);
+
+      await goodCallback(state);
+
+      expect(await stateOf(ownerId)).toBe("needs_sign_in");
+      expect(await storedTokensOf(ownerId)).toBeUndefined();
+    },
+    slowTest
+  );
+
+  it(
+    "makes an Operator add wait for a refresh that is running",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      expireAndRevoke();
+      const release = oauth.holdTokenRequests();
+      const refreshing = searchOf(ownerId);
+      await vi.waitFor(() => expect(oauth.refreshRequests).toHaveLength(1));
+
+      const adding = hubOf(ownerId).addConnection(
+        testMcpCatalogId,
+        defaultBehaviorConfig.mcpConnectTimeoutMillis
+      );
+      await vi.waitFor(async () => expect(await waitingOf(ownerId)).toBe(1));
+      release();
+      await refreshing;
+      await adding;
+
+      expect(await stateOf(ownerId)).toBe("needs_sign_in");
+    },
+    slowTest
+  );
+
+  it(
+    "refreshes an expired token during an explicit catalog refresh",
+    async () => {
+      const { ownerId } = await connectedOwner();
+      oauth.expireAccessToken();
+
+      const outcome = await hubOf(ownerId).refreshToolCatalog(
+        testMcpCatalogId,
+        defaultBehaviorConfig.mcpConnectTimeoutMillis
+      );
+
+      expect(outcome).toEqual({ outcome: "refreshed" });
+      expect(oauth.refreshRequests).toHaveLength(1);
     },
     slowTest
   );
