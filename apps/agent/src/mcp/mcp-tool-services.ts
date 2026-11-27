@@ -10,6 +10,7 @@ import type { Redactor } from "../tracing/redactor.ts";
 import { mcpArgumentProblemOf } from "./mcp-arguments.ts";
 import { mcpEntryOf, mcpToolRiskClass } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
+import type { McpConnections } from "./mcp-connections.ts";
 import type { McpHubPort } from "./mcp-hub-contract.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 import { findMcpToolsToolName } from "./mcp-tool-names.ts";
@@ -19,6 +20,7 @@ export interface McpToolServices {
   readonly states: ReadonlyMap<string, McpConnectionState>;
   readonly copies: ReadonlyMap<string, readonly McpToolCopy[]>;
   readonly hub: McpHubPort["Service"];
+  readonly requestConnect: McpConnections["Service"]["requestConnect"];
   readonly journal: Journal["Service"];
   readonly progress: TurnProgress["Service"];
   readonly redactor: Redactor["Service"];

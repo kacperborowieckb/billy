@@ -7,6 +7,9 @@ Generated from `apps/agent/src/edge/routes.ts` by `pnpm control map`. Do not edi
 | `POST /telegram/webhook` | Telegram secret token in X-Telegram-Bot-Api-Secret-Token | Receives a Telegram update, finds the Owner through the Directory, and stores the Event in the Owner's Personal Agent before it answers 200. |
 | `POST /operator/owners` | Operator token as Authorization: Bearer | Adds an Owner with a Telegram Channel Identity through the Directory. Registration stays closed. |
 | `POST /operator/mcp-connections` | Operator token as Authorization: Bearer | Adds an MCP Connection for an Owner from the MCP Catalog through the Owner's MCP Hub. Only the test-only catalog entry exists now. |
+| `GET /mcp/connect` | Telegram login data from a login_url button, signed with the bot token, fresh, and from the Owner's Channel Identity | Shows the consent page for connecting an MCP server. It starts nothing. |
+| `POST /mcp/connect` | The same Telegram login data, in the form that the consent page sends | Asks the Owner's MCP Hub to start OAuth with PKCE and redirects to the authorization server. |
+| `GET /oauth/client-metadata.json` | Public | Serves the OAuth Client ID Metadata Document of the agent. It exists on HTTPS only. |
 
 ## Seed and navigation
 

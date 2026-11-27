@@ -18,6 +18,15 @@ export const mcpConnections = sqliteTable(
   ]
 );
 
+export const mcpConnectRequests = sqliteTable(
+  "mcp_connect_requests",
+  {
+    eventId: text("event_id").notNull(),
+    catalogId: text("catalog_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.eventId, table.catalogId] })]
+);
+
 export const mcpTools = sqliteTable(
   "mcp_tools",
   {

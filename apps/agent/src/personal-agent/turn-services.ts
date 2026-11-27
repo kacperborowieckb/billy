@@ -85,6 +85,7 @@ export const liveTurnServices = (env: Env, ownerId: OwnerId) =>
         telegramChannel({
           apiUrl: config.TELEGRAM_API_URL,
           botToken: config.TELEGRAM_BOT_TOKEN,
+          edgeUrl: env.EDGE_PUBLIC_URL,
         }),
         liveModelGateway(config, ownerId),
         mcpHubClient(env.MCP_HUB, ownerId)

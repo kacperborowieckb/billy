@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 
 const testSecrets = {
   MCP_TEST_SERVER_URL: "https://mcp.test.example/mcp",
+  EDGE_PUBLIC_URL: "https://edge.test.example",
   AI_GATEWAY_TOKEN: "test-ai-gateway-token",
   OPERATOR_TOKEN: "test-operator-token",
   TELEGRAM_BOT_TOKEN: "test-telegram-bot-token",

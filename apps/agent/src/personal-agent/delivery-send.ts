@@ -66,7 +66,7 @@ export const recordSend = Effect.fnUntraced(function* recordSend<
   } as const;
 });
 
-const destinationOf = Effect.fnUntraced(function* destinationOf(
+export const destinationOf = Effect.fnUntraced(function* destinationOf(
   event: InboxEvent
 ) {
   if (event._tag === "OwnerMessage") {

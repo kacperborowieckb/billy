@@ -9,7 +9,12 @@ import {
   sendDocument,
 } from "./telegram-approval-answer.ts";
 import { telegramReactionFor } from "./telegram-reactions.ts";
-import { failed, send, sendWithApprovals } from "./telegram-send.ts";
+import {
+  failed,
+  send,
+  sendOwnerProofLink,
+  sendWithApprovals,
+} from "./telegram-send.ts";
 import type { TelegramConfig } from "./telegram-send.ts";
 
 const TrueResponseSchema = Schema.Union([
@@ -107,6 +112,7 @@ export const telegramChannel = (config: TelegramConfig) =>
     send: send(config),
     sendWithApprovals: sendWithApprovals(config),
     editApprovalMessage: editApprovalMessage(config),
+    sendOwnerProofLink: sendOwnerProofLink(config),
     answerPress: answerPress(config),
     sendDocument: sendDocument(config),
     react: react(config),

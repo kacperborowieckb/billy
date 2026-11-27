@@ -42,6 +42,7 @@ const fakeTurnServicesOf = (ownerId: OwnerId): TurnServices =>
     telegramChannel({
       apiUrl: fakeTelegramApiUrl,
       botToken: env.TELEGRAM_BOT_TOKEN,
+      edgeUrl: env.EDGE_PUBLIC_URL,
       fetch: fakeTelegram.fetch,
     }),
     ModelGateway.layer.pipe(
