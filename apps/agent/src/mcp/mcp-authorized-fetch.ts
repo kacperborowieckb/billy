@@ -3,6 +3,7 @@ import type {
   McpConnectionHealth,
   AccessOutcome,
 } from "./mcp-connection-health.ts";
+import { McpConnectionRemovedError } from "./mcp-connection-removed-error.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { McpRefreshUnavailableError } from "./mcp-refresh-unavailable-error.ts";
 import { McpSignInRequiredError } from "./mcp-sign-in-required-error.ts";
@@ -37,6 +38,9 @@ export const isInsufficientScope = (response: Response) =>
 const tokenFrom = (outcome: AccessOutcome) => {
   if (outcome._tag === "SignInRequired") {
     throw new McpSignInRequiredError("The MCP Connection needs a new sign-in");
+  }
+  if (outcome._tag === "NotConnected") {
+    throw new McpConnectionRemovedError("The MCP Connection was removed");
   }
   if (outcome._tag === "Unavailable") {
     throw new McpRefreshUnavailableError("The MCP token refresh failed");

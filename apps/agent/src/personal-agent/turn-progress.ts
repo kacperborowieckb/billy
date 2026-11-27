@@ -138,13 +138,24 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
 
   const recordingToolCall = <Output extends JSONValue, Failure, Needs>(
     call: ToolCallProgress,
-    run: Effect.Effect<Output, Failure, Needs>
+    run: Effect.Effect<Output, Failure, Needs>,
+    { runsOutsideTransaction = false } = {}
   ) =>
-    database.transaction(() =>
-      run.pipe(
-        Effect.tap((output) => record(call, messagesOfToolCall(call, output)))
-      )
-    );
+    runsOutsideTransaction
+      ? run.pipe(
+          Effect.tap((output) =>
+            database.transaction(() =>
+              record(call, messagesOfToolCall(call, output))
+            )
+          )
+        )
+      : database.transaction(() =>
+          run.pipe(
+            Effect.tap((output) =>
+              record(call, messagesOfToolCall(call, output))
+            )
+          )
+        );
 
   const recordTurnContext = Effect.fnUntraced(function* recordTurnContext(
     eventId: string,

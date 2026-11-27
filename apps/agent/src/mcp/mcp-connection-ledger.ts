@@ -5,6 +5,8 @@ import {
   hubConnectionStateOf,
   lastErrorKey,
   lastErrorOf,
+  removalMarkerKey,
+  removalMarkerOf,
 } from "./oauth-storage-keys.ts";
 import type { HubConnectionState, McpLastError } from "./oauth-storage-keys.ts";
 
@@ -12,6 +14,8 @@ export type McpErrorNote = Omit<McpLastError, "atMillis">;
 
 export class McpConnectionLedger {
   private readonly storage: DurableObjectStorage;
+
+  private ownerRemoved = false;
 
   constructor(storage: DurableObjectStorage) {
     this.storage = storage;
@@ -29,6 +33,29 @@ export class McpConnectionLedger {
 
   async lastErrorOf(catalogId: string) {
     return lastErrorOf(await this.storage.get(lastErrorKey(catalogId)));
+  }
+
+  async removalOf(catalogId: string) {
+    return removalMarkerOf(await this.storage.get(removalMarkerKey(catalogId)));
+  }
+
+  async isBeingRemoved(catalogId: string) {
+    return this.ownerRemoved || (await this.removalOf(catalogId)) !== undefined;
+  }
+
+  markOwnerRemoved() {
+    this.ownerRemoved = true;
+  }
+
+  markBeingRemoved(
+    catalogId: string,
+    marker: "pending" | "revoked" | "failed" | "not_attempted"
+  ) {
+    return this.storage.put(removalMarkerKey(catalogId), marker);
+  }
+
+  clearBeingRemoved(catalogId: string) {
+    return this.storage.delete(removalMarkerKey(catalogId));
   }
 
   markReady(catalogId: string) {

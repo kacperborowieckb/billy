@@ -156,9 +156,15 @@ export class McpOAuthCompleter {
     if (!hasText(code) && !hasText(error)) {
       return { outcome: "not_started" };
     }
-    await storage.delete(key);
-    return this.dependencies.entryQueue.run(entry.catalogId, () =>
-      this.finish(entry, pending, returned)
+    return this.dependencies.entryQueue.run(
+      entry.catalogId,
+      async (): Promise<McpCallbackOutcome> => {
+        if (pendingOAuthOf(await storage.get(key)) === undefined) {
+          return { outcome: "not_started" };
+        }
+        await storage.delete(key);
+        return this.finish(entry, pending, returned);
+      }
     );
   }
 

@@ -20,6 +20,7 @@ export const StoredClientSchema = Schema.Struct({
   client_auth_method: Schema.optionalKey(Schema.Literals(["basic", "post"])),
   redirectUrl: Schema.String,
   tokenEndpoint: Schema.optionalKey(Schema.String),
+  revocationEndpoint: Schema.optionalKey(Schema.String),
 });
 
 export type StoredClient = typeof StoredClientSchema.Type;
@@ -46,6 +47,11 @@ const withExpiry = (tokens: StoredTokens): StoredTokens => {
 
 const tokensKey = (catalogId: string) => `tokens:${catalogId}`;
 const clientKey = (catalogId: string) => `client:${catalogId}`;
+
+export const credentialKeysOf = (catalogId: string) => [
+  tokensKey(catalogId),
+  clientKey(catalogId),
+];
 
 export class SealedCredentials {
   private readonly storage: DurableObjectStorage;

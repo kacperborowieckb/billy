@@ -79,7 +79,7 @@ describe("the sign-in notification of a call", () => {
       catalog: [{ catalogId: "c" }] as never,
       entryQueue,
       ledger,
-      connector: {} as never,
+      connector: { epochOf: () => 0 } as never,
       ownerId: () => "owner",
       tellNeedsSignIn: tell,
     });
@@ -112,6 +112,45 @@ const copy = (name: string): McpToolCopy => ({
   annotations: {},
 });
 
+const readyLedger = (isReady: () => boolean) =>
+  ({
+    isReady: () => Promise.resolve(isReady()),
+  }) as unknown as McpConnectionLedger;
+
+describe("the tool catalog sync of a Connection that is removed", () => {
+  it("delivers no copy and closes the connection that a refresh opened during the removal", async () => {
+    let ready = true;
+    const delivered: string[] = [];
+    const closed: string[] = [];
+    const sync = new McpToolCopySync({
+      catalog: [{ catalogId: "c" }] as never,
+      entryQueue: new KeyedQueue(),
+      ledger: readyLedger(() => ready),
+      epochOf: () => 0,
+      isLive: () => true,
+      copiesOf: () => [copy("a")],
+      refreshTools: () => {
+        ready = false;
+        return Promise.resolve("refreshed");
+      },
+      closeLive: (catalogId) => {
+        closed.push(catalogId);
+        return Promise.resolve();
+      },
+      deliver: (catalogId) => {
+        delivered.push(catalogId);
+        return Promise.resolve();
+      },
+    });
+
+    expect(await sync.refresh("c", "owner", 1)).toEqual({
+      outcome: "not_ready",
+    });
+    expect(delivered).toEqual([]);
+    expect(closed).toEqual(["c"]);
+  });
+});
+
 describe("the copy marker of the tool catalog sync", () => {
   it("records the copy that was delivered, so a change during the delivery is sent next", async () => {
     let current = [copy("a")];
@@ -120,10 +159,12 @@ describe("the copy marker of the tool catalog sync", () => {
     const sync = new McpToolCopySync({
       catalog: [],
       entryQueue: new KeyedQueue(),
-      ledger: {} as McpConnectionLedger,
+      ledger: readyLedger(() => true),
+      epochOf: () => 0,
       isLive: () => true,
       copiesOf: () => current,
       refreshTools: () => Promise.resolve("refreshed"),
+      closeLive: () => Promise.resolve(),
       deliver: async (_catalogId, copies) => {
         delivered.push(copies.map(({ name }) => name));
         if (delivered.length === 1) {
@@ -132,12 +173,12 @@ describe("the copy marker of the tool catalog sync", () => {
       },
     });
 
-    const sending = sync.sendWhenChanged("c");
+    const sending = sync.sendWhenChanged("c", 0);
     await vi.waitFor(() => expect(delivered).toHaveLength(1));
     current = [copy("b")];
     firstDelivery.resolve(undefined);
     await sending;
-    await sync.sendWhenChanged("c");
+    await sync.sendWhenChanged("c", 0);
 
     expect(delivered).toEqual([["a"], ["b"]]);
   });

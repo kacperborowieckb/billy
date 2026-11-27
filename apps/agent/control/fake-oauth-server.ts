@@ -1,4 +1,5 @@
 import { createFakeRefreshGrant } from "./fake-oauth-refresh.ts";
+import { createFakeRevocationEndpoint } from "./fake-oauth-revocation.ts";
 import { answerTenantLayout } from "./fake-oauth-tenant-layout.ts";
 
 export const fakeOAuthSecrets = {
@@ -12,6 +13,7 @@ export const fakeOAuthAccountName = "Pat Reader";
 
 export const createFakeOAuthServer = () => {
   const refresh = createFakeRefreshGrant(fakeOAuthSecrets.refreshToken);
+  const revocation = createFakeRevocationEndpoint();
   const registrations: unknown[] = [];
   const tokenRequests: Record<string, string>[] = [];
   const state = {
@@ -43,6 +45,9 @@ export const createFakeOAuthServer = () => {
     authorization_endpoint: `${issuer}/authorize`,
     registration_endpoint: `${issuer}/register`,
     token_endpoint: state.tokenEndpoint ?? `${issuer}/token`,
+    ...(revocation.isAdvertised()
+      ? { revocation_endpoint: `${issuer}/revoke` }
+      : {}),
     authorization_response_iss_parameter_supported: state.sendsIssuer,
     code_challenge_methods_supported: state.supportsPkce ? ["S256"] : [],
     client_id_metadata_document_supported: state.supportsClientIdMetadata,
@@ -104,6 +109,9 @@ export const createFakeOAuthServer = () => {
     ) {
       return answerToken(request);
     }
+    if (revocation.isRevocation(request)) {
+      return revocation.answer(request);
+    }
     if (
       state.layout === "hanging_metadata" &&
       /oauth-protected-resource|openid-configuration/u.test(request.url)
@@ -160,6 +168,7 @@ export const createFakeOAuthServer = () => {
     answer,
     registrations,
     tokenRequests,
+    ...revocation.exposed,
     get requiresToken() {
       return state.requiresToken;
     },
@@ -237,6 +246,7 @@ export const createFakeOAuthServer = () => {
       state.metadataHold = Promise.resolve(undefined);
       state.withRefreshToken = true;
       refresh.reset();
+      revocation.reset();
       state.withAccountName = true;
       state.requiresToken = false;
       state.tokenEndpoint = undefined;

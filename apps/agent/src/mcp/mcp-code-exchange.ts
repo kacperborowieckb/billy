@@ -74,6 +74,9 @@ export const exchangeAndStore = async (
             }),
         redirectUrl: pending.redirectUrl,
         tokenEndpoint: pending.tokenEndpoint,
+        ...(pending.revocationEndpoint === undefined
+          ? {}
+          : { revocationEndpoint: pending.revocationEndpoint }),
       })),
       [latestExchangeKey(entry.catalogId)]: nonce,
       [`${settledOAuthKeyPrefix}${nonce}`]: {

@@ -11,7 +11,7 @@ import { mcpArgumentProblemOf } from "./mcp-arguments.ts";
 import { mcpEntryOf, mcpToolRiskClass } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpConnections } from "./mcp-connections.ts";
-import type { McpHubPort } from "./mcp-hub-contract.ts";
+import type { McpHubPort, McpRevocation } from "./mcp-hub-contract.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 import { findMcpToolsToolName } from "./mcp-tool-names.ts";
 
@@ -21,6 +21,10 @@ export interface McpToolServices {
   readonly copies: ReadonlyMap<string, readonly McpToolCopy[]>;
   readonly hub: McpHubPort["Service"];
   readonly requestConnect: McpConnections["Service"]["requestConnect"];
+  readonly removeConnection: (
+    catalogId: string,
+    revocation: McpRevocation
+  ) => Effect.Effect<void>;
   readonly journal: Journal["Service"];
   readonly progress: TurnProgress["Service"];
   readonly redactor: Redactor["Service"];

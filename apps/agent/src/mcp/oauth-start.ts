@@ -37,6 +37,7 @@ export const PendingOAuthSchema = Schema.Struct({
   issuer: Schema.String,
   issuerIsRequired: Schema.Boolean,
   tokenEndpoint: Schema.String,
+  revocationEndpoint: Schema.optionalKey(Schema.String),
   expiresAtMillis: Schema.Number,
 });
 
@@ -177,6 +178,9 @@ export const startOAuth = async (
         input.discovery.server
           .authorization_response_iss_parameter_supported === true,
       tokenEndpoint: input.discovery.server.token_endpoint,
+      ...(input.discovery.revocationEndpoint === undefined
+        ? {}
+        : { revocationEndpoint: input.discovery.revocationEndpoint }),
       expiresAtMillis: input.nowMillis + input.lifetimeMillis,
     },
   };

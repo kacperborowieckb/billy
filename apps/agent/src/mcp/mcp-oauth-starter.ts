@@ -37,13 +37,18 @@ export interface McpOAuthStarterDependencies {
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
   readonly entryQueue: KeyedQueue;
   readonly isReady: (catalogId: string) => Promise<boolean>;
+  readonly isBeingRemoved: (catalogId: string) => Promise<boolean>;
+  readonly entryEpochOf: (catalogId: string) => number;
   readonly markAuthenticating: (catalogId: string) => Promise<void>;
 }
 
 type Checked =
   | {
       readonly _tag: "Refused";
-      readonly outcome: "unknown_catalog_entry" | "already_connected";
+      readonly outcome:
+        | "unknown_catalog_entry"
+        | "already_connected"
+        | "unavailable";
     }
   | { readonly _tag: "Allowed"; readonly entry: McpCatalogEntry };
 
@@ -61,6 +66,9 @@ export class McpOAuthStarter {
     }
     if (await this.dependencies.isReady(request.catalogId)) {
       return { _tag: "Refused", outcome: "already_connected" };
+    }
+    if (await this.dependencies.isBeingRemoved(request.catalogId)) {
+      return { _tag: "Refused", outcome: "unavailable" };
     }
     return { _tag: "Allowed", entry };
   }
@@ -97,6 +105,7 @@ export class McpOAuthStarter {
   }
 
   async startOAuth(request: McpOAuthRequest): Promise<McpOAuthStartOutcome> {
+    const epoch = this.dependencies.entryEpochOf(request.catalogId);
     const checked = await this.check(request);
     if (checked._tag === "Refused") {
       return { outcome: checked.outcome };
@@ -106,8 +115,9 @@ export class McpOAuthStarter {
       const discovery = await this.discover(entry, request);
       const ownerId = this.dependencies.ownerId();
       const credentials = await this.dependencies.credentials(ownerId);
-      if (!(await this.useUpProof(request.proofId))) {
-        return { outcome: "proof_used" };
+      const proof = await this.useUpProof(entry.catalogId, request.proofId);
+      if (proof !== "fresh") {
+        return { outcome: proof };
       }
       const started = await startOAuth({
         send: this.dependencies.send,
@@ -132,6 +142,12 @@ export class McpOAuthStarter {
           if (await this.dependencies.isReady(entry.catalogId)) {
             return { outcome: "already_connected" } as const;
           }
+          if (
+            (await this.dependencies.isBeingRemoved(entry.catalogId)) ||
+            this.dependencies.entryEpochOf(entry.catalogId) !== epoch
+          ) {
+            return { outcome: "unavailable" } as const;
+          }
           await this.dependencies.storage.put<PendingOAuth>(
             `${pendingOAuthKeyPrefix}${started.nonce}`,
             started.pending
@@ -149,14 +165,22 @@ export class McpOAuthStarter {
     }
   }
 
-  private async useUpProof(proofId: string) {
-    const { storage } = this.dependencies;
+  private useUpProof(catalogId: string, proofId: string) {
+    const { storage, entryQueue, isBeingRemoved } = this.dependencies;
     const key = `${usedProofKeyPrefix}${proofId}`;
-    if ((await storage.get<number>(key)) !== undefined) {
-      return false;
-    }
-    await storage.put<number>(key, nowMillis() + usedProofLifetimeMillis);
-    return true;
+    return entryQueue.run(
+      catalogId,
+      async (): Promise<"fresh" | "proof_used" | "unavailable"> => {
+        if (await isBeingRemoved(catalogId)) {
+          return "unavailable";
+        }
+        if ((await storage.get<number>(key)) !== undefined) {
+          return "proof_used";
+        }
+        await storage.put<number>(key, nowMillis() + usedProofLifetimeMillis);
+        return "fresh";
+      }
+    );
   }
 
   private async forgetExpired() {

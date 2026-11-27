@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect";
 
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
+import { clientAuthenticationOf } from "./oauth-client-authentication.ts";
 import { withinDeadline } from "./oauth-deadline.ts";
 import { decodeTokenResponse } from "./oauth-token-exchange.ts";
 import type { StoredClient, StoredTokens } from "./sealed-credentials.ts";
@@ -63,35 +64,21 @@ const tokensOf = (text: string): StoredTokens => {
   };
 };
 
-const clientSecretOf = ({ client }: TokenRefreshInput) =>
-  client.client_secret === undefined
-    ? undefined
-    : {
-        method: client.client_auth_method ?? "basic",
-        secret: client.client_secret,
-      };
-
 const requestOf = (input: TokenRefreshInput, signal: AbortSignal) => {
   const { client, refreshToken, serverUrl } = input;
-  const authentication = clientSecretOf(input);
+  const authentication = clientAuthenticationOf(client);
   return {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Accept: "application/json",
-      ...(authentication?.method === "basic"
-        ? {
-            Authorization: `Basic ${btoa(`${encodeURIComponent(client.client_id)}:${encodeURIComponent(authentication.secret)}`)}`,
-          }
-        : {}),
+      ...authentication.headers,
     },
     body: new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
       client_id: client.client_id,
-      ...(authentication?.method === "post"
-        ? { client_secret: authentication.secret }
-        : {}),
+      ...authentication.fields,
       resource: serverUrl,
     }),
     signal,

@@ -21,7 +21,7 @@ export interface McpConnectionSetupDependencies {
   readonly toolCopies: McpToolCopySync;
   readonly ownerId: () => string;
   readonly agentOf: (ownerId: string) => Promise<PersonalAgentStub>;
-  readonly closeConnection: (catalogId: string) => Promise<void>;
+  readonly closeConnection: (catalogId: string, epoch: number) => Promise<void>;
 }
 
 const connectTimedOut = "The MCP server did not connect in time";
@@ -58,28 +58,31 @@ export class McpConnectionSetup {
   }: McpCompletion): Promise<"connected" | "failed"> {
     const { connector, ledger, toolCopies, agentOf, closeConnection } =
       this.dependencies;
+    const epoch = connector.epochOf(entry.catalogId);
     try {
       if (
         (await connector.ensureConnected(entry, ownerId, {
           timeoutMillis: defaultBehaviorConfig.mcpConnectTimeoutMillis,
           holdsEntryQueue: true,
+          epoch,
         })) === "timed_out"
       ) {
         throw new Error(connectTimedOut);
       }
+      const tools = connector.toolCopiesOf(entry.catalogId, epoch);
       const agent = await agentOf(ownerId);
       await ledger.markReady(entry.catalogId);
-      toolCopies.remember(entry.catalogId);
+      toolCopies.remember(entry.catalogId, tools);
       await agent.receiveMcpConnected({
         catalogId: entry.catalogId,
-        tools: connector.toolCopiesOf(entry.catalogId),
+        tools,
         accountLabel,
         completionId,
       });
       return "connected";
     } catch {
       await this.recordFailure(entry.catalogId);
-      await closeConnection(entry.catalogId);
+      await closeConnection(entry.catalogId, epoch);
       const agent = await agentOf(ownerId);
       await agent.receiveMcpConnectionState(entry.catalogId, "failed");
       return "failed";
@@ -105,7 +108,10 @@ export class McpConnectionSetup {
     if (entry === undefined) {
       return { outcome: "unknown_catalog_entry" };
     }
-    if ((await ledger.stateOf(catalogId)) === "needs_sign_in") {
+    if (
+      (await ledger.stateOf(catalogId)) === "needs_sign_in" ||
+      (await ledger.isBeingRemoved(catalogId))
+    ) {
       return { outcome: "failed" };
     }
     const fresh = await health.refreshWhileQueueHeld(entry, ownerId());
@@ -113,18 +119,20 @@ export class McpConnectionSetup {
       return { outcome: "failed" };
     }
     const agent = await agentOf(ownerId());
+    const epoch = connector.epochOf(catalogId);
     try {
       if (
         (await connector.ensureConnected(entry, ownerId(), {
           timeoutMillis: connectTimeoutMillis,
           holdsEntryQueue: true,
+          epoch,
         })) === "timed_out"
       ) {
         throw new Error(connectTimedOut);
       }
       await agent.receiveMcpToolCatalog(
         catalogId,
-        connector.toolCopiesOf(catalogId)
+        connector.toolCopiesOf(catalogId, epoch)
       );
       await agent.receiveMcpConnectionState(catalogId, "ready");
       await ledger.markReady(catalogId);

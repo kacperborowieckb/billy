@@ -7,12 +7,14 @@ import { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
 import { KeyedQueue } from "./keyed-queue.ts";
 import { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
+import { allowedOriginsOf } from "./mcp-allowed-origins.ts";
 import { McpCallGateway } from "./mcp-call-gateway.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import { McpConnectionHealth } from "./mcp-connection-health.ts";
 import { McpConnectionLedger } from "./mcp-connection-ledger.ts";
 import { McpConnectionSetup } from "./mcp-connection-setup.ts";
+import { McpDisconnector } from "./mcp-disconnector.ts";
 import type {
   McpAddConnectionOutcome,
   McpCallbackOutcome,
@@ -38,11 +40,6 @@ import { parseSealKeyring } from "./token-seal.ts";
 import type { SealKeyring } from "./token-seal.ts";
 
 const sendFromWorker: FetchFunction = (input, init) => fetch(input, init);
-
-const allowedOriginsOf = (env: Env): readonly string[] =>
-  env.MCP_TEST_SERVER_URL === ""
-    ? []
-    : [new URL(env.MCP_TEST_SERVER_URL).origin];
 
 export class McpHub extends DurableObject<Env> implements McpHubRpc {
   protected readonly send: FetchFunction = sendFromWorker;
@@ -75,6 +72,7 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   private readonly connector = new McpServerConnector({
     manager: this.manager,
+    storage: this.ctx.storage,
     start: () => this.lifecycle.start(),
     send: (input, init) => this.send(input, init),
     allowedOrigins: this.allowedOrigins,
@@ -86,15 +84,16 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     catalog: this.catalog,
     entryQueue: this.entryQueue,
     ledger: this.ledger,
-    isLive: (catalogId) =>
-      this.manager.mcpConnections[catalogId]?.connectionState === "ready",
-    copiesOf: (catalogId) => this.connector.toolCopiesOf(catalogId),
-    refreshTools: (catalogId, ownerId, connectTimeoutMillis) => {
+    epochOf: (catalogId) => this.connector.epochOf(catalogId),
+    isLive: (catalogId, epoch) => this.connector.isLive(catalogId, epoch),
+    copiesOf: (id, epoch) => this.connector.toolCopiesOf(id, epoch),
+    refreshTools: (catalogId, ownerId, options) => {
       const entry = mcpEntryOf(this.catalog, catalogId);
       return entry === undefined
         ? Promise.resolve("failed" as const)
-        : this.connector.refreshTools(entry, ownerId, connectTimeoutMillis);
+        : this.connector.refreshTools(entry, ownerId, options);
     },
+    closeLive: (id, epoch) => this.connector.close(id, epoch),
     deliver: async (catalogId, copies) => {
       const agent = await this.agentOf(this.ownerName());
       await agent.receiveMcpToolCatalog(catalogId, copies);
@@ -116,6 +115,8 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     ownerId: () => this.ownerName(),
     credentials: (ownerId) => this.credentialsOf(ownerId),
     isReady: (catalogId) => this.ledger.isReady(catalogId),
+    isBeingRemoved: (catalogId) => this.ledger.isBeingRemoved(catalogId),
+    entryEpochOf: (catalogId) => this.connector.epochOf(catalogId),
     markAuthenticating: async (catalogId) => {
       if ((await this.ledger.stateOf(catalogId)) === undefined) {
         await this.tellState(this.ownerName(), catalogId, "authenticating");
@@ -159,7 +160,18 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     toolCopies: this.toolCopies,
     ownerId: () => this.ownerName(),
     agentOf: (ownerId) => this.agentOf(ownerId),
-    closeConnection: (catalogId) => this.closeQuietly(catalogId),
+    closeConnection: (catalogId, epoch) => this.closeQuietly(catalogId, epoch),
+  });
+
+  private readonly disconnector = new McpDisconnector({
+    catalog: this.catalog,
+    ledger: this.ledger,
+    entryQueue: this.entryQueue,
+    connector: this.connector,
+    storage: this.ctx.storage,
+    send: this.guardedSend,
+    ownerId: () => this.ownerName(),
+    credentials: (ownerId) => this.credentialsOf(ownerId),
   });
 
   private ownerName() {
@@ -213,9 +225,9 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     }
   }
 
-  private async closeQuietly(catalogId: string) {
+  private async closeQuietly(catalogId: string, epoch: number) {
     try {
-      await this.connector.close(catalogId);
+      await this.connector.close(catalogId, epoch);
     } catch (error) {
       await Effect.runPromise(
         Effect.logWarning("The MCP connection did not close", error)
@@ -244,6 +256,18 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   callTool(request: McpCallRequest): Promise<McpCallOutcome> {
     return this.calls.callTool(request);
+  }
+
+  disconnect(catalogId: string) {
+    return this.disconnector.disconnect(catalogId);
+  }
+
+  acknowledgeRemoval(catalogId: string): Promise<void> {
+    return this.disconnector.acknowledgeRemoval(catalogId);
+  }
+
+  removeOwnerStorage(): Promise<void> {
+    return this.disconnector.removeAll();
   }
 
   lastError(catalogId: string): Promise<McpLastError | undefined> {
