@@ -39,6 +39,8 @@ import { SealedCredentials } from "./sealed-credentials.ts";
 import { parseSealKeyring } from "./token-seal.ts";
 import type { SealKeyring } from "./token-seal.ts";
 
+const closeDeadlineMillis = 3000;
+
 const sendFromWorker: FetchFunction = (input, init) => fetch(input, init);
 
 export class McpHub extends DurableObject<Env> implements McpHubRpc {
@@ -92,7 +94,8 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
         ? Promise.resolve("failed" as const)
         : this.connector.refreshTools(entry, ownerId, connectTimeoutMillis);
     },
-    closeLive: (catalogId) => this.closeQuietly(catalogId),
+    closeLive: (catalogId) =>
+      this.connector.closeWhileQueueHeld(catalogId, closeDeadlineMillis),
     deliver: async (catalogId, copies) => {
       const agent = await this.agentOf(this.ownerName());
       await agent.receiveMcpToolCatalog(catalogId, copies);

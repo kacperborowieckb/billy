@@ -28,6 +28,12 @@ export interface McpServerConnectorDependencies {
 export interface ConnectOptions {
   readonly timeoutMillis: number;
   readonly holdsEntryQueue?: boolean;
+  readonly epoch?: number;
+}
+
+export interface AdmittedCall {
+  readonly request: McpCallRequest;
+  readonly epoch: number;
 }
 
 export class McpServerConnector {
@@ -43,15 +49,21 @@ export class McpServerConnector {
     this.dependencies = dependencies;
   }
 
-  private epochOf(catalogId: string) {
+  epochOf(catalogId: string) {
     return this.epochs.get(catalogId) ?? 0;
   }
 
-  private async registerAndConnect(entry: McpCatalogEntry, ownerId: string) {
+  private async registerAndConnect(
+    entry: McpCatalogEntry,
+    ownerId: string,
+    epoch: number
+  ) {
     const { manager, send, allowedOrigins, credentials, health } =
       this.dependencies;
     const { catalogId } = entry;
-    const epoch = this.epochOf(catalogId);
+    if (this.epochOf(catalogId) !== epoch) {
+      throw new Error("The MCP Connection was removed before it connected");
+    }
     await manager.registerServer(catalogId, {
       url: entry.serverUrl,
       name: entry.displayName,
@@ -85,14 +97,15 @@ export class McpServerConnector {
     }
   }
 
-  private connectOnce(entry: McpCatalogEntry, ownerId: string) {
+  private connectOnce(entry: McpCatalogEntry, ownerId: string, epoch: number) {
     const existing = this.connecting.get(entry.catalogId);
     if (existing !== undefined) {
       return existing;
     }
     const started: Promise<void> = this.registerAndConnect(
       entry,
-      ownerId
+      ownerId,
+      epoch
     ).finally(() => {
       if (this.connecting.get(entry.catalogId) === started) {
         this.connecting.delete(entry.catalogId);
@@ -105,13 +118,17 @@ export class McpServerConnector {
   ensureConnected(
     entry: McpCatalogEntry,
     ownerId: string,
-    { timeoutMillis, holdsEntryQueue = false }: ConnectOptions
+    {
+      timeoutMillis,
+      holdsEntryQueue = false,
+      epoch = this.epochOf(entry.catalogId),
+    }: ConnectOptions
   ): Promise<"connected" | "timed_out"> {
     if (!holdsEntryQueue) {
-      return this.connectWhenNeeded(entry, ownerId, timeoutMillis);
+      return this.connectWhenNeeded(entry, ownerId, { timeoutMillis, epoch });
     }
     return this.whileQueueHeld(entry.catalogId, () =>
-      this.connectWhenNeeded(entry, ownerId, timeoutMillis)
+      this.connectWhenNeeded(entry, ownerId, { timeoutMillis, epoch })
     );
   }
 
@@ -132,7 +149,10 @@ export class McpServerConnector {
   private async connectWhenNeeded(
     entry: McpCatalogEntry,
     ownerId: string,
-    connectTimeoutMillis: number
+    {
+      timeoutMillis: connectTimeoutMillis,
+      epoch = this.epochOf(entry.catalogId),
+    }: ConnectOptions
   ): Promise<"connected" | "timed_out"> {
     await this.dependencies.start();
     if (
@@ -142,7 +162,7 @@ export class McpServerConnector {
       return "connected";
     }
     const connected = await within(
-      this.connectOnce(entry, ownerId),
+      this.connectOnce(entry, ownerId, epoch),
       connectTimeoutMillis
     );
     return Option.isSome(connected) ? "connected" : "timed_out";
@@ -154,11 +174,9 @@ export class McpServerConnector {
     connectTimeoutMillis: number
   ): Promise<"refreshed" | "failed" | "timed_out"> {
     try {
-      const connected = await this.connectWhenNeeded(
-        entry,
-        ownerId,
-        connectTimeoutMillis
-      );
+      const connected = await this.connectWhenNeeded(entry, ownerId, {
+        timeoutMillis: connectTimeoutMillis,
+      });
       if (connected === "timed_out") {
         return "timed_out";
       }
@@ -181,17 +199,9 @@ export class McpServerConnector {
     }
   }
 
-  async forget(catalogId: string, deadlineMillis: number) {
-    this.epochs.set(catalogId, this.epochOf(catalogId) + 1);
-    const running = this.connecting.get(catalogId);
+  async closeWhileQueueHeld(catalogId: string, deadlineMillis: number) {
     await this.whileQueueHeld(catalogId, async () => {
       try {
-        if (running !== undefined) {
-          await within(
-            running.catch(() => null),
-            deadlineMillis
-          );
-        }
         await within(this.closeIfOpen(catalogId), deadlineMillis);
       } catch {
         await Effect.runPromise(
@@ -199,6 +209,18 @@ export class McpServerConnector {
         );
       }
     });
+  }
+
+  async forget(catalogId: string, deadlineMillis: number) {
+    this.epochs.set(catalogId, this.epochOf(catalogId) + 1);
+    const running = this.connecting.get(catalogId);
+    if (running !== undefined) {
+      await within(
+        running.catch(() => null),
+        deadlineMillis
+      ).catch(() => null);
+    }
+    await this.closeWhileQueueHeld(catalogId, deadlineMillis);
   }
 
   toolCopiesOf(catalogId: string) {
@@ -210,12 +232,13 @@ export class McpServerConnector {
   async callTool(
     entry: McpCatalogEntry,
     ownerId: string,
-    request: McpCallRequest
+    { request, epoch }: AdmittedCall
   ): Promise<McpCallOutcome> {
     try {
       if (
         (await this.ensureConnected(entry, ownerId, {
           timeoutMillis: request.connectTimeoutMillis,
+          epoch,
         })) === "timed_out"
       ) {
         return { _tag: "Failed", reason: "timed_out" };

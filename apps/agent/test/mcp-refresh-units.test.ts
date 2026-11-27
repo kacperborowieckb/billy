@@ -9,6 +9,7 @@ import { McpCallGateway } from "../src/mcp/mcp-call-gateway.ts";
 import type { McpConnectionHealth } from "../src/mcp/mcp-connection-health.ts";
 import type { McpConnectionLedger } from "../src/mcp/mcp-connection-ledger.ts";
 import { McpRefreshUnavailableError } from "../src/mcp/mcp-refresh-unavailable-error.ts";
+import { McpServerConnector } from "../src/mcp/mcp-server-connector.ts";
 import { McpToolCopySync } from "../src/mcp/mcp-tool-copy-sync.ts";
 import type { McpToolCopy } from "../src/mcp/mcp-tool-copy.ts";
 
@@ -79,7 +80,7 @@ describe("the sign-in notification of a call", () => {
       catalog: [{ catalogId: "c" }] as never,
       entryQueue,
       ledger,
-      connector: {} as never,
+      connector: { epochOf: () => 0 } as never,
       ownerId: () => "owner",
       tellNeedsSignIn: tell,
     });
@@ -179,5 +180,52 @@ describe("the copy marker of the tool catalog sync", () => {
     await sync.sendWhenChanged("c");
 
     expect(delivered).toEqual([["a"], ["b"]]);
+  });
+});
+
+const connectorOver = (manager: Record<string, unknown>) =>
+  new McpServerConnector({
+    manager: manager as never,
+    start: () => Promise.resolve(),
+    send: () => Promise.resolve(new Response(null, { status: 500 })),
+    allowedOrigins: [],
+    credentials: () => Promise.reject(new Error("no credentials")),
+    health: {} as never,
+  });
+
+describe("the connector of a Connection that is removed", () => {
+  const entry = { catalogId: "c", serverUrl: "https://mcp.test.example/mcp" };
+  const request = {
+    catalogId: "c",
+    tool: "search",
+    arguments: {},
+    connectTimeoutMillis: 1000,
+    callTimeoutMillis: 1000,
+  };
+
+  it("does not open a connection for a call that was admitted before the removal", async () => {
+    const registerServer = vi.fn();
+    const connector = connectorOver({ mcpConnections: {}, registerServer });
+    const epoch = connector.epochOf("c");
+
+    await connector.forget("c", 50);
+    const outcome = await connector.callTool(entry as never, "owner", {
+      request,
+      epoch,
+    });
+
+    expect(outcome).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(registerServer).not.toHaveBeenCalled();
+  });
+
+  it("gives up a close that never ends when the deadline comes", async () => {
+    const connector = connectorOver({
+      mcpConnections: { c: {} },
+      closeConnection: () => Promise.withResolvers<undefined>().promise,
+    });
+
+    await expect(
+      connector.closeWhileQueueHeld("c", 20)
+    ).resolves.toBeUndefined();
   });
 });

@@ -44,6 +44,7 @@ export class McpCallGateway {
 
   async callTool(request: McpCallRequest): Promise<McpCallOutcome> {
     const { catalog, ledger, connector, ownerId } = this.dependencies;
+    const epoch = connector.epochOf(request.catalogId);
     const entry = mcpEntryOf(catalog, request.catalogId);
     const state =
       entry === undefined ? undefined : await ledger.stateOf(request.catalogId);
@@ -53,7 +54,10 @@ export class McpCallGateway {
     if (state === "needs_sign_in") {
       return this.signInFailure(request.catalogId);
     }
-    const outcome = await connector.callTool(entry, ownerId(), request);
+    const outcome = await connector.callTool(entry, ownerId(), {
+      request,
+      epoch,
+    });
     if (outcome._tag === "Result") {
       return outcome;
     }
