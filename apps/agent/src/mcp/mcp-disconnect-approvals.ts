@@ -1,22 +1,20 @@
 import { and, eq } from "drizzle-orm";
-import { DateTime, Effect } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 
 import { pendingApprovals } from "../approval/pending-approvals-schema.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { callMcpToolToolName } from "./mcp-tool-names.ts";
 
-const connectionOf = (frozenInput: string) => {
-  try {
-    const parsed: unknown = JSON.parse(frozenInput);
-    return typeof parsed === "object" &&
-      parsed !== null &&
-      "connection" in parsed
-      ? parsed.connection
-      : null;
-  } catch {
-    return null;
-  }
-};
+const FrozenCallSchema = Schema.fromJsonString(
+  Schema.Struct({ connection: Schema.String })
+);
+
+const decodeFrozenCall = Schema.decodeUnknownOption(FrozenCallSchema);
+
+const connectionOf = (frozenInput: string) =>
+  Option.getOrUndefined(
+    Option.map(decodeFrozenCall(frozenInput), ({ connection }) => connection)
+  );
 
 export const makeApprovalsOfConnectionDue = Effect.fnUntraced(
   function* makeApprovalsOfConnectionDue(catalogId: string) {

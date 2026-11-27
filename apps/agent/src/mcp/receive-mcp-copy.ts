@@ -10,6 +10,7 @@ import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import { McpConnections, McpConnectionStateSchema } from "./mcp-connections.ts";
 import { makeApprovalsOfConnectionDue } from "./mcp-disconnect-approvals.ts";
+import type { McpRevocation } from "./mcp-hub-contract.ts";
 import { McpToolCatalogCopySchema } from "./mcp-tool-copy.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 
@@ -140,10 +141,7 @@ export const receiveMcpConnected = Effect.fnUntraced(
 );
 
 export const removeMcpConnection = Effect.fnUntraced(
-  function* removeMcpConnection(
-    catalogId: string,
-    revocation: "revoked" | "failed" | "not_attempted"
-  ) {
+  function* removeMcpConnection(catalogId: string, revocation: McpRevocation) {
     const { database } = yield* AgentStorage;
     const journal = yield* Journal;
     const connections = yield* McpConnections;

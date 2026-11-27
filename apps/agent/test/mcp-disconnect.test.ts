@@ -86,6 +86,14 @@ const hubKeysOf = (ownerId: string) =>
     return [...stored.keys()];
   });
 
+const approvalStatesOf = async (ownerId: string) =>
+  runInDurableObject(await agentOf(ownerId), (_instance, { storage }) =>
+    storage.sql
+      .exec<{ state: string }>("SELECT state FROM pending_approvals")
+      .toArray()
+      .map((row) => row.state)
+  );
+
 const expectAgentForgot = async (ownerId: string) => {
   expect(await statesOf(ownerId)).toEqual([]);
 };
@@ -361,8 +369,11 @@ describe("one state machine for each catalog entry", () => {
       expect(await outcomeOf(disconnectOf(ownerId))).toBe("disconnected");
       releaseCall();
 
-      const outcome = await running;
-      expect(outcome._tag === "Failed" || outcome._tag === "Result").toBe(true);
+      await vi.waitFor(() => expect(fakeMcpServer.calls).toHaveLength(1));
+      expect(await running).toEqual({
+        _tag: "Failed",
+        reason: "not_connected",
+      });
       await expectNothingLeft(ownerId);
       expect(await stateChangesOf(ownerId)).not.toContain("needs_sign_in");
     },
@@ -471,7 +482,10 @@ describe("a Pending Approval for a disconnected server", () => {
         nowSeconds() - 37
       );
       await goodCallback(state);
-      await runDurableObjectAlarm(await agentOf(ownerId));
+      await vi.waitFor(async () => {
+        await runDurableObjectAlarm(await agentOf(ownerId));
+        expect(await approvalStatesOf(ownerId)).toEqual(["expired"]);
+      });
       await telegramWebhook(
         pressUpdate({
           fromUserId: telegramUserId,
@@ -480,15 +494,7 @@ describe("a Pending Approval for a disconnected server", () => {
         })
       );
 
-      const states = await runInDurableObject(
-        await agentOf(ownerId),
-        (_instance, { storage }) =>
-          storage.sql
-            .exec<{ state: string }>("SELECT state FROM pending_approvals")
-            .toArray()
-            .map((row) => row.state)
-      );
-      expect(states).toEqual(["expired"]);
+      expect(await approvalStatesOf(ownerId)).toEqual(["expired"]);
       expect(fakeMcpServer.calls).toEqual([]);
     },
     slowTest

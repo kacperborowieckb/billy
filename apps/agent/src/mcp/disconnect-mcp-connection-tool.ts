@@ -4,6 +4,7 @@ import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import { ToolFailed } from "../model-gateway/agent-tool.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
+import type { McpRevocation } from "./mcp-hub-contract.ts";
 import { disconnectMcpConnectionToolName } from "./mcp-tool-names.ts";
 import {
   connectionDescription,
@@ -26,10 +27,7 @@ const DisconnectOutputSchema = Schema.Struct({
 
 type DisconnectOutput = typeof DisconnectOutputSchema.Type;
 
-const noticeOf = (
-  displayName: string,
-  revocation: "revoked" | "failed" | "not_attempted"
-) => {
+const noticeOf = (displayName: string, revocation: McpRevocation) => {
   const base = `${displayName} is disconnected. The agent has no access to it now, and its tokens are deleted here.`;
   if (revocation === "failed") {
     return `${base} The service did not confirm that it revoked the token. Tell the Owner that they can remove Billy in the settings of ${displayName}.`;
