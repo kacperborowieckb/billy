@@ -35,7 +35,7 @@ export class McpServerConnector {
 
   private readonly connecting = new Map<string, Promise<void>>();
 
-  private readonly queueWaitsOnConnect = new Set<string>();
+  private readonly queueHolds = new Map<string, number>();
 
   constructor(dependencies: McpServerConnectorDependencies) {
     this.dependencies = dependencies;
@@ -55,7 +55,7 @@ export class McpServerConnector {
           entry,
           ownerId,
           health,
-          queueWaitsOnConnect: () => this.queueWaitsOnConnect.has(catalogId),
+          queueWaitsOnConnect: () => (this.queueHolds.get(catalogId) ?? 0) > 0,
         }),
         authProvider: new SealedOAuthProvider(
           await credentials(ownerId),
@@ -86,7 +86,7 @@ export class McpServerConnector {
     return started;
   }
 
-  async ensureConnected(
+  ensureConnected(
     entry: McpCatalogEntry,
     ownerId: string,
     { timeoutMillis, holdsEntryQueue = false }: ConnectOptions
@@ -94,11 +94,22 @@ export class McpServerConnector {
     if (!holdsEntryQueue) {
       return this.connectWhenNeeded(entry, ownerId, timeoutMillis);
     }
-    this.queueWaitsOnConnect.add(entry.catalogId);
+    return this.whileQueueHeld(entry.catalogId, () =>
+      this.connectWhenNeeded(entry, ownerId, timeoutMillis)
+    );
+  }
+
+  async whileQueueHeld<Value>(catalogId: string, work: () => Promise<Value>) {
+    this.queueHolds.set(catalogId, (this.queueHolds.get(catalogId) ?? 0) + 1);
     try {
-      return await this.connectWhenNeeded(entry, ownerId, timeoutMillis);
+      return await work();
     } finally {
-      this.queueWaitsOnConnect.delete(entry.catalogId);
+      const left = (this.queueHolds.get(catalogId) ?? 1) - 1;
+      if (left === 0) {
+        this.queueHolds.delete(catalogId);
+      } else {
+        this.queueHolds.set(catalogId, left);
+      }
     }
   }
 

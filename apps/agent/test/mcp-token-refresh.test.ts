@@ -450,6 +450,22 @@ describe("other entries into the queue of the Connection", () => {
   );
 
   it(
+    "finishes a callback whose connect is refused, with the cleanup under the same rules",
+    async () => {
+      const telegramUserId = newTelegramUserId();
+      const ownerId = await ownerWhoWroteToTheAgent(telegramUserId);
+      const { state } = await startedConsent(telegramUserId, ownerId);
+      fakeMcpServer.refuseAllTokens(true);
+
+      const callback = await goodCallback(state);
+
+      expect(callback.status).toBe(502);
+      expect(await stateOf(ownerId)).toBe("failed");
+    },
+    slowTest
+  );
+
+  it(
     "makes an Operator add wait for a refresh that is running",
     async () => {
       const { ownerId } = await connectedOwner();

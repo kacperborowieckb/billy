@@ -37,7 +37,18 @@ export class McpConnectionSetup {
     await ledger.recordError(catalogId, { phase: "connect", reason: "failed" });
   }
 
-  async connectAfterConsent({
+  connectAfterConsent({
+    entry,
+    ownerId,
+    completionId,
+    accountLabel,
+  }: McpCompletion): Promise<"connected" | "failed"> {
+    return this.dependencies.connector.whileQueueHeld(entry.catalogId, () =>
+      this.connectHoldingQueue({ entry, ownerId, completionId, accountLabel })
+    );
+  }
+
+  private async connectHoldingQueue({
     entry,
     ownerId,
     completionId,
