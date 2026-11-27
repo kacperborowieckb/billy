@@ -537,6 +537,12 @@ describe("stored credentials and the Operator add", () => {
       });
       expect(oauth.refreshRequests).toHaveLength(0);
       expect(await stateOf(ownerId)).toBe("needs_sign_in");
+      expect(await hubOf(ownerId).lastError(testMcpCatalogId)).toEqual(
+        expect.objectContaining({
+          phase: "refresh",
+          reason: "no_token_endpoint",
+        })
+      );
     },
     slowTest
   );

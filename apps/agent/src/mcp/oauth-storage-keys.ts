@@ -48,6 +48,7 @@ export const McpLastErrorSchema = Schema.Struct({
   reason: Schema.Literals([
     "invalid_grant",
     "no_refresh_token",
+    "no_token_endpoint",
     "unauthorized",
     "insufficient_scope",
     "unavailable",

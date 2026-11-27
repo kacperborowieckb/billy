@@ -164,13 +164,16 @@ export class McpConnectionHealth {
       return token(tokens.access_token);
     }
     const client = await credentials.client(catalogId);
-    if (
-      tokens.refresh_token === undefined ||
-      client?.tokenEndpoint === undefined
-    ) {
+    if (tokens.refresh_token === undefined) {
       return this.enterNeedsSignIn(entry, ownerId, {
         phase: "refresh",
         reason: "no_refresh_token",
+      });
+    }
+    if (client?.tokenEndpoint === undefined) {
+      return this.enterNeedsSignIn(entry, ownerId, {
+        phase: "refresh",
+        reason: "no_token_endpoint",
       });
     }
     const outcome = await refreshTokens({
