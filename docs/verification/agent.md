@@ -232,7 +232,7 @@ Decision [0036](../decisions/0036-mcp-connections.md), ticket #158. `test/mcp-ca
 
 `pnpm control mcp-flow` proves the whole path on the local Worker with the Notion entry and no network: the Connect button, the consent page and the OAuth start through the Edge (DCR, PKCE S256), the callback, "Connected Notion (account Acme Workspace)", `find_mcp_tools`, a search and a fetch with no Approval, a page create that waits with the template line, Details (the file with the full arguments), Approve (one call with the exact arguments), disconnect (revocation at the token endpoint), and the Journal. It fails when a step does not happen, when the create runs before Approve, or when a fake token, code, or client secret is in the Journal or in the chat.
 
-Known limits: the fake Notion server, model, and Telegram stand in for the real ones. The tests cannot prove the real argument names of Notion tools, the real token response, or real revocation; the real run of #158 covers them.
+Known limits: the fake Notion server, model, and Telegram stand in for the real ones. The tests cannot prove the real argument names of Notion tools, the real token response, or real revocation. They stay unproven until the real run of #158, which is not done yet.
 
 ## Control CLI
 
@@ -360,6 +360,8 @@ The MCP Catalog has the Notion entry. A Notion connection needs no app registrat
 3. **BotFather.** In Telegram, send `/setdomain` to `@BotFather`, choose the bot of the Instance, and send the Edge domain (the host only, the same as in `EDGE_PUBLIC_URL`). BotFather accepts a `workers.dev` domain. Without this step Telegram refuses the Connect button.
 4. **Button presses.** The Telegram webhook must receive `callback_query` updates (`allowed_updates` is `["message", "callback_query"]`), for Approve, Reject, and Details.
 5. **Check.** Write "connect Notion" to the bot. A "Connect Notion" button comes. The button opens the consent page of the Edge, and after the sign-in at Notion the bot writes "Connected Notion (account <workspace name>)". The part in parentheses is absent when Notion sends no workspace name.
+
+Before you remove the Notion entry from the Catalog, also by a revert of the code, ask each Owner who connected it to disconnect it. The agent cannot disconnect a Connection of an entry that the Catalog does not hold (decision [0036](../decisions/0036-mcp-connections.md)).
 
 ## Bundle size and startup
 

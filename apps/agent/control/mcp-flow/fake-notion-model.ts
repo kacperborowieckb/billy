@@ -124,7 +124,10 @@ const commandOf = (ownerText: string) => {
   const [command = "", ...rest] = ownerText
     .slice(fakeNotionPrefix.length)
     .split(" ");
-  return { step: steps[command], rest: rest.join(" ") };
+  return {
+    step: Object.hasOwn(steps, command) ? steps[command] : undefined,
+    rest: rest.join(" "),
+  };
 };
 
 export const isFakeNotionMessage = (ownerText: string) =>

@@ -8,6 +8,7 @@ import { startLocalWorker, temporarySecrets } from "../local-worker.ts";
 import { addOwner, renderAddedOwner } from "../operator.ts";
 import { fakeNotionPageIds, fakeNotionWorkspaceName } from "./fake-notion.ts";
 import { flowCheck } from "./flow-checks.ts";
+import { detailsShowTheCall } from "./flow-details.ts";
 import { checkFlowJournal } from "./flow-journal.ts";
 import { readFlowObservation } from "./flow-observation.ts";
 import { flowOwner } from "./flow-owner.ts";
@@ -127,7 +128,11 @@ const proposeAndApprove = Effect.fnUntraced(function* proposeAndApprove(
   const details = yield* owner.nextDocument("Details");
   yield* flowCheck(
     "Details",
-    details.content.includes(`Notes about ${createdTitle}`),
+    detailsShowTheCall(details.content, {
+      connection: "notion",
+      tool: "notion-create-pages",
+      arguments: approvedArguments,
+    }),
     "the file does not hold the full arguments"
   );
 
