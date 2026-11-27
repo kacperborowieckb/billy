@@ -19,8 +19,6 @@ export class McpSdkServers {
 
   private readonly connecting = new Map<string, Promise<void>>();
 
-  private readonly closing = new Set<string>();
-
   private readonly retiring = new Map<string, Promise<null>>();
 
   private updates: Promise<unknown> = Promise.resolve();
@@ -42,23 +40,27 @@ export class McpSdkServers {
     return this.manager.mcpConnections[sdkId]?.connectionState === "ready";
   }
 
-  advanceFrom(catalogId: string, epoch: number) {
-    if (this.epochOf(catalogId) === epoch) {
-      this.epochs.set(catalogId, epoch + 1);
+  private async runConnect(
+    catalogId: string,
+    sdkId: string,
+    start: () => Promise<void>
+  ) {
+    try {
+      await start();
+    } catch (error) {
+      this.retire(catalogId, sdkId);
+      throw error;
+    } finally {
+      this.connecting.delete(sdkId);
     }
-    this.connecting.delete(sdkIdOf(catalogId, epoch));
   }
 
-  connectOnce(sdkId: string, start: () => Promise<void>) {
+  connectOnce(catalogId: string, sdkId: string, start: () => Promise<void>) {
     const existing = this.connecting.get(sdkId);
     if (existing !== undefined) {
       return existing;
     }
-    const started: Promise<void> = start().finally(() => {
-      if (this.connecting.get(sdkId) === started) {
-        this.connecting.delete(sdkId);
-      }
-    });
+    const started = this.runConnect(catalogId, sdkId, start);
     this.connecting.set(sdkId, started);
     return started;
   }
@@ -99,7 +101,7 @@ export class McpSdkServers {
   async dropStale(catalogId: string, currentSdkId: string) {
     const ids = await this.trackedIds(catalogId);
     for (const id of ids) {
-      if (id !== currentSdkId && !this.closing.has(id)) {
+      if (id !== currentSdkId) {
         this.retire(catalogId, id);
       }
     }
@@ -120,6 +122,10 @@ export class McpSdkServers {
   }
 
   retire(catalogId: string, sdkId: string) {
+    if (this.currentId(catalogId) === sdkId) {
+      this.epochs.set(catalogId, this.epochOf(catalogId) + 1);
+    }
+    this.connecting.delete(sdkId);
     const existing = this.retiring.get(sdkId);
     if (existing !== undefined) {
       return existing;
@@ -129,28 +135,9 @@ export class McpSdkServers {
     return retired;
   }
 
-  close(sdkId: string): Promise<void> {
-    return this.manager.mcpConnections[sdkId] === undefined
-      ? Promise.resolve()
-      : this.manager.closeConnection(sdkId);
-  }
-
   async closeWithin(catalogId: string, sdkId: string, deadlineMillis: number) {
-    this.closing.add(sdkId);
-    const closed = this.close(sdkId);
-    closed
-      .catch(() => null)
-      .then(() => {
-        this.closing.delete(sdkId);
-        return this.retire(catalogId, sdkId);
-      })
-      .catch(() => null);
     try {
-      const settled = await within(closed, deadlineMillis);
-      if (Option.isNone(settled)) {
-        this.closing.delete(sdkId);
-        this.retire(catalogId, sdkId);
-      }
+      await within(this.retire(catalogId, sdkId), deadlineMillis);
     } catch {
       await Effect.runPromise(
         Effect.logWarning("The MCP connection did not close cleanly")

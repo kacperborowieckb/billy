@@ -11,13 +11,15 @@ interface FakeConnection {
 interface FakeBehavior {
   readonly closeOf?: (id: string) => Promise<void>;
   readonly connectOf?: (id: string) => Promise<void>;
+  readonly callOf?: (id: string) => Promise<void>;
 }
 
-const fakeSdkManager = ({ closeOf, connectOf }: FakeBehavior = {}) => {
+const fakeSdkManager = ({ closeOf, connectOf, callOf }: FakeBehavior = {}) => {
   const mcpConnections: Record<string, FakeConnection> = {};
   const rows = new Set<string>();
   const registered: string[] = [];
   const removed: string[] = [];
+  const calledIds: string[] = [];
   const closeAttempts: string[] = [];
   const closeConnection = async (id: string) => {
     closeAttempts.push(id);
@@ -48,7 +50,11 @@ const fakeSdkManager = ({ closeOf, connectOf }: FakeBehavior = {}) => {
     },
     discoverIfConnected: () => Promise.resolve({ success: true }),
     listTools: () => [],
-    callTool: () => Promise.resolve({ content: [], isError: false }),
+    callTool: async ({ serverId }: { serverId: string }) => {
+      calledIds.push(serverId);
+      await callOf?.(serverId);
+      return { content: [], isError: false };
+    },
     closeConnection,
     removeServer: async (id: string) => {
       removed.push(id);
@@ -62,7 +68,7 @@ const fakeSdkManager = ({ closeOf, connectOf }: FakeBehavior = {}) => {
       rows.delete(id);
     },
   };
-  return { manager, rows, registered, removed, closeAttempts };
+  return { manager, rows, registered, removed, closeAttempts, calledIds };
 };
 
 const hangUntil = (release: Promise<undefined>) => () =>
@@ -171,7 +177,7 @@ describe("the connector of a Connection that is removed", () => {
 });
 
 describe("one owner for each SDK operation", () => {
-  it("removes the record of a close that hangs past its deadline, also after repeated disconnects", async () => {
+  it("returns at the deadline of a close that hangs, keeps its record inert, and removes it when the close ends", async () => {
     const release = Promise.withResolvers<undefined>();
     const { manager, rows, removed } = fakeSdkManager({
       closeOf: hangUntil(release.promise),
@@ -183,9 +189,10 @@ describe("one owner for each SDK operation", () => {
     await connector.forget("c", 20);
     await callOf(connector, connector.epochOf("c"));
     await connector.forget("c", 20);
-    expect(removed).toEqual(expect.arrayContaining(["c:0", "c:1"]));
-    release.resolve(undefined);
 
+    expect(removed).toEqual(expect.arrayContaining(["c:0", "c:1"]));
+    expect(rows).toEqual(new Set(["c:0", "c:1"]));
+    release.resolve(undefined);
     await vi.waitFor(() => expect(rows.size).toBe(0));
     await vi.waitFor(() =>
       expect(storage.stored.get("sdk-servers:c")).toBeUndefined()
@@ -263,6 +270,103 @@ describe("one owner for each SDK operation", () => {
     expect(reconnected._tag).toBe("Result");
     expect(afterLateFailure._tag).toBe("Result");
   });
+
+  it("retires the id of a connect that passes its deadline with no later connect", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager, rows } = fakeSdkManager({
+      connectOf: hangUntil(release.promise),
+    });
+    const connector = connectorOver(manager);
+
+    await connector.callTool(entry as never, "owner", {
+      request: { ...request, connectTimeoutMillis: 20 },
+      epoch: connector.epochOf("c"),
+    });
+
+    expect(connector.epochOf("c")).toBe(1);
+    release.resolve(undefined);
+    await vi.waitFor(() => expect(rows.size).toBe(0));
+  });
+
+  it("retires the id of a call that passes its deadline, so the next call uses a new id", async () => {
+    const release = Promise.withResolvers<undefined>();
+    const { manager, calledIds, registered } = fakeSdkManager({
+      callOf: (id) =>
+        id === "c:0" ? (release.promise as Promise<void>) : Promise.resolve(),
+    });
+    const connector = connectorOver(manager);
+
+    const timedOut = await connector.callTool(entry as never, "owner", {
+      request: { ...request, callTimeoutMillis: 20 },
+      epoch: connector.epochOf("c"),
+    });
+    const next = await callOf(connector, connector.epochOf("c"));
+    release.resolve(undefined);
+
+    expect(timedOut).toEqual({ _tag: "Failed", reason: "timed_out" });
+    expect(next._tag).toBe("Result");
+    expect(calledIds).toEqual(["c:0", "c:1"]);
+    expect(registered).toEqual(["c:0", "c:1"]);
+  });
+
+  it("keeps the id when a call throws an error that is no deadline", async () => {
+    const { manager, calledIds } = fakeSdkManager({
+      callOf: (id) =>
+        id === "c:0" ? Promise.reject(new Error("sign-in")) : Promise.resolve(),
+    });
+    const connector = connectorOver(manager);
+
+    await callOf(connector, connector.epochOf("c"));
+    await callOf(connector, connector.epochOf("c"));
+
+    expect(calledIds).toEqual(["c:0", "c:0"]);
+  });
+
+  it("retires the id when a call throws an SDK timeout", async () => {
+    const { manager, calledIds } = fakeSdkManager({
+      callOf: (id) =>
+        id === "c:0"
+          ? Promise.reject(
+              Object.assign(new Error("timed out"), { code: -32_001 })
+            )
+          : Promise.resolve(),
+    });
+    const connector = connectorOver(manager);
+
+    const failed = await callOf(connector, connector.epochOf("c"));
+    const next = await callOf(connector, connector.epochOf("c"));
+
+    expect(failed).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(next._tag).toBe("Result");
+    expect(calledIds).toEqual(["c:0", "c:1"]);
+  });
+
+  it.each(["close", "closeWhileQueueHeld"] as const)(
+    "advances the epoch on %s, so a reconnect gets a new id and the late cleanup of the old close leaves it registered",
+    async (way) => {
+      const release = Promise.withResolvers<undefined>();
+      const { manager, registered, rows } = fakeSdkManager({
+        closeOf: (id) =>
+          id === "c:0" && way === "closeWhileQueueHeld"
+            ? (release.promise as Promise<void>)
+            : Promise.resolve(),
+      });
+      const connector = connectorOver(manager);
+      await callOf(connector, connector.epochOf("c"));
+
+      await (way === "close"
+        ? connector.close("c")
+        : connector.closeWhileQueueHeld("c", 20));
+      const reconnected = await callOf(connector, connector.epochOf("c"));
+      release.resolve(undefined);
+      await vi.waitFor(() => expect(rows).toEqual(new Set(["c:1"])));
+
+      expect(connector.epochOf("c")).toBe(1);
+      expect(reconnected._tag).toBe("Result");
+      expect(registered).toEqual(["c:0", "c:1"]);
+      expect(Object.keys(manager.mcpConnections)).toEqual(["c:1"]);
+    }
+  );
 
   it("removes every tracked id that is not current when a connect starts, through the public API", async () => {
     const { manager, registered, removed } = fakeSdkManager();

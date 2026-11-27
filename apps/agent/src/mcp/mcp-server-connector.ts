@@ -5,6 +5,7 @@ import type { AdmittedCall } from "./mcp-admitted-call.ts";
 import { authorizedFetch } from "./mcp-authorized-fetch.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpConnectionHealth } from "./mcp-connection-health.ts";
+import { isDeadlineError } from "./mcp-deadline-error.ts";
 import type { McpCallOutcome } from "./mcp-hub-contract.ts";
 import { resultOutcomeOf, toolCopyOf } from "./mcp-hub-results.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
@@ -138,15 +139,17 @@ export class McpServerConnector {
       return "connected";
     }
     const connected = await within(
-      this.servers.connectOnce(sdkIdOf(entry.catalogId, epoch), () =>
-        this.registerAndConnect(entry, ownerId, epoch)
+      this.servers.connectOnce(
+        entry.catalogId,
+        sdkIdOf(entry.catalogId, epoch),
+        () => this.registerAndConnect(entry, ownerId, epoch)
       ),
       connectTimeoutMillis
     );
     if (Option.isSome(connected)) {
       return "connected";
     }
-    this.servers.advanceFrom(entry.catalogId, epoch);
+    this.servers.retire(entry.catalogId, sdkIdOf(entry.catalogId, epoch));
     return "timed_out";
   }
 
@@ -166,7 +169,13 @@ export class McpServerConnector {
         this.servers.currentId(entry.catalogId)
       );
       return discovered?.success === true ? "refreshed" : "failed";
-    } catch {
+    } catch (error) {
+      if (isDeadlineError(error)) {
+        this.servers.retire(
+          entry.catalogId,
+          this.servers.currentId(entry.catalogId)
+        );
+      }
       return "failed";
     }
   }
@@ -195,8 +204,8 @@ export class McpServerConnector {
 
   async forget(catalogId: string, deadlineMillis: number) {
     const closedSdkId = this.servers.currentId(catalogId);
-    this.servers.advanceFrom(catalogId, this.epochOf(catalogId));
     const running = this.servers.connectOf(closedSdkId);
+    this.servers.retire(catalogId, closedSdkId);
     if (running !== undefined) {
       await within(
         running.catch(() => null),
@@ -221,6 +230,7 @@ export class McpServerConnector {
     ownerId: string,
     { request, epoch }: AdmittedCall
   ): Promise<McpCallOutcome> {
+    const calledSdkId = sdkIdOf(request.catalogId, epoch);
     try {
       if (
         (await this.ensureConnected(entry, ownerId, {
@@ -236,7 +246,7 @@ export class McpServerConnector {
       const result = await within(
         this.dependencies.manager.callTool(
           {
-            serverId: this.servers.currentId(request.catalogId),
+            serverId: calledSdkId,
             name: request.tool,
             arguments: { ...request.arguments },
           },
@@ -245,10 +255,14 @@ export class McpServerConnector {
         request.callTimeoutMillis
       );
       if (Option.isNone(result)) {
+        this.servers.retire(request.catalogId, calledSdkId);
         return { _tag: "Failed", reason: "timed_out" };
       }
       return resultOutcomeOf(result.value);
-    } catch {
+    } catch (error) {
+      if (isDeadlineError(error)) {
+        this.servers.retire(request.catalogId, calledSdkId);
+      }
       return { _tag: "Failed", reason: "failed" };
     }
   }
