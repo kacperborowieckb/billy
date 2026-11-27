@@ -1,6 +1,8 @@
 import { Context } from "effect";
 import type { Effect } from "effect";
 
+import type { McpLastError } from "./oauth-storage-keys.ts";
+
 export interface McpCallRequest {
   readonly catalogId: string;
   readonly tool: string;
@@ -18,11 +20,25 @@ export type McpCallOutcome =
     }
   | {
       readonly _tag: "Failed";
-      readonly reason: "timed_out" | "failed" | "not_connected";
+      readonly reason:
+        | "timed_out"
+        | "failed"
+        | "not_connected"
+        | "needs_sign_in"
+        | "insufficient_scope";
     };
 
 export interface McpAddConnectionOutcome {
   readonly outcome: "added" | "unknown_catalog_entry" | "failed";
+}
+
+export interface McpRefreshOutcome {
+  readonly outcome:
+    | "refreshed"
+    | "failed"
+    | "timed_out"
+    | "not_ready"
+    | "unknown_catalog_entry";
 }
 
 export interface McpOAuthRequest {
@@ -86,6 +102,11 @@ export interface McpHubRpc {
     connectTimeoutMillis: number
   ) => Promise<McpAddConnectionOutcome>;
   readonly callTool: (request: McpCallRequest) => Promise<McpCallOutcome>;
+  readonly lastError: (catalogId: string) => Promise<McpLastError | undefined>;
+  readonly refreshToolCatalog: (
+    catalogId: string,
+    connectTimeoutMillis: number
+  ) => Promise<McpRefreshOutcome>;
 }
 
 export class McpHubPort extends Context.Service<

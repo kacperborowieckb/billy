@@ -25,13 +25,43 @@ const decodeExpiry = Schema.decodeUnknownOption(Schema.Number);
 export const expiryOf = (stored: unknown) =>
   Option.getOrUndefined(decodeExpiry(stored));
 
-const decodeRecorded = Schema.decodeUnknownOption(Schema.Literal(true));
+const decodeConnectionRecord = Schema.decodeUnknownOption(
+  Schema.Literals(["ready", "needs_sign_in"])
+);
 
 export const connectionRecordKey = (catalogId: string) =>
   `connection:${catalogId}`;
 
-export const isConnectionRecorded = (stored: unknown) =>
-  Option.isSome(decodeRecorded(stored));
+export type HubConnectionState = "ready" | "needs_sign_in";
+
+export const hubConnectionStateOf = (
+  stored: unknown
+): HubConnectionState | undefined =>
+  stored === true
+    ? "ready"
+    : Option.getOrUndefined(decodeConnectionRecord(stored));
+
+export const lastErrorKey = (catalogId: string) => `last-error:${catalogId}`;
+
+export const McpLastErrorSchema = Schema.Struct({
+  phase: Schema.Literals(["token_exchange", "connect", "refresh", "request"]),
+  reason: Schema.Literals([
+    "invalid_grant",
+    "no_refresh_token",
+    "no_token_endpoint",
+    "unauthorized",
+    "insufficient_scope",
+    "unavailable",
+    "failed",
+  ]),
+  httpStatus: Schema.optionalKey(Schema.Number),
+  atMillis: Schema.Number,
+});
+
+export type McpLastError = typeof McpLastErrorSchema.Type;
+
+export const lastErrorOf = (stored: unknown) =>
+  Option.getOrUndefined(Schema.decodeUnknownOption(McpLastErrorSchema)(stored));
 
 export const latestExchangeKey = (catalogId: string) =>
   `latest-exchange:${catalogId}`;

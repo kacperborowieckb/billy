@@ -12,8 +12,6 @@ import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { pendingOAuthOf } from "./oauth-start.ts";
 import type { PendingOAuth } from "./oauth-start.ts";
 import {
-  connectionRecordKey,
-  isConnectionRecorded,
   latestExchangeKey,
   pendingOAuthKeyPrefix,
   settledOAuthKeyPrefix,
@@ -36,6 +34,7 @@ export interface McpOAuthCompleterDependencies {
   readonly storage: DurableObjectStorage;
   readonly entryQueue: KeyedQueue;
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
+  readonly isReady: (catalogId: string) => Promise<boolean>;
   readonly connect: (
     completion: McpCompletion
   ) => Promise<"connected" | "failed">;
@@ -103,12 +102,6 @@ export class McpOAuthCompleter {
     );
   }
 
-  private async isRecorded(catalogId: string) {
-    return isConnectionRecorded(
-      await this.dependencies.storage.get(connectionRecordKey(catalogId))
-    );
-  }
-
   private async replayOf(
     nonce: string,
     iss: string | undefined
@@ -132,6 +125,10 @@ export class McpOAuthCompleter {
     return this.dependencies.entryQueue.run(entry.catalogId, async () => {
       const latest = await storage.get(latestExchangeKey(entry.catalogId));
       if (latest !== nonce) {
+        return { outcome: "not_started" };
+      }
+      const credentials = await this.dependencies.credentials(settled.ownerId);
+      if ((await credentials.tokens(entry.catalogId)) === undefined) {
         return { outcome: "not_started" };
       }
       const connected = await this.dependencies.connect({
@@ -172,7 +169,7 @@ export class McpOAuthCompleter {
   ): Promise<McpCallbackOutcome> {
     const { code, error } = returned;
     const serverName = entry.displayName;
-    if (await this.isRecorded(entry.catalogId)) {
+    if (await this.dependencies.isReady(entry.catalogId)) {
       return { outcome: "already_connected", serverName };
     }
     if (hasText(error) || !hasText(code)) {

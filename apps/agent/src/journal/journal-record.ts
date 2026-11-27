@@ -4,6 +4,7 @@ import { riskClasses } from "../approval/risk-class.ts";
 import {
   approvalAnswers,
   mcpCallStatuses,
+  mcpConnectionStates,
   approvalRunResults,
   noteChanges,
   openLoopClosedReasons,
@@ -166,6 +167,11 @@ export const JournalRecordSchema = Schema.TaggedUnion({
   McpConnectionAdded: {
     eventId: Schema.String,
     catalogId: Schema.String,
+  },
+  McpConnectionStateChanged: {
+    eventId: Schema.String,
+    catalogId: Schema.String,
+    state: Schema.Literals(mcpConnectionStates),
   },
   OwnerPreferenceChanged: {
     eventId: Schema.String,

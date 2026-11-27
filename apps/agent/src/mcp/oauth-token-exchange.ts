@@ -4,7 +4,7 @@ import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { withinDeadline } from "./oauth-deadline.ts";
 import type { StoredTokens } from "./sealed-credentials.ts";
 
-const TokenResponseSchema = Schema.Struct({
+export const TokenResponseSchema = Schema.Struct({
   access_token: Schema.NonEmptyString,
   token_type: Schema.String,
   refresh_token: Schema.optionalKey(Schema.String),
@@ -14,7 +14,8 @@ const TokenResponseSchema = Schema.Struct({
   workspace_name: Schema.optionalKey(Schema.String),
 });
 
-const decodeTokenResponse = Schema.decodeUnknownSync(TokenResponseSchema);
+export const decodeTokenResponse =
+  Schema.decodeUnknownSync(TokenResponseSchema);
 
 export class TokenExchangeFailedError extends Error {
   override readonly name = "TokenExchangeFailedError";

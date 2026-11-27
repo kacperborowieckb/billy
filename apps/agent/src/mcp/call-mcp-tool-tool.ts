@@ -20,6 +20,7 @@ import {
   connectionDescription,
   entryOrFail,
   mcpCallRiskClass,
+  reconnectInstruction,
 } from "./mcp-tool-services.ts";
 import type { McpToolServices } from "./mcp-tool-services.ts";
 
@@ -53,7 +54,14 @@ const failureNotices: Readonly<Record<FailedOutcome["reason"], string>> = {
     "The call failed. Tell the Owner that you could not reach the service.",
   not_connected:
     "The service is not connected. Tell the Owner that it is not connected.",
+  needs_sign_in: `The sign-in of the service is no longer valid. ${reconnectInstruction}`,
+  insufficient_scope: `The service asked for more permission than the Owner gave, so the call was not made. ${reconnectInstruction}`,
 };
+
+const signInReasons: ReadonlySet<FailedOutcome["reason"]> = new Set([
+  "needs_sign_in",
+  "insufficient_scope",
+]);
 
 const refusal = (message: string) => Effect.fail(new ToolFailed({ message }));
 
@@ -125,6 +133,29 @@ const approvedRunOutcomeOf = (output: McpCallOutput): ApprovalRunOutcome => {
     : { result: "unconfirmed" };
 };
 
+const requestReconnect = (
+  services: McpToolServices,
+  eventId: string,
+  catalogId: string
+) => services.requestConnect(eventId, catalogId).pipe(Effect.orDie);
+
+const notReadyOutputOf = (
+  services: McpToolServices,
+  input: CallInput
+): McpCallOutput | undefined => {
+  const entry = mcpEntryOf(services.catalog, input.connection);
+  const state = services.states.get(input.connection);
+  if (entry === undefined || state === undefined || state === "ready") {
+    return undefined;
+  }
+  return {
+    connection: entry.displayName,
+    tool: input.tool,
+    status: "failed",
+    notice: callRefusalOf(services, input) ?? "",
+  };
+};
+
 const checkCallable = Effect.fnUntraced(function* checkCallable(
   services: McpToolServices,
   input: CallInput,
@@ -180,6 +211,11 @@ export const callMcpToolTool = (
       failureMessage: "The call failed. Tell the Owner that it failed.",
       work: (input) =>
         Effect.gen(function* callEffect() {
+          const notReady = notReadyOutputOf(services, input);
+          if (notReady !== undefined) {
+            yield* requestReconnect(services, eventId, input.connection);
+            return notReady;
+          }
           const entry = yield* checkCallable(services, input, access);
           const outcome = yield* services.hub.callTool({
             catalogId: input.connection,
@@ -188,6 +224,9 @@ export const callMcpToolTool = (
             connectTimeoutMillis: services.behavior.mcpConnectTimeoutMillis,
             callTimeoutMillis: services.behavior.mcpCallTimeoutMillis,
           });
+          if (outcome._tag === "Failed" && signInReasons.has(outcome.reason)) {
+            yield* requestReconnect(services, eventId, entry.catalogId);
+          }
           yield* services.journal
             .append({
               _tag: "McpToolCalled",

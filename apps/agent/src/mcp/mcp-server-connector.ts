@@ -1,7 +1,9 @@
 import { Effect, Option } from "effect";
 
 import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
+import { authorizedFetch } from "./mcp-authorized-fetch.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
+import type { McpConnectionHealth } from "./mcp-connection-health.ts";
 import type { McpCallOutcome, McpCallRequest } from "./mcp-hub-contract.ts";
 import { resultTextOf, toolCopyOf } from "./mcp-hub-results.ts";
 import { guardedFetch } from "./mcp-outbound-guard.ts";
@@ -20,6 +22,12 @@ export interface McpServerConnectorDependencies {
   readonly send: FetchFunction;
   readonly allowedOrigins: readonly string[];
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
+  readonly health: McpConnectionHealth;
+}
+
+export interface ConnectOptions {
+  readonly timeoutMillis: number;
+  readonly holdsEntryQueue?: boolean;
 }
 
 export class McpServerConnector {
@@ -27,19 +35,28 @@ export class McpServerConnector {
 
   private readonly connecting = new Map<string, Promise<void>>();
 
+  private readonly queueHolds = new Map<string, number>();
+
   constructor(dependencies: McpServerConnectorDependencies) {
     this.dependencies = dependencies;
   }
 
   private async registerAndConnect(entry: McpCatalogEntry, ownerId: string) {
-    const { manager, send, allowedOrigins, credentials } = this.dependencies;
+    const { manager, send, allowedOrigins, credentials, health } =
+      this.dependencies;
     const { catalogId } = entry;
     await manager.registerServer(catalogId, {
       url: entry.serverUrl,
       name: entry.displayName,
       transport: {
         type: "streamable-http",
-        fetch: guardedFetch(send, allowedOrigins),
+        fetch: authorizedFetch({
+          send: guardedFetch(send, allowedOrigins),
+          entry,
+          ownerId,
+          health,
+          queueWaitsOnConnect: () => (this.queueHolds.get(catalogId) ?? 0) > 0,
+        }),
         authProvider: new SealedOAuthProvider(
           await credentials(ownerId),
           catalogId,
@@ -69,7 +86,34 @@ export class McpServerConnector {
     return started;
   }
 
-  async ensureConnected(
+  ensureConnected(
+    entry: McpCatalogEntry,
+    ownerId: string,
+    { timeoutMillis, holdsEntryQueue = false }: ConnectOptions
+  ): Promise<"connected" | "timed_out"> {
+    if (!holdsEntryQueue) {
+      return this.connectWhenNeeded(entry, ownerId, timeoutMillis);
+    }
+    return this.whileQueueHeld(entry.catalogId, () =>
+      this.connectWhenNeeded(entry, ownerId, timeoutMillis)
+    );
+  }
+
+  async whileQueueHeld<Value>(catalogId: string, work: () => Promise<Value>) {
+    this.queueHolds.set(catalogId, (this.queueHolds.get(catalogId) ?? 0) + 1);
+    try {
+      return await work();
+    } finally {
+      const left = (this.queueHolds.get(catalogId) ?? 1) - 1;
+      if (left === 0) {
+        this.queueHolds.delete(catalogId);
+      } else {
+        this.queueHolds.set(catalogId, left);
+      }
+    }
+  }
+
+  private async connectWhenNeeded(
     entry: McpCatalogEntry,
     ownerId: string,
     connectTimeoutMillis: number
@@ -86,6 +130,29 @@ export class McpServerConnector {
       connectTimeoutMillis
     );
     return Option.isSome(connected) ? "connected" : "timed_out";
+  }
+
+  async refreshTools(
+    entry: McpCatalogEntry,
+    ownerId: string,
+    connectTimeoutMillis: number
+  ): Promise<"refreshed" | "failed" | "timed_out"> {
+    try {
+      const connected = await this.connectWhenNeeded(
+        entry,
+        ownerId,
+        connectTimeoutMillis
+      );
+      if (connected === "timed_out") {
+        return "timed_out";
+      }
+      const discovered = await this.dependencies.manager.discoverIfConnected(
+        entry.catalogId
+      );
+      return discovered?.success === true ? "refreshed" : "failed";
+    } catch {
+      return "failed";
+    }
   }
 
   async close(catalogId: string) {
@@ -105,11 +172,9 @@ export class McpServerConnector {
   ): Promise<McpCallOutcome> {
     try {
       if (
-        (await this.ensureConnected(
-          entry,
-          ownerId,
-          request.connectTimeoutMillis
-        )) === "timed_out"
+        (await this.ensureConnected(entry, ownerId, {
+          timeoutMillis: request.connectTimeoutMillis,
+        })) === "timed_out"
       ) {
         return { _tag: "Failed", reason: "timed_out" };
       }

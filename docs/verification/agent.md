@@ -197,6 +197,21 @@ Decision [0036](../decisions/0036-mcp-connections.md), ticket #155. `test/mcp-oa
 
 Known limits: the tests use no real authorization server. They cannot prove how Notion names the account in its token response or how its refresh tokens rotate over days (both come with #156 and #158).
 
+### MCP Connections: token refresh and needs sign-in
+
+Decision [0036](../decisions/0036-mcp-connections.md), ticket #156. `test/mcp-token-refresh.test.ts` connects through the Edge as the callback tests do, then lets the fake authorization server expire the access token (`expireAccessToken`), revoke or rotate the refresh token, refuse refreshes, and cut a refresh response. The fake MCP server can hold its tool call responses, refuse all tokens, ask for more scope, and send `tools/list_changed`. Every test that depends on an order holds and releases that order. They check:
+
+- Two calls that both need a refresh cause one token request (the second waits in the queue of the entry). A call that is already running finishes while another call refreshes. A token that is about to expire is refreshed before the call.
+- A refresh response with no refresh token keeps the old one, and the next refresh presents it. A rotated refresh token is stored and presented next time.
+- A rotated refresh token that the provider accepted and that was lost (the response body never arrives) fails that call with the state still `ready`. The next refresh gets `invalid_grant` and the state is `needs_sign_in`.
+- A token endpoint that answers 503 keeps the state `ready` and writes the last error `unavailable`.
+- `invalid_grant` sets `needs sign-in`, writes `McpConnectionStateChanged`, deletes the sealed tokens, and leaves no token in any hub or Personal Agent table. The last error holds the phase, the reason, the HTTP status, and the time. A Connection in `needs sign-in` makes no request to the server. A 401 after a refresh and a 403 `insufficient_scope` (with no token request) set `needs sign-in` and fail the call with their own reason.
+- The next Owner Turn that calls the Connection gets a tool result that says the task is not done, one reply, and exactly one "Reconnect Test server" `login_url` button, also when the model calls twice. The Brief and a Scheduled Task get the button once, with or without a call (`test/mcp-side-sessions.test.ts`).
+- A call that the server rejected with the old token while a reconnect was exchanging its code waits for the callback, then retries with the new token and succeeds. The state changes are `ready`, `needs_sign_in`, `ready`.
+- `tools/list_changed` from the fake server and an explicit refresh update the tool copy in the Personal Agent.
+
+Known limits: a refresh that is retried by Notion with a grace period, and the real expiry of a token after hours, are not covered (#158).
+
 ## Control CLI
 
 Run the commands from `apps/agent` with `pnpm control <command>`, or from the root with `pnpm --filter @repo/agent control <command>`.

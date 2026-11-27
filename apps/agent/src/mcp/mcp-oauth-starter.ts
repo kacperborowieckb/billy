@@ -36,7 +36,7 @@ export interface McpOAuthStarterDependencies {
   readonly ownerId: () => string;
   readonly credentials: (ownerId: string) => Promise<SealedCredentials>;
   readonly entryQueue: KeyedQueue;
-  readonly isRecorded: (catalogId: string) => Promise<boolean>;
+  readonly isReady: (catalogId: string) => Promise<boolean>;
   readonly markAuthenticating: (catalogId: string) => Promise<void>;
 }
 
@@ -59,7 +59,7 @@ export class McpOAuthStarter {
     if (entry === undefined) {
       return { _tag: "Refused", outcome: "unknown_catalog_entry" };
     }
-    if (await this.dependencies.isRecorded(request.catalogId)) {
+    if (await this.dependencies.isReady(request.catalogId)) {
       return { _tag: "Refused", outcome: "already_connected" };
     }
     return { _tag: "Allowed", entry };
@@ -129,7 +129,7 @@ export class McpOAuthStarter {
       return await this.dependencies.entryQueue.run(
         entry.catalogId,
         async () => {
-          if (await this.dependencies.isRecorded(entry.catalogId)) {
+          if (await this.dependencies.isReady(entry.catalogId)) {
             return { outcome: "already_connected" } as const;
           }
           await this.dependencies.storage.put<PendingOAuth>(

@@ -1,3 +1,6 @@
+import { createFakeRefreshGrant } from "./fake-oauth-refresh.ts";
+import { answerTenantLayout } from "./fake-oauth-tenant-layout.ts";
+
 export const fakeOAuthSecrets = {
   authorizationCode: "fake-authorization-code-7c1e",
   accessToken: "fake-access-token-4b9d",
@@ -8,6 +11,7 @@ export const fakeOAuthSecrets = {
 export const fakeOAuthAccountName = "Pat Reader";
 
 export const createFakeOAuthServer = () => {
+  const refresh = createFakeRefreshGrant(fakeOAuthSecrets.refreshToken);
   const registrations: unknown[] = [];
   const tokenRequests: Record<string, string>[] = [];
   const state = {
@@ -44,36 +48,6 @@ export const createFakeOAuthServer = () => {
     client_id_metadata_document_supported: state.supportsClientIdMetadata,
   });
 
-  const answerTenantLayout = (request: Request) => {
-    const url = new URL(request.url);
-    const { origin } = url;
-    const tenant = `${origin}/tenant1`;
-    if (request.method === "POST" && url.pathname === "/mcp") {
-      return new Response(null, {
-        status: 401,
-        headers: {
-          "WWW-Authenticate": `Bearer Resource_Metadata="${origin}/custom/prm"`,
-        },
-      });
-    }
-    if (url.pathname === "/custom/prm") {
-      return Response.json({
-        resource: `${origin}/mcp`,
-        authorization_servers: [tenant],
-      });
-    }
-    if (
-      url.pathname === "/.well-known/oauth-authorization-server/tenant1" &&
-      state.layout === "challenged_tenant"
-    ) {
-      return Response.json(metadataOf(tenant));
-    }
-    if (url.pathname === "/.well-known/oauth-authorization-server") {
-      return Response.json(metadataOf(origin));
-    }
-    return new Response(null, { status: 404 });
-  };
-
   const currentAccessToken = () =>
     state.freshTokens
       ? `${fakeOAuthSecrets.accessToken}-${state.exchanges}`
@@ -89,6 +63,15 @@ export const createFakeOAuthServer = () => {
     const form = new URLSearchParams(await request.text());
     tokenRequests.push(Object.fromEntries(form));
     await state.tokenHold;
+    if (state.requiresClientSecret && !hasClientSecret(request, form)) {
+      return Response.json({ error: "invalid_client" }, { status: 401 });
+    }
+    if (form.get("grant_type") === "refresh_token") {
+      return refresh.answer(form, () => {
+        state.exchanges += 1;
+        return currentAccessToken();
+      });
+    }
     if (
       state.tokenLoginRefused ||
       (state.requiresClientSecret && !hasClientSecret(request, form)) ||
@@ -98,6 +81,7 @@ export const createFakeOAuthServer = () => {
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     }
     state.exchanges += 1;
+    refresh.accept(fakeOAuthSecrets.refreshToken);
     return Response.json({
       access_token: currentAccessToken(),
       token_type: "Bearer",
@@ -145,7 +129,7 @@ export const createFakeOAuthServer = () => {
         state.layout === "root_metadata_only") &&
       !request.url.includes("/register")
     ) {
-      return answerTenantLayout(request);
+      return answerTenantLayout(request, state.layout, metadataOf);
     }
     const url = new URL(request.url);
     const { origin } = url;
@@ -215,6 +199,15 @@ export const createFakeOAuthServer = () => {
     refuseCodes: (refused: boolean) => {
       state.tokenLoginRefused = refused;
     },
+    expireAccessToken: () => {
+      state.exchanges += 1;
+    },
+    ...refresh.controls,
+    get refreshRequests() {
+      return tokenRequests.filter(
+        (request) => request["grant_type"] === "refresh_token"
+      );
+    },
     sendRefreshToken: (sent: boolean) => {
       state.withRefreshToken = sent;
     },
@@ -243,6 +236,7 @@ export const createFakeOAuthServer = () => {
       state.tokenHold = Promise.resolve(undefined);
       state.metadataHold = Promise.resolve(undefined);
       state.withRefreshToken = true;
+      refresh.reset();
       state.withAccountName = true;
       state.requiresToken = false;
       state.tokenEndpoint = undefined;

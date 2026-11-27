@@ -73,6 +73,7 @@ export const exchangeAndStore = async (
               client_auth_method: pending.clientAuthMethod ?? "basic",
             }),
         redirectUrl: pending.redirectUrl,
+        tokenEndpoint: pending.tokenEndpoint,
       })),
       [latestExchangeKey(entry.catalogId)]: nonce,
       [`${settledOAuthKeyPrefix}${nonce}`]: {
