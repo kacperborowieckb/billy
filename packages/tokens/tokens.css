@@ -118,6 +118,9 @@
   --easing-receive: cubic-bezier(0.34, 1.42, 0.64, 1);
   --duration-sky: 1400ms;
   --duration-sun: 1600ms;
+  --duration-word: 700ms;
+  --duration-word-step: 60ms;
+  --duration-word-beat: 800ms;
 }
 
 :root[data-theme="light"] {
@@ -212,6 +215,9 @@
     --duration-receive: 0ms;
     --duration-sky: 0ms;
     --duration-sun: 0ms;
+    --duration-word: 0ms;
+    --duration-word-step: 0ms;
+    --duration-word-beat: 0ms;
   }
 }
 

@@ -9,13 +9,15 @@ import { billy, outfits, world } from "../art";
 import Cloud from "./cloud.astro";
 import Phone from "./phone.astro";
 
+// Each word waits its place in the line (`--step`) and, on the second line,
+// the beat after "Tell Billy." (`--beat`); both are motion tokens.
 const words = [
-  { text: "Tell", delay: 100 },
-  { text: "Billy.", delay: 170, breakAfter: true },
-  { text: "He'll", delay: 900 },
-  { text: "do", delay: 960 },
-  { text: "it", delay: 1020 },
-  { text: "all.", delay: 1080 },
+  { text: "Tell", step: 1, beat: 0 },
+  { text: "Billy.", step: 2, beat: 0, breakAfter: true },
+  { text: "He'll", step: 1, beat: 1 },
+  { text: "do", step: 2, beat: 1 },
+  { text: "it", step: 3, beat: 1 },
+  { text: "all.", step: 4, beat: 1 },
 ];
 ---
 
@@ -25,7 +27,7 @@ const words = [
       {
         words.map((word, index) => (
           <>
-            <span class="word" style={`--delay: ${word.delay}ms`}>
+            <span class="word" style={`--step: ${word.step}; --beat: ${word.beat}`}>
               {word.text}
             </span>
             {word.breakAfter ? <br /> : index < words.length - 1 ? " " : ""}
@@ -33,8 +35,8 @@ const words = [
         ))
       }
     </h1>
-    <p class="lede rise" style="--d: 1450ms">Whatever you would hand to a great assistant, text it to Billy, and he takes it from there.</p>
-    <div class="actions rise" style="--d: 1560ms">
+    <p class="lede rise" style="--steps: 0">Whatever you would hand to a great assistant, text it to Billy, and he takes it from there.</p>
+    <div class="actions rise" style="--steps: 2">
       <a class={buttonVariants({ className: "go" })} href="#self-host">Get Billy<svg class="chevron" data-icon="inline-end" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg></a>
       <a class={buttonVariants({ variant: "secondary" })} href="#keeps">See how it works</a>
     </div>
@@ -43,7 +45,7 @@ const words = [
   <div class="wrap">
     <div
       class="stage scene rise"
-      style="--d: 1700ms"
+      style="--steps: 4"
       data-valley
       role="img"
       aria-label="Billy on his dam in the valley, answering messages through the day on a phone beside him. The examples follow."
@@ -327,13 +329,15 @@ const words = [
     }
 
     .word {
-      animation: word-in 700ms var(--easing-standard) both;
-      animation-delay: var(--delay);
+      animation: word-in var(--duration-word) var(--easing-standard) both;
+      animation-delay: calc(var(--duration-word-step) * var(--step, 0) + var(--duration-word-beat) * var(--beat, 0));
     }
 
     .rise {
       animation: rise var(--duration-enter) var(--easing-standard) both;
-      animation-delay: var(--d);
+      /* After the second line has landed: the beat, one word's entrance,
+         then a step apart. */
+      animation-delay: calc(var(--duration-word-beat) + var(--duration-enter) + var(--duration-word-step) * var(--steps, 0));
     }
   }
 

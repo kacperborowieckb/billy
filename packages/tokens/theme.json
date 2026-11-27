@@ -430,6 +430,15 @@
     },
     "duration-sun": {
       "milliseconds": 1600
+    },
+    "duration-word": {
+      "milliseconds": 700
+    },
+    "duration-word-step": {
+      "milliseconds": 60
+    },
+    "duration-word-beat": {
+      "milliseconds": 800
     }
   }
 }
