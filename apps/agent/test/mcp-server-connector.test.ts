@@ -177,6 +177,34 @@ describe("a connect that was removed while it tracked its id", () => {
     expect(registered).toEqual([]);
   });
 
+  it("lists no tools and keeps nothing when the removal ran while it connected", async () => {
+    const connecting = Promise.withResolvers<undefined>();
+    const discovered: string[] = [];
+    let connects = 0;
+    const { manager, rows } = fakeSdkManager({
+      connectOf: () => {
+        connects += 1;
+        return connecting.promise as Promise<void>;
+      },
+      discoverOf: (id) => {
+        discovered.push(id);
+        return Promise.resolve();
+      },
+    });
+    const connector = connectorOver(manager);
+
+    const calling = callOf(connector, connector.epochOf("c"));
+    await vi.waitFor(() => expect(connects).toBe(1));
+    const forgetting = connector.forget("c", 20);
+    await forgetting;
+    connecting.resolve(undefined);
+
+    expect(await calling).toEqual({ _tag: "Failed", reason: "failed" });
+    expect(discovered).toEqual([]);
+    await vi.waitFor(() => expect(rows.size).toBe(0));
+    expect(Object.keys(manager.mcpConnections)).toEqual([]);
+  });
+
   it("retires nothing of the replacement when the old connect was still reading the tracked ids", async () => {
     const { manager, registered } = fakeSdkManager();
     const storage = storageStub();

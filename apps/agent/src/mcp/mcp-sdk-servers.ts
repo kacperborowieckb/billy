@@ -34,7 +34,7 @@ export class McpSdkServers {
 
   refuseWhenRetired(catalogId: string, epoch: number) {
     if (this.epochOf(catalogId) !== epoch) {
-      throw new Error("The MCP Connection was removed before it connected");
+      throw new Error("The MCP Connection was removed during its connect");
     }
   }
 

@@ -68,33 +68,34 @@ export class McpServerConnector {
       this.dependencies;
     const { catalogId } = entry;
     const sdkId = sdkIdOf(catalogId, epoch);
-    const sealedCredentials = await credentials(ownerId);
-    this.servers.refuseWhenRetired(catalogId, epoch);
-    await this.servers.dropStale(catalogId, sdkId);
-    await this.servers.track(catalogId, sdkId);
-    this.servers.refuseWhenRetired(catalogId, epoch);
-    await manager.registerServer(
-      sdkId,
-      serverRegistrationOf({
-        credentials: sealedCredentials,
-        send: guardedFetch(send, allowedOrigins),
-        entry,
-        ownerId,
-        health,
-        queueWaitsOnConnect: () => this.queueHolds.isHeld(catalogId),
-      })
+    const whileCurrent = async <Value>(step: Promise<Value>) => {
+      const value = await step;
+      this.servers.refuseWhenRetired(catalogId, epoch);
+      return value;
+    };
+    const sealedCredentials = await whileCurrent(credentials(ownerId));
+    await whileCurrent(this.servers.dropStale(catalogId, sdkId));
+    await whileCurrent(this.servers.track(catalogId, sdkId));
+    await whileCurrent(
+      manager.registerServer(
+        sdkId,
+        serverRegistrationOf({
+          credentials: sealedCredentials,
+          send: guardedFetch(send, allowedOrigins),
+          entry,
+          ownerId,
+          health,
+          queueWaitsOnConnect: () => this.queueHolds.isHeld(catalogId),
+        })
+      )
     );
-    const connected = await manager.connectToServer(sdkId);
+    const connected = await whileCurrent(manager.connectToServer(sdkId));
     if (connected.state !== "connected") {
       throw new Error("The MCP server is not connected");
     }
-    const discovered = await manager.discoverIfConnected(sdkId);
+    const discovered = await whileCurrent(manager.discoverIfConnected(sdkId));
     if (discovered?.success !== true) {
       throw new Error("The MCP server did not list its tools");
-    }
-    if (this.epochOf(catalogId) !== epoch) {
-      await this.servers.closeWithin(catalogId, sdkId, closeDeadlineMillis);
-      throw new Error("The MCP Connection was removed while it connected");
     }
   }
 
