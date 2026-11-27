@@ -1,7 +1,9 @@
 import { DateTime } from "effect";
 
+import { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
+import { exchangeAndStore } from "./mcp-code-exchange.ts";
 import type {
   McpCallbackOutcome,
   McpOAuthCallback,
@@ -17,10 +19,7 @@ import {
   settledOAuthKeyPrefix,
   settledOAuthOf,
 } from "./oauth-storage-keys.ts";
-import { exchangeCode } from "./oauth-token-exchange.ts";
 import type { SealedCredentials } from "./sealed-credentials.ts";
-
-const settledLifetimeMillis = 15 * 60 * 1000;
 
 const nowMillis = () => DateTime.toEpochMillis(DateTime.nowUnsafe());
 
@@ -69,6 +68,8 @@ export class McpOAuthCompleter {
   private readonly dependencies: McpOAuthCompleterDependencies;
 
   private readonly running = new Map<string, RunningCallback>();
+
+  private readonly entryQueue = new KeyedQueue();
 
   constructor(dependencies: McpOAuthCompleterDependencies) {
     this.dependencies = dependencies;
@@ -129,15 +130,14 @@ export class McpOAuthCompleter {
     if (latest !== nonce) {
       return { outcome: "not_started" };
     }
-    if (await this.isRecorded(entry.catalogId)) {
-      return { outcome: "connected", serverName };
-    }
-    const connected = await this.dependencies.connect({
-      entry,
-      ownerId: settled.ownerId,
-      completionId: nonce,
-      accountLabel: settled.accountLabel,
-    });
+    const connected = await this.entryQueue.run(entry.catalogId, () =>
+      this.dependencies.connect({
+        entry,
+        ownerId: settled.ownerId,
+        completionId: nonce,
+        accountLabel: settled.accountLabel,
+      })
+    );
     return { outcome: connected, serverName };
   }
 
@@ -157,6 +157,17 @@ export class McpOAuthCompleter {
       return { outcome: "not_started" };
     }
     await storage.delete(key);
+    return this.entryQueue.run(entry.catalogId, () =>
+      this.finish(entry, pending, returned)
+    );
+  }
+
+  private async finish(
+    entry: McpCatalogEntry,
+    pending: PendingOAuth,
+    returned: McpOAuthCallback
+  ): Promise<McpCallbackOutcome> {
+    const { code, error } = returned;
     const serverName = entry.displayName;
     if (await this.isRecorded(entry.catalogId)) {
       return { outcome: "already_connected", serverName };
@@ -165,7 +176,9 @@ export class McpOAuthCompleter {
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "denied", serverName };
     }
-    const exchanged = await this.exchange(entry, pending, {
+    const exchanged = await exchangeAndStore(this.dependencies, {
+      entry,
+      pending,
       nonce: returned.nonce,
       code,
     });
@@ -179,67 +192,6 @@ export class McpOAuthCompleter {
       completionId: returned.nonce,
       accountLabel: exchanged.label,
     });
-    if (connected === "failed") {
-      return { outcome: "failed", serverName };
-    }
-    return { outcome: "connected", serverName };
-  }
-
-  private async exchange(
-    entry: McpCatalogEntry,
-    pending: PendingOAuth,
-    granted: { readonly nonce: string; readonly code: string }
-  ): Promise<
-    | { readonly _tag: "Failed" }
-    | { readonly _tag: "Exchanged"; readonly label: string | undefined }
-  > {
-    try {
-      const credentials = await this.dependencies.credentials(pending.ownerId);
-      const clientSecret =
-        pending.sealedClientSecret === undefined
-          ? undefined
-          : await credentials.openClientSecret(
-              entry.catalogId,
-              granted.nonce,
-              pending.sealedClientSecret
-            );
-      const exchanged = await exchangeCode({
-        send: this.dependencies.send,
-        tokenEndpoint: pending.tokenEndpoint,
-        clientId: pending.clientId,
-        clientSecret,
-        redirectUrl: pending.redirectUrl,
-        serverUrl: entry.serverUrl,
-        code: granted.code,
-        codeVerifier: await credentials.openVerifier(
-          entry.catalogId,
-          granted.nonce,
-          pending.sealedCodeVerifier
-        ),
-      });
-      await this.dependencies.storage.put({
-        ...(await credentials.sealedEntries(entry.catalogId, exchanged.tokens, {
-          client_id: pending.clientId,
-          ...(clientSecret === undefined
-            ? {}
-            : { client_secret: clientSecret }),
-          redirectUrl: pending.redirectUrl,
-        })),
-        [latestExchangeKey(entry.catalogId)]: granted.nonce,
-        [`${settledOAuthKeyPrefix}${granted.nonce}`]: {
-          ownerId: pending.ownerId,
-          catalogId: entry.catalogId,
-          issuer: pending.issuer,
-          issuerIsRequired: pending.issuerIsRequired,
-          ...(exchanged.accountLabel === undefined
-            ? {}
-            : { accountLabel: exchanged.accountLabel }),
-          expiresAtMillis: nowMillis() + settledLifetimeMillis,
-        },
-      });
-      return { _tag: "Exchanged", label: exchanged.accountLabel };
-    } catch {
-      return { _tag: "Failed" };
-    }
+    return { outcome: connected, serverName };
   }
 }

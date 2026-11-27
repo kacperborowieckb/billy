@@ -24,7 +24,9 @@ export interface TokenExchangeInput {
   readonly send: FetchFunction;
   readonly tokenEndpoint: string;
   readonly clientId: string;
-  readonly clientSecret: string | undefined;
+  readonly clientAuthentication:
+    | { readonly method: "basic" | "post"; readonly secret: string }
+    | undefined;
   readonly redirectUrl: string;
   readonly serverUrl: string;
   readonly code: string;
@@ -51,7 +53,7 @@ export const exchangeCode = async ({
   send,
   tokenEndpoint,
   clientId,
-  clientSecret,
+  clientAuthentication,
   redirectUrl,
   serverUrl,
   code,
@@ -64,15 +66,20 @@ export const exchangeCode = async ({
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
+          ...(clientAuthentication?.method === "basic"
+            ? {
+                Authorization: `Basic ${btoa(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientAuthentication.secret)}`)}`,
+              }
+            : {}),
         },
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code,
           redirect_uri: redirectUrl,
           client_id: clientId,
-          ...(clientSecret === undefined
-            ? {}
-            : { client_secret: clientSecret }),
+          ...(clientAuthentication?.method === "post"
+            ? { client_secret: clientAuthentication.secret }
+            : {}),
           code_verifier: codeVerifier,
           resource: serverUrl,
         }),

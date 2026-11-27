@@ -49,7 +49,13 @@ export class SealedOAuthProvider implements AgentMcpOAuthProvider {
           client_id: client.client_id,
           ...(client.client_secret === undefined
             ? {}
-            : { client_secret: client.client_secret }),
+            : {
+                client_secret: client.client_secret,
+                token_endpoint_auth_method:
+                  client.client_auth_method === "post"
+                    ? "client_secret_post"
+                    : "client_secret_basic",
+              }),
         };
   }
 

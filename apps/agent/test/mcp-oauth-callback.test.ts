@@ -276,6 +276,21 @@ describe("client authentication and tenants", () => {
     );
   });
 
+  it("sends the registered client secret in a Basic header when the server says so", async () => {
+    fakeMcpServer.oauth.supportClientIdMetadata(false);
+    fakeMcpServer.oauth.registerWithMethod("client_secret_basic");
+    fakeMcpServer.oauth.requireClientSecret(true);
+    const ownerId = await ownerWhoWroteToTheAgent(9989);
+    const { state } = await startedConsent(9989, ownerId);
+
+    const response = await goodCallback(state);
+
+    expect(response.status).toBe(200);
+    expect(
+      fakeMcpServer.oauth.tokenRequests[0]?.["client_secret"]
+    ).toBeUndefined();
+  });
+
   it("posts the code to the token endpoint of a tenant issuer", async () => {
     fakeMcpServer.oauth.useLayout("challenged_tenant");
     const ownerId = await ownerWhoWroteToTheAgent(9996);
@@ -518,6 +533,41 @@ describe("a replay of a good callback", () => {
 
     expect(await addedEntryCountOf(ownerId)).toBe(1);
     expect(fakeTelegram.sent).toHaveLength(2);
+  });
+
+  it("lets a replay deliver the completion when the hub stopped after it recorded the Connection", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9988);
+    const { state } = await startedConsent(9988, ownerId);
+    fakeMcpServer.beUnavailable(true);
+    await goodCallback(state);
+    fakeMcpServer.beUnavailable(false);
+    await runInDurableObject(
+      env.MCP_HUB.getByName(ownerId),
+      (_instance, { storage }) =>
+        storage.put(`connection:${testMcpCatalogId}`, true)
+    );
+
+    const replay = await goodCallback(state);
+
+    expect(replay.status).toBe(200);
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "ready" },
+    ]);
+    expect(await addedEntryCountOf(ownerId)).toBe(1);
+  });
+
+  it("serializes two completions of one entry so only one exchanges a code", async () => {
+    const ownerId = await ownerWhoWroteToTheAgent(9987);
+    const { state: first } = await startedConsent(9987, ownerId);
+    const second = await secondConsent(9987, ownerId);
+
+    const answers = await Promise.all([
+      goodCallback(first),
+      goodCallback(second),
+    ]);
+
+    expect(answers.map(({ status }) => status)).toEqual([200, 200]);
+    expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
   });
 
   it("makes one Journal Entry for two completions that arrive together", async () => {

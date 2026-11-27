@@ -16,6 +16,7 @@ export const createFakeOAuthServer = () => {
     sendsIssuer: true,
     tokenLoginRefused: false,
     requiresClientSecret: false,
+    registeredMethod: "client_secret_post" as string,
     withRefreshToken: true,
     withAccountName: true,
     requiresToken: false,
@@ -68,13 +69,18 @@ export const createFakeOAuthServer = () => {
     return new Response(null, { status: 404 });
   };
 
+  const hasClientSecret = (request: Request, form: URLSearchParams) =>
+    state.registeredMethod === "client_secret_basic"
+      ? request.headers.get("Authorization") ===
+        `Basic ${btoa(`fake-dcr-client:${fakeOAuthSecrets.clientSecret}`)}`
+      : form.get("client_secret") === fakeOAuthSecrets.clientSecret;
+
   const answerToken = async (request: Request) => {
     const form = new URLSearchParams(await request.text());
     tokenRequests.push(Object.fromEntries(form));
     if (
       state.tokenLoginRefused ||
-      (state.requiresClientSecret &&
-        form.get("client_secret") !== fakeOAuthSecrets.clientSecret) ||
+      (state.requiresClientSecret && !hasClientSecret(request, form)) ||
       form.get("grant_type") !== "authorization_code" ||
       form.get("code") !== fakeOAuthSecrets.authorizationCode
     ) {
@@ -142,6 +148,7 @@ export const createFakeOAuthServer = () => {
         {
           client_id: "fake-dcr-client",
           client_secret: fakeOAuthSecrets.clientSecret,
+          token_endpoint_auth_method: state.registeredMethod,
         },
         { status: 201 }
       );
@@ -164,6 +171,9 @@ export const createFakeOAuthServer = () => {
     },
     sendIssuer: (sent: boolean) => {
       state.sendsIssuer = sent;
+    },
+    registerWithMethod: (method: string) => {
+      state.registeredMethod = method;
     },
     requireClientSecret: (required: boolean) => {
       state.requiresClientSecret = required;
@@ -193,6 +203,7 @@ export const createFakeOAuthServer = () => {
       state.sendsIssuer = true;
       state.tokenLoginRefused = false;
       state.requiresClientSecret = false;
+      state.registeredMethod = "client_secret_post";
       state.withRefreshToken = true;
       state.withAccountName = true;
       state.requiresToken = false;

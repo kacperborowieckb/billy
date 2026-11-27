@@ -9,6 +9,7 @@ import type { OAuthDiscovery } from "./oauth-discovery.ts";
 const RegistrationSchema = Schema.Struct({
   client_id: Schema.String,
   client_secret: Schema.optionalKey(Schema.String),
+  token_endpoint_auth_method: Schema.optionalKey(Schema.String),
 });
 
 const decodeRegistration = Schema.decodeUnknownSync(RegistrationSchema);
@@ -23,12 +24,15 @@ const challengeOf = async (verifier: string) =>
     )
   );
 
+export const ClientAuthMethodSchema = Schema.Literals(["basic", "post"]);
+
 export const PendingOAuthSchema = Schema.Struct({
   ownerId: Schema.String,
   catalogId: Schema.String,
   sealedCodeVerifier: Schema.String,
   clientId: Schema.String,
   sealedClientSecret: Schema.optionalKey(Schema.String),
+  clientAuthMethod: Schema.optionalKey(ClientAuthMethodSchema),
   redirectUrl: Schema.String,
   issuer: Schema.String,
   issuerIsRequired: Schema.Boolean,
@@ -57,9 +61,13 @@ export interface OAuthStartInput {
   readonly lifetimeMillis: number;
 }
 
+const authMethodOf = (method: string | undefined) =>
+  method === "client_secret_post" ? "post" : "basic";
+
 interface RegisteredClient {
   readonly clientId: string;
   readonly clientSecret: string | undefined;
+  readonly clientAuthMethod: "basic" | "post" | undefined;
 }
 
 const registeredClient = async ({
@@ -70,7 +78,11 @@ const registeredClient = async ({
   clientMetadataUrl,
 }: OAuthStartInput): Promise<RegisteredClient> => {
   if (discovery.clientMode === "CIMD" && clientMetadataUrl !== undefined) {
-    return { clientId: clientMetadataUrl, clientSecret: undefined };
+    return {
+      clientId: clientMetadataUrl,
+      clientSecret: undefined,
+      clientAuthMethod: undefined,
+    };
   }
   const endpoint = discovery.server.registration_endpoint;
   if (endpoint === undefined) {
@@ -100,6 +112,10 @@ const registeredClient = async ({
     return {
       clientId: registration.client_id,
       clientSecret: registration.client_secret,
+      clientAuthMethod:
+        registration.client_secret === undefined
+          ? undefined
+          : authMethodOf(registration.token_endpoint_auth_method),
     };
   });
 };
@@ -113,7 +129,8 @@ export interface StartedOAuth {
 export const startOAuth = async (
   input: OAuthStartInput
 ): Promise<StartedOAuth> => {
-  const { clientId, clientSecret } = await registeredClient(input);
+  const { clientId, clientSecret, clientAuthMethod } =
+    await registeredClient(input);
   const codeVerifier = randomToken();
   const nonce = randomToken();
   const url = new URL(input.discovery.server.authorization_endpoint);
@@ -132,9 +149,10 @@ export const startOAuth = async (
       catalogId: input.catalogId,
       sealedCodeVerifier: await input.sealVerifier(nonce, codeVerifier),
       clientId,
-      ...(clientSecret === undefined
+      ...(clientSecret === undefined || clientAuthMethod === undefined
         ? {}
         : {
+            clientAuthMethod,
             sealedClientSecret: await input.sealClientSecret(
               nonce,
               clientSecret

@@ -16,6 +16,7 @@ export type StoredTokens = typeof StoredTokensSchema.Type;
 export const StoredClientSchema = Schema.Struct({
   client_id: Schema.String,
   client_secret: Schema.optionalKey(Schema.String),
+  client_auth_method: Schema.optionalKey(Schema.Literals(["basic", "post"])),
   redirectUrl: Schema.String,
 });
 
