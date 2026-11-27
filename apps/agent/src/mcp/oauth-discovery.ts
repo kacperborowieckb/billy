@@ -16,6 +16,7 @@ const AuthorizationServerSchema = Schema.Struct({
     Schema.Boolean
   ),
   registration_endpoint: Schema.optionalKey(Schema.String),
+  revocation_endpoint: Schema.optionalKey(Schema.String),
   code_challenge_methods_supported: Schema.optionalKey(
     Schema.Array(Schema.String)
   ),
@@ -29,6 +30,7 @@ export type OAuthClientMode = "CIMD" | "DCR";
 export interface OAuthDiscovery {
   readonly server: AuthorizationServer;
   readonly clientMode: OAuthClientMode;
+  readonly revocationEndpoint: string | undefined;
 }
 
 export class OAuthDiscoveryFailedError extends Error {
@@ -211,5 +213,16 @@ export const discoverOAuth = async ({
       "The authorization server accepts no client"
     );
   }
-  return { server: server.value, clientMode: clientMode.value };
+  const revocation = server.value.revocation_endpoint;
+  const revocationEndpoint =
+    revocation !== undefined &&
+    URL.canParse(revocation) &&
+    refusedReasonOf(new URL(revocation), allowedOrigins) === undefined
+      ? revocation
+      : undefined;
+  return {
+    server: server.value,
+    clientMode: clientMode.value,
+    revocationEndpoint,
+  };
 };

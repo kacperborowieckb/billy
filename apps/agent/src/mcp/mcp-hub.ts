@@ -13,12 +13,14 @@ import type { McpCatalog } from "./mcp-catalog.ts";
 import { McpConnectionHealth } from "./mcp-connection-health.ts";
 import { McpConnectionLedger } from "./mcp-connection-ledger.ts";
 import { McpConnectionSetup } from "./mcp-connection-setup.ts";
+import { McpDisconnector } from "./mcp-disconnector.ts";
 import type {
   McpAddConnectionOutcome,
   McpCallbackOutcome,
   McpCallOutcome,
   McpCallRequest,
   McpConsentOutcome,
+  McpDisconnectOutcome,
   McpHubRpc,
   McpRefreshOutcome,
   McpOAuthCallback,
@@ -162,6 +164,16 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
     closeConnection: (catalogId) => this.closeQuietly(catalogId),
   });
 
+  private readonly disconnector = new McpDisconnector({
+    catalog: this.catalog,
+    entryQueue: this.entryQueue,
+    connector: this.connector,
+    storage: this.ctx.storage,
+    send: this.guardedSend,
+    ownerId: () => this.ownerName(),
+    credentials: (ownerId) => this.credentialsOf(ownerId),
+  });
+
   private ownerName() {
     return this.ctx.id.name ?? "";
   }
@@ -244,6 +256,14 @@ export class McpHub extends DurableObject<Env> implements McpHubRpc {
 
   callTool(request: McpCallRequest): Promise<McpCallOutcome> {
     return this.calls.callTool(request);
+  }
+
+  disconnect(catalogId: string): Promise<McpDisconnectOutcome> {
+    return this.disconnector.disconnect(catalogId);
+  }
+
+  removeOwnerStorage(): Promise<void> {
+    return this.disconnector.removeAll();
   }
 
   lastError(catalogId: string): Promise<McpLastError | undefined> {

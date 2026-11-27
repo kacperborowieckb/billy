@@ -41,6 +41,12 @@ export interface McpRefreshOutcome {
     | "unknown_catalog_entry";
 }
 
+export type McpRevocation = "revoked" | "failed" | "not_attempted";
+
+export type McpDisconnectOutcome =
+  | { readonly outcome: "disconnected"; readonly revocation: McpRevocation }
+  | { readonly outcome: "unknown_catalog_entry" | "failed" };
+
 export interface McpOAuthRequest {
   readonly catalogId: string;
   readonly redirectUrl: string;
@@ -102,6 +108,8 @@ export interface McpHubRpc {
     connectTimeoutMillis: number
   ) => Promise<McpAddConnectionOutcome>;
   readonly callTool: (request: McpCallRequest) => Promise<McpCallOutcome>;
+  readonly disconnect: (catalogId: string) => Promise<McpDisconnectOutcome>;
+  readonly removeOwnerStorage: () => Promise<void>;
   readonly lastError: (catalogId: string) => Promise<McpLastError | undefined>;
   readonly refreshToolCatalog: (
     catalogId: string,
@@ -116,5 +124,8 @@ export class McpHubPort extends Context.Service<
     readonly callTool: (
       request: McpCallRequest
     ) => Effect.Effect<McpCallOutcome>;
+    readonly disconnect: (
+      catalogId: string
+    ) => Effect.Effect<McpDisconnectOutcome>;
   }
 >()("McpHubPort") {}

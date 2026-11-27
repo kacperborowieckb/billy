@@ -37,14 +37,21 @@ export class McpServerConnector {
 
   private readonly queueHolds = new Map<string, number>();
 
+  private readonly epochs = new Map<string, number>();
+
   constructor(dependencies: McpServerConnectorDependencies) {
     this.dependencies = dependencies;
+  }
+
+  private epochOf(catalogId: string) {
+    return this.epochs.get(catalogId) ?? 0;
   }
 
   private async registerAndConnect(entry: McpCatalogEntry, ownerId: string) {
     const { manager, send, allowedOrigins, credentials, health } =
       this.dependencies;
     const { catalogId } = entry;
+    const epoch = this.epochOf(catalogId);
     await manager.registerServer(catalogId, {
       url: entry.serverUrl,
       name: entry.displayName,
@@ -71,6 +78,10 @@ export class McpServerConnector {
     const discovered = await manager.discoverIfConnected(catalogId);
     if (discovered?.success !== true) {
       throw new Error("The MCP server did not list its tools");
+    }
+    if (this.epochOf(catalogId) !== epoch) {
+      await this.closeIfOpen(catalogId);
+      throw new Error("The MCP Connection was removed while it connected");
     }
   }
 
@@ -157,6 +168,26 @@ export class McpServerConnector {
 
   async close(catalogId: string) {
     await this.dependencies.manager.closeConnection(catalogId);
+  }
+
+  private async closeIfOpen(catalogId: string) {
+    if (this.dependencies.manager.mcpConnections[catalogId] !== undefined) {
+      await this.dependencies.manager.closeConnection(catalogId);
+    }
+  }
+
+  async forget(catalogId: string, deadlineMillis: number) {
+    this.epochs.set(catalogId, this.epochOf(catalogId) + 1);
+    this.connecting.delete(catalogId);
+    await this.whileQueueHeld(catalogId, async () => {
+      try {
+        await within(this.closeIfOpen(catalogId), deadlineMillis);
+      } catch {
+        await Effect.runPromise(
+          Effect.logWarning("The MCP connection did not close cleanly")
+        );
+      }
+    });
   }
 
   toolCopiesOf(catalogId: string) {

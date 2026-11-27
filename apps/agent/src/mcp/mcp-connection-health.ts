@@ -15,6 +15,7 @@ const expiryMarginMillis = 60_000;
 export type AccessOutcome =
   | { readonly _tag: "Token"; readonly accessToken: string | undefined }
   | { readonly _tag: "SignInRequired" }
+  | { readonly _tag: "NotConnected" }
   | { readonly _tag: "Unavailable" };
 
 export interface McpConnectionHealthDependencies {
@@ -46,6 +47,8 @@ const token = (accessToken: string | undefined): AccessOutcome => ({
 });
 
 const signInRequired: AccessOutcome = { _tag: "SignInRequired" };
+
+const notConnected: AccessOutcome = { _tag: "NotConnected" };
 
 const unavailable: AccessOutcome = { _tag: "Unavailable" };
 
@@ -125,7 +128,11 @@ export class McpConnectionHealth {
   ): Promise<AccessOutcome> {
     const { catalogId } = entry;
     const { ledger, tellNeedsSignIn } = this.dependencies;
-    if ((await ledger.stateOf(catalogId)) === "needs_sign_in") {
+    const state = await ledger.stateOf(catalogId);
+    if (state === undefined) {
+      return notConnected;
+    }
+    if (state === "needs_sign_in") {
       return signInRequired;
     }
     await ledger.enterNeedsSignIn(catalogId, note);
@@ -142,8 +149,12 @@ export class McpConnectionHealth {
   ): Promise<AccessOutcome> {
     const { catalogId } = entry;
     const { ledger } = this.dependencies;
-    if ((await ledger.stateOf(catalogId)) === "needs_sign_in") {
+    const state = await ledger.stateOf(catalogId);
+    if (state === "needs_sign_in") {
       return signInRequired;
+    }
+    if (state === undefined && rejectedAccessToken !== undefined) {
+      return notConnected;
     }
     const credentials = await this.dependencies.credentials(ownerId);
     const tokens = await credentials.tokens(catalogId);

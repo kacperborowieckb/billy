@@ -4,10 +4,12 @@ import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Journal } from "../journal/journal.ts";
 import { callMcpToolTool } from "../mcp/call-mcp-tool-tool.ts";
 import { connectMcpServerTool } from "../mcp/connect-mcp-server-tool.ts";
+import { disconnectMcpConnectionTool } from "../mcp/disconnect-mcp-connection-tool.ts";
 import { findMcpToolsTool } from "../mcp/find-mcp-tools-tool.ts";
 import {
   callMcpToolToolName,
   connectMcpServerToolName,
+  disconnectMcpConnectionToolName,
   findMcpToolsToolName,
 } from "../mcp/mcp-tool-names.ts";
 import type { McpToolServices } from "../mcp/mcp-tool-services.ts";
@@ -201,6 +203,10 @@ export const ownerMessageTools = (
     [findMcpToolsToolName]: findMcpToolsTool(mcpServices, eventId),
     [callMcpToolToolName]: callMcpToolTool(mcpServices, eventId),
     [connectMcpServerToolName]: connectMcpServerTool(mcpServices, eventId),
+    [disconnectMcpConnectionToolName]: disconnectMcpConnectionTool(
+      mcpServices,
+      eventId
+    ),
     [staySilentToolName]: staySilentTool,
     [reactToolName]: reactTool,
   };

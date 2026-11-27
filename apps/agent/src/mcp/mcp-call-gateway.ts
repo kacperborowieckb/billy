@@ -58,6 +58,9 @@ export class McpCallGateway {
       return outcome;
     }
     const stateAfter = await ledger.stateOf(request.catalogId);
+    if (stateAfter === undefined) {
+      return { _tag: "Failed", reason: "not_connected" };
+    }
     return stateAfter === "needs_sign_in"
       ? this.signInFailure(request.catalogId)
       : outcome;

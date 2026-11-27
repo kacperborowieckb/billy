@@ -118,8 +118,26 @@ const makeMcpConnections = (catalog: McpCatalog) =>
         .delete(mcpConnectRequests)
         .where(eq(mcpConnectRequests.eventId, eventId));
 
+    const remove = (catalogId: string) =>
+      database.transaction(() =>
+        Effect.gen(function* removeEffect() {
+          const removed = yield* database
+            .delete(mcpConnections)
+            .where(eq(mcpConnections.catalogId, catalogId))
+            .returning({ catalogId: mcpConnections.catalogId });
+          yield* database
+            .delete(mcpTools)
+            .where(eq(mcpTools.catalogId, catalogId));
+          yield* database
+            .delete(mcpConnectRequests)
+            .where(eq(mcpConnectRequests.catalogId, catalogId));
+          return removed.length > 0;
+        })
+      );
+
     return {
       catalog,
+      remove,
       states,
       stateOf,
       setState,

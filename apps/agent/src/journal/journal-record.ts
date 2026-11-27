@@ -168,6 +168,11 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     eventId: Schema.String,
     catalogId: Schema.String,
   },
+  McpConnectionRemoved: {
+    eventId: Schema.String,
+    catalogId: Schema.String,
+    revocation: Schema.Literals(["revoked", "failed", "not_attempted"]),
+  },
   McpConnectionStateChanged: {
     eventId: Schema.String,
     catalogId: Schema.String,

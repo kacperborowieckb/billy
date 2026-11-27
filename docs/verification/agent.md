@@ -212,6 +212,20 @@ Decision [0036](../decisions/0036-mcp-connections.md), ticket #156. `test/mcp-to
 
 Known limits: a refresh that is retried by Notion with a grace period, and the real expiry of a token after hours, are not covered (#158).
 
+### MCP disconnect
+
+Decision [0036](../decisions/0036-mcp-connections.md), ticket #157. `test/mcp-disconnect.test.ts` connects through the Edge, then disconnects through a model Turn (the tool) or the hub RPC. The fake authorization server has a revocation endpoint that can be held, answer 500, or never end its body (`holdRevocations`, `failRevocationsWith`, `cutRevocationBodies`, `advertiseRevocation`). The tests check:
+
+- A disconnect in an owner Turn revokes the refresh token and the access token, deletes the hub tokens, the pending requests, and the Personal Agent record and tool copy, and writes `McpConnectionRemoved`. No token stays in any table.
+- In an untrusted Turn the disconnect waits for Approve and revokes nothing before it.
+- A revocation that answers 500, never ends its body (deadline of 3 seconds), is not offered, or is still waiting deletes the tokens anyway.
+- `call_mcp_tool` after a disconnect answers `not_connected` and makes no request to the server.
+- Disconnect during a callback (held token exchange, with a second callback behind the disconnect), during a refresh, and during a running call, a replayed callback after a disconnect, a reconnect right after a disconnect, and a second disconnect each end in the order that the test forces with a hold and a release. None leaves a record, and none writes `needs sign-in`.
+- A Pending Approval for a disconnected Connection expires and never runs, also after a reconnect.
+- `removeOwnerStorage` deletes the whole hub storage.
+
+Known limit: no Owner removal flow exists yet (#138), so the storage deletion is tested through the hub RPC only.
+
 ## Control CLI
 
 Run the commands from `apps/agent` with `pnpm control <command>`, or from the root with `pnpm --filter @repo/agent control <command>`.

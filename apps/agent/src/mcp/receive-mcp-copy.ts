@@ -5,9 +5,11 @@ import { Journal } from "../journal/journal.ts";
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
 import { OwnerChannelConversation } from "../personal-agent/owner-channel-conversation.ts";
 import type { McpConnectionState } from "../personal-agent/storage-values.ts";
+import { Schedules } from "../schedule/schedules.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import { McpConnections, McpConnectionStateSchema } from "./mcp-connections.ts";
+import { makeApprovalsOfConnectionDue } from "./mcp-disconnect-approvals.ts";
 import { McpToolCatalogCopySchema } from "./mcp-tool-copy.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 
@@ -132,6 +134,34 @@ export const receiveMcpConnected = Effect.fnUntraced(
       Effect.catchCause((cause) =>
         Effect.logWarning("The Connected message was not sent", cause)
       )
+    );
+  },
+  Effect.orDie
+);
+
+export const removeMcpConnection = Effect.fnUntraced(
+  function* removeMcpConnection(
+    catalogId: string,
+    revocation: "revoked" | "failed" | "not_attempted"
+  ) {
+    const { database } = yield* AgentStorage;
+    const journal = yield* Journal;
+    const connections = yield* McpConnections;
+    const schedules = yield* Schedules;
+    yield* database.transaction(() =>
+      Effect.gen(function* recordRemoval() {
+        const existed = yield* connections.remove(catalogId);
+        yield* makeApprovalsOfConnectionDue(catalogId);
+        if (existed) {
+          yield* journal.append({
+            _tag: "McpConnectionRemoved",
+            eventId: `mcp-connection-removed:${crypto.randomUUID()}`,
+            catalogId,
+            revocation,
+          });
+        }
+        yield* schedules.rearm;
+      })
     );
   },
   Effect.orDie
