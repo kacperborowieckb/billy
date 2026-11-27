@@ -252,9 +252,10 @@ export const createChat = (thread: HTMLElement, avatar = true) => {
     /** Stop playing: typing dots go, and the thread shows again. */
     stop() {
       run += 1;
-      // The thread's slide-up animations stop with it.
+      // The thread's animations (slide-ups, and pops and transitions inside
+      // each message) stop with it.
       for (const child of thread.children) {
-        for (const animation of child.getAnimations()) {
+        for (const animation of child.getAnimations({ subtree: true })) {
           animation.cancel();
         }
       }
