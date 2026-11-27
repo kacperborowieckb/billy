@@ -20,6 +20,17 @@ describe("the reason of an MCP failure", () => {
     expect(failureReasonOf(refused)).toBe("durable_object_has_no_name");
   });
 
+  it("ends on a cause chain that points to itself", () => {
+    const looped = new TypeError("loop");
+    looped.cause = looped;
+    const late = Object.assign(new Error("outer"), {
+      cause: Object.assign(new Error("inner"), { name: "TimeoutError" }),
+    });
+
+    expect(failureReasonOf(looped)).toContain("TypeError");
+    expect(failureReasonOf(late)).toBe("deadline");
+  });
+
   it("holds only class names, never a message or a value", () => {
     const inner = new TypeError("Pat Reader fake-access-token-4b9d");
     const failed = Object.assign(

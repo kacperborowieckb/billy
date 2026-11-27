@@ -5,11 +5,18 @@ const isDeadlineSignal = (error: object) =>
   ("name" in error && error.name === "TimeoutError");
 
 export const isDeadlineError = (error: unknown): boolean => {
-  if (typeof error !== "object" || error === null) {
-    return false;
+  const seen = new Set<object>();
+  let current = error;
+  while (
+    typeof current === "object" &&
+    current !== null &&
+    !seen.has(current)
+  ) {
+    if (isDeadlineSignal(current)) {
+      return true;
+    }
+    seen.add(current);
+    current = "cause" in current ? current.cause : undefined;
   }
-  return (
-    isDeadlineSignal(error) ||
-    ("cause" in error && isDeadlineError(error.cause))
-  );
+  return false;
 };
