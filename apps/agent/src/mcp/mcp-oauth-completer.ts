@@ -43,8 +43,10 @@ export interface McpOAuthCompleterDependencies {
 const hasText = (value: string | undefined): value is string =>
   value !== undefined && value.length > 0;
 
-const issuerAgrees = (pending: PendingOAuth, iss: string | undefined) =>
-  iss === undefined ? !pending.issuerIsRequired : iss === pending.issuer;
+const issuerAgrees = (
+  pending: Pick<PendingOAuth, "issuer" | "issuerIsRequired">,
+  iss: string | undefined
+) => (iss === undefined ? !pending.issuerIsRequired : iss === pending.issuer);
 
 export class McpOAuthCompleter {
   private readonly dependencies: McpOAuthCompleterDependencies;
@@ -67,7 +69,10 @@ export class McpOAuthCompleter {
     return started;
   }
 
-  private async replayOf(nonce: string): Promise<McpCallbackOutcome> {
+  private async replayOf(
+    nonce: string,
+    iss: string | undefined
+  ): Promise<McpCallbackOutcome> {
     const { storage, catalog } = this.dependencies;
     const settled = settledOAuthOf(
       await storage.get(`${settledOAuthKeyPrefix}${nonce}`)
@@ -76,7 +81,11 @@ export class McpOAuthCompleter {
       settled === undefined || settled.expiresAtMillis <= nowMillis()
         ? undefined
         : mcpEntryOf(catalog, settled.catalogId);
-    if (settled === undefined || entry === undefined) {
+    if (
+      settled === undefined ||
+      entry === undefined ||
+      !issuerAgrees(settled, iss)
+    ) {
       return { outcome: "not_started" };
     }
     const serverName = entry.displayName;
@@ -98,7 +107,7 @@ export class McpOAuthCompleter {
     const key = `${pendingOAuthKeyPrefix}${returned.nonce}`;
     const pending = pendingOAuthOf(await storage.get(key));
     if (pending === undefined || pending.expiresAtMillis <= nowMillis()) {
-      return this.replayOf(returned.nonce);
+      return this.replayOf(returned.nonce, returned.iss);
     }
     const entry = mcpEntryOf(catalog, pending.catalogId);
     if (entry === undefined || !issuerAgrees(pending, returned.iss)) {
@@ -168,6 +177,8 @@ export class McpOAuthCompleter {
         {
           ownerId: pending.ownerId,
           catalogId: entry.catalogId,
+          issuer: pending.issuer,
+          issuerIsRequired: pending.issuerIsRequired,
           ...(exchanged.accountLabel === undefined
             ? {}
             : { accountLabel: exchanged.accountLabel }),

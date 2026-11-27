@@ -400,9 +400,18 @@ describe("a replay of a good callback", () => {
 
     const first = await goodCallback(state);
     fakeMcpServer.beUnavailable(false);
+    const wrongIssuer = await callbackWith({
+      code: fakeOAuthSecrets.authorizationCode,
+      state,
+      iss: "https://evil.example",
+    });
+    expect(await statesOf(ownerId)).toEqual([
+      { catalogId: testMcpCatalogId, state: "failed" },
+    ]);
     const second = await goodCallback(state);
 
     expect(first.status).toBe(502);
+    expect(wrongIssuer.status).toBe(403);
     expect(second.status).toBe(200);
     expect(fakeMcpServer.oauth.tokenRequests).toHaveLength(1);
     expect(await statesOf(ownerId)).toEqual([
