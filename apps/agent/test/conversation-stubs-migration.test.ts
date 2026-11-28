@@ -107,6 +107,7 @@ const deletedRows = [
     `${toolStubLine}\n[Notion notion-fetch: done. Result removed from the history. Call the tool again to read it]\n`
   ),
   seeded("step", [{ type: "text", text: toolStubLine }]),
+  seeded("reply", `  ${toolStubLine}\r\n\r\n${replyStub}\r\n`),
 ];
 
 const copiedTextWithCall = seeded("step", [
@@ -119,6 +120,12 @@ const keptRows = [
   seeded("step", [{ type: "text", text: "I look at your Notes." }]),
   seeded("reply", replyStub),
   seeded("reply", `I wrote this: ${toolStubLine}`),
+  seeded("reply", `${toolStubLine}\nYour call is at 15:00 [Calendar]`),
+  seeded("reply", `${toolStubLine} Your call is at 15:00 [Calendar]`),
+  seeded("step", [
+    { type: "text", text: `${toolStubLine}\nI look again [Notion]` },
+    toolCallPart,
+  ]),
 ];
 
 const seededRows = [...deletedRows, copiedTextWithCall, ...keptRows];
