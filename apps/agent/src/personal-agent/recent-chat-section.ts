@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 
+import { markUntrustedContent } from "../notes/note.ts";
 import { textAfterContextBlock } from "./context-labels.ts";
 import type { ConversationRow } from "./conversation.ts";
 
@@ -12,10 +13,16 @@ const textPartsOf = (message: ModelMessage) => {
     .join("\n");
 };
 
-const chatLineOf = ({ message }: ConversationRow) =>
+const chatTextOf = (message: ModelMessage) =>
   message.role === "user"
-    ? `Owner: ${textAfterContextBlock(textPartsOf(message))}`
-    : `Agent: ${textPartsOf(message)}`;
+    ? textAfterContextBlock(textPartsOf(message))
+    : textPartsOf(message);
+
+const chatLineOf = ({ message, trustLevel }: ConversationRow) => {
+  const speaker = message.role === "user" ? "Owner" : "Agent";
+  const text = chatTextOf(message);
+  return `${speaker}: ${trustLevel === "untrusted" ? markUntrustedContent(text) : text}`;
+};
 
 export const recentChatSection = (rows: readonly ConversationRow[]) =>
   rows.length === 0

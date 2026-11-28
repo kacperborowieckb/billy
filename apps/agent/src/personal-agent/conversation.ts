@@ -3,32 +3,35 @@ import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
+import { trustLevelOfParts } from "../approval/turn-trust.ts";
 import {
   ModelMessageJsonSchema,
   ModelMessageSchema,
 } from "../model-gateway/model-message-schema.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import type { SentConversationRows } from "../tracing/traced-request.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import {
+  decodedRows,
   sentRowsCondition,
   storedRowsOf,
   summaryFirst,
 } from "./conversation-rows.ts";
-import { breakMainConversationPrefix } from "./prefix-cache.ts";
 import {
   conversationMessages,
   conversationRecordedEvents,
   refusedCompactionBlocks,
-} from "./storage-schema.ts";
+} from "./conversation-schema.ts";
+import { breakMainConversationPrefix } from "./prefix-cache.ts";
 import type { ConversationRowKind } from "./storage-values.ts";
 
 const encodeMessage = Schema.encodeSync(ModelMessageJsonSchema);
-const decodeMessage = Schema.decodeUnknownEffect(ModelMessageJsonSchema);
 const checkMessage = Schema.decodeUnknownEffect(ModelMessageSchema);
 
 export interface ConversationRow {
   readonly kind: ConversationRowKind;
   readonly message: ModelMessage;
+  readonly trustLevel: TrustLevel;
 }
 
 export interface StoredConversationRow extends ConversationRow {
@@ -40,13 +43,13 @@ export interface NewSummary {
   readonly compactionId: string;
   readonly lastCompactedSequence: number;
   readonly message: ModelMessage;
+  readonly trustLevel: TrustLevel;
 }
 
 const chatTextRowKinds: readonly ConversationRowKind[] = [
   "input",
   "reply",
   "write_back",
-  "write_back_stub",
 ];
 
 export interface ConversationEntry {
@@ -55,20 +58,6 @@ export interface ConversationEntry {
   readonly recordedAs?: string | undefined;
   readonly storedWithStub?: boolean;
 }
-
-const decodedRows = (
-  rows: readonly {
-    readonly kind: ConversationRowKind;
-    readonly message: string;
-  }[]
-) =>
-  Effect.all(
-    rows.map(({ kind, message }) =>
-      decodeMessage(message).pipe(
-        Effect.map((decoded): ConversationRow => ({ kind, message: decoded }))
-      )
-    )
-  ).pipe(Effect.orDie);
 
 const makeConversation = Effect.gen(function* makeConversationEffect() {
   const { database } = yield* AgentStorage;
@@ -111,6 +100,12 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     )
     .pipe(Effect.map(([row]) => row?.eventId));
 
+  const historyTrustLevel = database
+    .selectDistinct({ trustLevel: conversationMessages.trustLevel })
+    .from(conversationMessages)
+    .where(isNull(conversationMessages.compactedAt))
+    .pipe(Effect.map(trustLevelOfParts), Effect.orDie);
+
   const history = uncompactedRows.pipe(
     Effect.map((rows) => rows.map((row) => row.message)),
     Effect.orDie
@@ -121,11 +116,11 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     rows: readonly ConversationRow[]
   ) {
     const recordedAt = DateTime.formatIso(yield* DateTime.now);
-    for (const { kind, message } of rows) {
+    for (const { message, ...row } of rows) {
       const checked = yield* checkMessage(message).pipe(Effect.orDie);
       yield* database.insert(conversationMessages).values({
+        ...row,
         eventId,
-        kind,
         message: encodeMessage(checked),
         recordedAt,
       });
@@ -158,6 +153,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     compactionId,
     lastCompactedSequence,
     message,
+    trustLevel,
   }: NewSummary) =>
     database.transaction(() =>
       Effect.gen(function* replaceWithSummaryEffect() {
@@ -180,7 +176,9 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
               eq(conversationMessages.kind, "summary")
             )
           );
-        yield* writeRows(compactionId, [{ kind: "summary", message }]);
+        yield* writeRows(compactionId, [
+          { kind: "summary", message, trustLevel },
+        ]);
         yield* breakMainConversationPrefix(database, "compaction");
       })
     );
@@ -213,6 +211,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
       .select({
         kind: conversationMessages.kind,
         message: conversationMessages.message,
+        trustLevel: conversationMessages.trustLevel,
       })
       .from(conversationMessages)
       .where(
@@ -227,30 +226,25 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     return (yield* decodedRows(rows)).toReversed();
   });
 
-  const sentTextIsStoredInFull = Effect.fnUntraced(
-    function* sentTextIsStoredInFull(eventId: string) {
-      const rows = yield* database
-        .select({
-          kind: conversationMessages.kind,
-          message: conversationMessages.message,
-        })
-        .from(conversationMessages)
-        .where(
-          and(
-            eq(conversationMessages.eventId, eventId),
-            inArray(conversationMessages.kind, [
-              "write_back",
-              "write_back_stub",
-            ])
-          )
+  const sentTextIsTrusted = Effect.fnUntraced(function* sentTextIsTrusted(
+    eventId: string
+  ) {
+    const rows = yield* database
+      .select({ trustLevel: conversationMessages.trustLevel })
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.eventId, eventId),
+          eq(conversationMessages.kind, "write_back")
         )
-        .pipe(Effect.orDie);
-      return rows.length > 0 && rows.every(({ kind }) => kind === "write_back");
-    }
-  );
+      )
+      .pipe(Effect.orDie);
+    return rows.length > 0 && trustLevelOfParts(rows) === "owner";
+  });
 
   return {
     history,
+    historyTrustLevel,
     uncompactedRows,
     sentRows,
     summaryEventId,
@@ -259,7 +253,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     recordRefusedBlock,
     append,
     recentTextRows,
-    sentTextIsStoredInFull,
+    sentTextIsTrusted,
   };
 });
 

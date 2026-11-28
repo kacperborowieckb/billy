@@ -5,6 +5,7 @@ export default defineConfig({
   driver: "durable-sqlite",
   schema: [
     "./src/personal-agent/storage-schema.ts",
+    "./src/personal-agent/conversation-schema.ts",
     "./src/personal-agent/turn-progress-schema.ts",
     "./src/personal-agent/prefix-cache-schema.ts",
     "./src/preferences/preferences-schema.ts",

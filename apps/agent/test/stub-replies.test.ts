@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
-import { untrustedReplyStub } from "../src/personal-agent/conversation-stubs.ts";
 import { honestFailureText } from "../src/personal-agent/delivery.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { stubOnlyReplyReason } from "../src/personal-agent/stub-reply.ts";
@@ -19,7 +18,7 @@ const agentOf = (ownerId: string) =>
 
 const copiedStubs = [
   "[Result removed from the history. call_mcp_tool: done.]",
-  untrustedReplyStub,
+  "[Reply sent to the Owner. Text removed from the history]",
 ].join("\n");
 
 const stubReply = { say: copiedStubs };

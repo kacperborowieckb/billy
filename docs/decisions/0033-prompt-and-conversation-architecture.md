@@ -8,6 +8,8 @@ Partly superseded: [0035](0035-summary-open-items.md) changes the rule that the 
 
 Partly superseded: [0038](0038-conversation-tool-history.md) changes "Untrusted Content and Stubs": a tool call of an `untrusted` Turn is stored as a `tool-call` and `tool-result` pair with a Stub as the result, not as a Stub in the text of the agent.
 
+Partly superseded: [0038](0038-conversation-tool-history.md) also replaces "No model text of an `untrusted` run is stored", the Stub of a Write-back, and "The Summary does not make a Turn `untrusted`". Replies and sent texts are stored, and the Conversation rows carry the Trust Level.
+
 Date: 2026-11-23
 
 Issue [#179](https://github.com/kacperborowieckb/billy/issues/179) (measure and decide). Issue [#182](https://github.com/kacperborowieckb/billy/issues/182) builds this decision. The measurement, with its method and all numbers, is in [the prefix cache research](../research/2026-11-23-prefix-cache-measurements.md).

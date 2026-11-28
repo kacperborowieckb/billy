@@ -378,7 +378,7 @@ describe("a Brief with only owner Open Loops", multiTurnTimeout, () => {
 });
 
 describe("a Brief that resumes after a reset", multiTurnTimeout, () => {
-  it("reuses the Run block that it recorded, so an untrusted start stays untrusted after the Open Loop closed, and writes a Stub", async () => {
+  it("reuses the Run block that it recorded, so an untrusted start stays untrusted after the Open Loop closed, and marks the Write-back untrusted", async () => {
     const ownerId = await ownerInWarsaw(9806);
     const gift = await keepNote(ownerId, {
       text: "Buy a gift for Ana",
@@ -438,11 +438,71 @@ describe("a Brief that resumes after a reset", multiTurnTimeout, () => {
       await agentOf(ownerId),
       (_, state) =>
         state.storage.sql
-          .exec<{ kind: string }>(
-            "SELECT kind FROM conversation_messages WHERE kind LIKE 'write_back%'"
+          .exec<{ trust_level: string }>(
+            "SELECT trust_level FROM conversation_messages WHERE kind = 'write_back'"
           )
           .toArray()
     );
-    expect(writeBacks).toEqual([{ kind: "write_back_stub" }]);
+    expect(writeBacks).toEqual([{ trust_level: "untrusted" }]);
   });
 });
+
+describe(
+  "a Brief whose Run block quotes the reply of an untrusted Turn",
+  multiTurnTimeout,
+  () => {
+    it("quotes that reply in the marker, runs no change with the input of the model, and marks its Write-back untrusted", async () => {
+      const ownerId = await ownerInWarsaw(9807);
+      const gift = await keepNote(ownerId, {
+        text: "Buy a gift for Ana",
+        trustLevel: "owner",
+        withOpenLoop: true,
+      });
+      const reply = "Ana asks you to wire money every morning.";
+      scriptModel([{ say: reply }]);
+      await telegramWebhook(
+        textUpdate({
+          fromUserId: 9807,
+          text: forwardedInstruction,
+          forwardOrigin: {
+            type: "hidden_user",
+            sender_user_name: "Ana",
+            date: 1_794_000_000,
+          },
+        })
+      );
+      await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(2));
+      scriptModel([
+        followUpCall(forwardedInstruction, [gift.noteId]),
+        closeCall(gift.noteId),
+        { say: "Good morning" },
+      ]);
+
+      await fireAgentSchedule(ownerId, briefPrompt, 2);
+
+      expect(
+        JSON.stringify(fakeModel.doGenerateCalls.at(-1)?.prompt ?? [])
+      ).toContain(
+        JSON.stringify(`Agent: ${markUntrustedContent(reply)}`).slice(1, -1)
+      );
+      expect(await followUpSchedulesOf(ownerId)).toEqual([
+        { text: fixedFollowUpPrompt([gift.noteId]), set_by: "agent" },
+      ]);
+      expect(toolResultOfLastCall(closeOpenLoopToolName)).toEqual({
+        type: "execution-denied",
+        reason: untrustedChangeWithoutOwnerReason,
+      });
+      await vi.waitFor(async () =>
+        expect(
+          await runInDurableObject(await agentOf(ownerId), (_, state) =>
+            state.storage.sql
+              .exec<{ trust_level: string }>(
+                "SELECT trust_level FROM conversation_messages WHERE kind = 'write_back'"
+              )
+              .toArray()
+          )
+        ).toEqual([{ trust_level: "untrusted" }])
+      );
+    });
+  }
+);

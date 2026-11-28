@@ -15,7 +15,6 @@ import type { OwnerMessage } from "../event.ts";
 import type { OwnerId } from "../owner-id.ts";
 import {
   approvalAnswers,
-  conversationRowKinds,
   eventKinds,
   inboxStates,
   modelTasks,
@@ -75,43 +74,6 @@ export const ownerChannelConversations = sqliteTable(
   (table) => [
     check("owner_channel_conversations_one_row", sql`${table.slot} = 0`),
   ]
-);
-
-export const conversationMessages = sqliteTable(
-  "conversation_messages",
-  {
-    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
-    eventId: text("event_id").notNull(),
-    kind: text("kind", { enum: conversationRowKinds }).notNull(),
-    message: text("message").notNull(),
-    recordedAt: text("recorded_at").notNull(),
-    compactedAt: text("compacted_at"),
-  },
-  (table) => [
-    index("conversation_messages_event").on(table.eventId),
-    index("conversation_messages_compacted").on(table.compactedAt),
-    check(
-      "conversation_messages_kind_check",
-      valueIn(table.kind, conversationRowKinds)
-    ),
-  ]
-);
-
-export const refusedCompactionBlocks = sqliteTable(
-  "refused_compaction_blocks",
-  {
-    slot: integer("slot").primaryKey(),
-    lastCompactedSequence: integer("last_compacted_sequence").notNull(),
-    refusedAt: text("refused_at").notNull(),
-  },
-  (table) => [
-    check("refused_compaction_blocks_one_row", sql`${table.slot} = 0`),
-  ]
-);
-
-export const conversationRecordedEvents = sqliteTable(
-  "conversation_recorded_events",
-  { eventId: text("event_id").primaryKey() }
 );
 
 export const journalEntries = sqliteTable("journal_entries", {

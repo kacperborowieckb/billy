@@ -14,7 +14,6 @@ import { callMcpToolToolName } from "../src/mcp/mcp-tool-names.ts";
 import { untrustedContentOpening } from "../src/notes/note.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { failedApprovedCallMessage } from "../src/personal-agent/approval-result-turn.ts";
-import { untrustedReplyStub } from "../src/personal-agent/conversation-stubs.ts";
 import { honestFailureText } from "../src/personal-agent/delivery.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { unconfirmedToolMessage } from "../src/personal-agent/recorded-tool.ts";
@@ -409,6 +408,36 @@ const waitForSentAfter = (sentBefore: number, count = 1) =>
     timeout: 10_000,
   });
 
+describe("A Turn after an MCP Turn", { timeout: 40_000 }, () => {
+  it("sends the offer of that Turn again, so a Yes drafts one Pending Approval for a change that an owner Turn would run at once", async () => {
+    const offer = "Page 1 is the Reading list. Should I rename it to Books?";
+    const ownerId = await ownerWithConnection(9980);
+    scriptModel([callOf("search", { query: "pages" }), { say: offer }]);
+    await say(9980, "find my pages", 0);
+    scriptModel([
+      callOf("rename_page", { id: "1", title: "Books" }),
+      { say: "The rename waits for your Approval." },
+    ]);
+    const callsBefore = fakeModel.doGenerateCalls.length;
+
+    await say(9980, "Yes", fakeTelegram.sent.length);
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["pending"])
+    );
+
+    const prompt = fakeModel.doGenerateCalls[callsBefore]?.prompt ?? [];
+    expect(prompt.at(-2)).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: offer }],
+    });
+    expect(JSON.stringify(prompt)).not.toContain(untrustedContentOpening);
+    expect(JSON.stringify(prompt)).not.toContain("ran search");
+    expect(fakeMcpServer.calls.map((call) => call.tool)).toEqual(["search"]);
+    const [rename] = await approvalsOf(ownerId);
+    expect(rename?.tool_name).toBe(callMcpToolToolName);
+  });
+});
+
 describe("The answer after an approved MCP call", { timeout: 40_000 }, () => {
   it("sends a new message that uses the result of an approved read", async () => {
     fakeMcpServer.listHiddenTools();
@@ -431,7 +460,7 @@ describe("The answer after an approved MCP call", { timeout: 40_000 }, () => {
     );
   });
 
-  it("gives the result to the model as Untrusted Content and keeps only Stubs in the history", async () => {
+  it("gives the result to the model as Untrusted Content and keeps a Stub in place of the result in the history", async () => {
     const { ownerId, approval } = await askFor(9971, "create_page", {
       title: "New",
     });
@@ -448,7 +477,7 @@ describe("The answer after an approved MCP call", { timeout: 40_000 }, () => {
       const rows = await conversationOf(ownerId);
       expect(rows.at(-1)).toEqual({
         kind: "reply",
-        message: { role: "assistant", content: untrustedReplyStub },
+        message: { role: "assistant", content: "I created the page New." },
       });
     });
     const stored = JSON.stringify(await conversationOf(ownerId));

@@ -230,6 +230,7 @@ export const compactWhenOverLimit = Effect.fnUntraced(
       compactionId,
       lastCompactedSequence: block.value.lastCompactedSequence,
       message: summaryMessage(attempts.summary, openItems),
+      trustLevel: block.value.trustLevel,
     });
     return "Compacted" satisfies CompactionResult;
   }

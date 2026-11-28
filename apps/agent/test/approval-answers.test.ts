@@ -14,7 +14,6 @@ import {
 } from "../src/approval/approval-status.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { failedApprovedCallMessage } from "../src/personal-agent/approval-result-turn.ts";
-import { untrustedReplyStub } from "../src/personal-agent/conversation-stubs.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import {
@@ -265,7 +264,7 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     });
     expect(await lastConversationEntry(ownerId)).toEqual({
       role: "assistant",
-      content: untrustedReplyStub,
+      content: "Your Reminder is set.",
     });
     expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls + 1);
     expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Your Reminder is set.");

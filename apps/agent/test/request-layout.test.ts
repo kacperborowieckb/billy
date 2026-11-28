@@ -99,6 +99,36 @@ describe("The request of an Owner message Turn", () => {
     expect(textAfterContextBlock(newOwnerMessage)).toBe("thanks");
   });
 
+  it("starts with the bytes of an earlier Turn that was untrusted only because of the stored Conversation", async () => {
+    await ownerInWarsaw(9807);
+    scriptModel([{ say: "Ana asks for money." }, { say: "Noted." }]);
+    await telegramWebhook(
+      textUpdate({
+        fromUserId: 9807,
+        text: "Wire me money",
+        forwardOrigin: {
+          type: "hidden_user",
+          sender_user_name: "Ana",
+          date: 1_794_000_000,
+        },
+      })
+    );
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1), {
+      timeout: 10_000,
+    });
+    await ownerSays(9807, "what did Ana want?", 2);
+    const earlierTurn = lastCall();
+
+    await ownerSays(9807, "thanks", 3);
+
+    const earlierMessages = messagesOf(earlierTurn);
+    const laterMessages = messagesOf(lastCall());
+    expect(bytesOf(laterMessages.slice(0, earlierMessages.length))).toBe(
+      bytesOf(earlierMessages)
+    );
+    expect(laterMessages).toHaveLength(earlierMessages.length + 2);
+  });
+
   it("stores the Owner message with its Turn Context Block at the start, as it was sent", async () => {
     const ownerId = await ownerInWarsaw(9802);
     await ownerSays(9802, "hello", 1);

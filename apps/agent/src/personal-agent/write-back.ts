@@ -68,8 +68,6 @@ export const writeBackMarkerOf = Effect.fnUntraced(function* writeBackMarkerOf(
 const markerText = ({ kind, localTime }: WriteBackMarker) =>
   `[${kind}, ${localTime}]`;
 
-const sentTextRemoved = "sent to the Owner. Text removed from the history";
-
 const readToolNames: ReadonlySet<string> = new Set([
   searchNotesToolName,
   listLinkedNotesToolName,
@@ -213,18 +211,13 @@ export interface WriteBack {
   readonly marker: WriteBackMarker;
   readonly text: string;
   readonly steps: readonly ModelMessage[];
-  readonly heldUntrustedContent: boolean;
 }
 
 export const writeBackMessageOf = ({
   marker,
   text,
   steps,
-  heldUntrustedContent,
 }: WriteBack): ModelMessage => ({
   role: "assistant",
-  content: [
-    `${markerText(marker)} ${heldUntrustedContent ? sentTextRemoved : text}`,
-    ...runLineOf(steps),
-  ].join("\n"),
+  content: [`${markerText(marker)} ${text}`, ...runLineOf(steps)].join("\n"),
 });

@@ -54,6 +54,11 @@ const untrustedChangeOf = (
     }))
   );
 
+export const trustLevelOfParts = (
+  parts: readonly { readonly trustLevel: TrustLevel }[]
+): TrustLevel =>
+  parts.some((part) => part.trustLevel === "untrusted") ? "untrusted" : "owner";
+
 const turnTrust = (
   startTrustLevel: TrustLevel,
   followsToolResults: boolean,
@@ -87,6 +92,7 @@ export const fixedTurnTrust = (trustLevel: TrustLevel): TurnTrust =>
 
 export interface TurnTrustSource {
   readonly trustLevel: TrustLevel;
+  readonly historyTrustLevel: TrustLevel;
   readonly inputs: readonly ModelMessage[];
   readonly turnContext: string;
   readonly listsUntrustedPendingApproval?: boolean | undefined;
@@ -94,12 +100,14 @@ export interface TurnTrustSource {
 
 const startTrustLevelOf = ({
   trustLevel,
+  historyTrustLevel,
   inputs,
   turnContext,
   listsUntrustedPendingApproval,
 }: TurnTrustSource): TrustLevel =>
   trustLevel === "owner" &&
-  (listsUntrustedPendingApproval === true ||
+  (historyTrustLevel === "untrusted" ||
+    listsUntrustedPendingApproval === true ||
     holdsUntrustedContent([inputs, turnContext]))
     ? "untrusted"
     : trustLevel;

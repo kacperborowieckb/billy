@@ -33,7 +33,13 @@ const appendOwnerMessage = Effect.gen(function* appendEffect() {
   const conversation = yield* Conversation;
   yield* conversation.append({
     eventId: "seed",
-    rows: [{ kind: "input", message: { role: "user", content: "kept" } }],
+    rows: [
+      {
+        kind: "input",
+        message: { role: "user", content: "kept" },
+        trustLevel: "owner",
+      },
+    ],
   });
 });
 

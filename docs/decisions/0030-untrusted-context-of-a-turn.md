@@ -6,6 +6,8 @@ Partly superseded: [0034](0034-architecture-review-changes.md) changes "Which Tu
 
 Partly superseded: [0033](0033-prompt-and-conversation-architecture.md) changes "How code checks it": the stored Conversation holds Stubs and no marked Untrusted Content, so the tool results and the forwarded messages of earlier Turns no longer make a Turn `untrusted`. The check of the marker in what the model reads stays. The code follows 0033 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
 
+Partly superseded: [0038](0038-conversation-tool-history.md) changes "How code checks it" as 0033 changed it: code also reads the Trust Level of the stored Conversation rows, so a later Turn can start `untrusted` from them.
+
 Date: 2026-11-22
 
 Partly superseded by [0032](0032-pending-approval-keeps-its-trust.md): the list of three paths and the marker check now have a fourth path, the open Pending Approvals of an untrusted Turn.

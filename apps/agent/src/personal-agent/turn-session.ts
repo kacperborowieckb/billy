@@ -1,9 +1,11 @@
 import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
+import { trustLevelOfParts } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { McpConnections } from "../mcp/mcp-connections.ts";
 import { holdsUntrustedContent } from "../notes/note.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import { Profile } from "../profile/profile.ts";
 import {
   ownerCurrentTimeText,
@@ -34,6 +36,7 @@ interface SessionRequestParts {
   readonly turnContext: string;
   readonly ownerContext: ModelMessage;
   readonly rows: readonly SentRow[];
+  readonly historyTrustLevel: TrustLevel;
   readonly tail: readonly ModelMessage[];
 }
 
@@ -86,6 +89,7 @@ const conversationRequest = Effect.fnUntraced(function* conversationRequest({
     turnContext,
     ownerContext,
     rows,
+    historyTrustLevel: trustLevelOfParts(rows),
     tail: [...withTurnContext(turnContext, inputs), ...earlier],
   });
 });
@@ -137,6 +141,7 @@ const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
       turnContext: block,
       ownerContext,
       rows: [],
+      historyTrustLevel: "owner",
       tail: [...withTurnContext(block, inputs), ...earlier],
     });
   }
@@ -162,24 +167,17 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
   text,
 }: SentRun) {
   const conversation = yield* Conversation;
-  const heldUntrustedContent = holdsUntrustedContent([
-    turnContext,
-    inputs,
-    steps,
-    text,
-  ]);
+  const trustLevel = holdsUntrustedContent([turnContext, inputs, steps, text])
+    ? "untrusted"
+    : "owner";
   yield* conversation.append({
     eventId,
     recordedAs,
     rows: [
       {
-        kind: heldUntrustedContent ? "write_back_stub" : "write_back",
-        message: writeBackMessageOf({
-          marker,
-          text,
-          steps,
-          heldUntrustedContent,
-        }),
+        kind: "write_back",
+        message: writeBackMessageOf({ marker, text, steps }),
+        trustLevel,
       },
     ],
   });

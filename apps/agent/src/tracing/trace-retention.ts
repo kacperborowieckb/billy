@@ -3,10 +3,8 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { DateTime, Effect, Option } from "effect";
 
 import { AgentStorage } from "../personal-agent/agent-storage.ts";
-import {
-  conversationMessages,
-  turnTraces,
-} from "../personal-agent/storage-schema.ts";
+import { conversationMessages } from "../personal-agent/conversation-schema.ts";
+import { turnTraces } from "../personal-agent/storage-schema.ts";
 import { earlierOf } from "../schedule/outcome-alarm-queries.ts";
 import type { TraceRetentionDays } from "./trace-retention-days.ts";
 import {

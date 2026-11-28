@@ -3,12 +3,31 @@ import type { SQL } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { ModelMessageJsonSchema } from "../model-gateway/model-message-schema.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import type { SentConversationRows } from "../tracing/traced-request.ts";
-import type { StoredConversationRow } from "./conversation.ts";
-import { conversationMessages } from "./storage-schema.ts";
+import { conversationMessages } from "./conversation-schema.ts";
+import type { ConversationRow, StoredConversationRow } from "./conversation.ts";
 import type { ConversationRowKind } from "./storage-values.ts";
 
 const decodeMessage = Schema.decodeUnknownEffect(ModelMessageJsonSchema);
+
+export const decodedRows = (
+  rows: readonly {
+    readonly kind: ConversationRowKind;
+    readonly message: string;
+    readonly trustLevel: TrustLevel;
+  }[]
+) =>
+  Effect.all(
+    rows.map(({ message, ...row }) =>
+      decodeMessage(message).pipe(
+        Effect.map((decoded): ConversationRow => ({
+          ...row,
+          message: decoded,
+        }))
+      )
+    )
+  ).pipe(Effect.orDie);
 
 export const summaryFirst = <
   Row extends { readonly kind: ConversationRowKind },
@@ -29,6 +48,7 @@ export const storedRowsOf = (
           sequence: row.sequence,
           eventId: row.eventId,
           kind: row.kind,
+          trustLevel: row.trustLevel,
           message,
         }))
       )

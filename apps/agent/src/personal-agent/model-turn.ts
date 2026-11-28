@@ -74,7 +74,8 @@ export const runModelTurn = <Failure, Requirements>({
       inputs: kind.inputs,
       earlier,
     });
-    const { system, ownerContext, turnContext, messages } = sessionRequest;
+    const { system, ownerContext, turnContext, messages, historyTrustLevel } =
+      sessionRequest;
     const tracedRequest = yield* tracedRequestOf(
       { ...sessionRequest, task: kind.task, tools: kind.tools },
       redactor
@@ -82,7 +83,10 @@ export const runModelTurn = <Failure, Requirements>({
     const turn = { eventId, turnContext, inputs: kind.inputs };
     const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
       session.commit({ ...turn, steps, ending });
-    const trust = turnTrustGiven({ ...kind, ...preparation, ...turn }, earlier);
+    const trust = turnTrustGiven(
+      { ...kind, ...preparation, ...turn, historyTrustLevel },
+      earlier
+    );
     const callReview = yield* turnReviewOf(eventId, behavior);
     const decided = yield* generateWithOutcomeTools({
       eventId,

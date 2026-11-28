@@ -437,7 +437,7 @@ describe("Retention", () => {
     await insertOldTrace(ownerId, "kept-trace", 29);
     await run(
       ownerId,
-      `INSERT INTO conversation_messages (event_id, kind, message, recorded_at, compacted_at) VALUES ('old-row', 'input', '{"role":"user","content":"old"}', '${daysAgo(60)}', '${daysAgo(31)}')`
+      `INSERT INTO conversation_messages (event_id, kind, message, trust_level, recorded_at, compacted_at) VALUES ('old-row', 'input', '{"role":"user","content":"old"}', 'owner', '${daysAgo(60)}', '${daysAgo(31)}')`
     );
 
     const journalBefore = await query(ownerId, "SELECT * FROM journal_entries");
