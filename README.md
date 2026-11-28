@@ -13,6 +13,6 @@ pnpm verify
 - [Ubiquitous language](CONTEXT.md)
 - [Contributing and issue priorities](CONTRIBUTING.md)
 - [Repository foundation](docs/decisions/0001-repository-foundation.md)
-- [Agent authority](docs/decisions/0002-agent-authority.md)
+- [Agent merge and automations](docs/decisions/0037-agent-merge-and-automations.md)
 - [Primitives catalog](docs/primitives/README.md)
 - [Self-verification and current Actions limit](docs/verification/README.md)
