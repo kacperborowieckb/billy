@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0039](0039-auto-review.md) builds Auto-review. A `change` call in an `untrusted` Turn goes to a reviewer model before the Owner.
+
 Partly superseded: [0031](0031-gated-tools-resolve-their-input.md) changes the list of `read` tools under "Risk Class": `quiet_hours` and `proactive_message_budget` are `read` for a call with no value to change.
 
 Changed on 2026-11-28 by [#242](https://github.com/kacperborowieckb/billy/issues/242): an approved call that settles now gets one Model Turn that answers the Owner from its outcome. See "Answer after an approved call". This meets the first "Revisit if" item.

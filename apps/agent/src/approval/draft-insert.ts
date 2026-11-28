@@ -17,6 +17,7 @@ export interface DraftRequest {
   readonly toolName: string;
   readonly frozenInput: unknown;
   readonly summary: string;
+  readonly reviewerReason?: string | undefined;
   readonly trustLevel: TrustLevel;
   readonly expiresAt: DateTime.Utc;
 }
@@ -42,6 +43,7 @@ export const insertDraft = (
         toolName: request.toolName,
         frozenInput: encodeFrozenInput(request.frozenInput),
         summary: request.summary,
+        reviewerReason: request.reviewerReason ?? null,
         trustLevel: request.trustLevel,
         state: "draft",
         createdAt: DateTime.formatIso(yield* DateTime.now),

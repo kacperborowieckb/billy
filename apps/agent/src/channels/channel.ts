@@ -12,6 +12,7 @@ export interface OutgoingMessage {
 export interface ApprovalRequest {
   readonly pendingApprovalId: string;
   readonly summary: string;
+  readonly reviewerReason?: string;
 }
 
 export interface ApprovalMessage {

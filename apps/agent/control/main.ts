@@ -2,6 +2,7 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, Option, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
 
+import { reviewSetCommand } from "./auto-review/review-set-command.ts";
 import {
   bundleTargets,
   measureBundle,
@@ -16,6 +17,7 @@ import {
   renderDiagnosis,
 } from "./doctor.ts";
 import { runEvalCommand } from "./eval/eval-command.ts";
+import { exitWithFailureWhen } from "./exit-code.ts";
 import {
   featureMapIsCurrent,
   featureMapPath,
@@ -31,13 +33,6 @@ import {
 } from "./operator.ts";
 import { requestReply } from "./request.ts";
 import { wranglerConfigPath } from "./workspace.ts";
-
-const exitWithFailureWhen = (failed: boolean) =>
-  Effect.sync(() => {
-    if (failed) {
-      process.exitCode = 1;
-    }
-  });
 
 const doctor = Command.make("doctor", {}, () =>
   Effect.gen(function* doctorCommand() {
@@ -121,6 +116,12 @@ const request = Command.make(
       ),
       Flag.withDefault(false)
     ),
+    forward: Flag.String("forward").pipe(
+      Flag.withDescription(
+        "Send this text as a forwarded message in one Burst with the last message, so that Turn is untrusted and the reviewer checks its changes."
+      ),
+      Flag.optional
+    ),
     mcp: Flag.Boolean("mcp").pipe(
       Flag.withDescription(
         "Start a fake MCP server, add the test-only MCP Connection for the Owner through the MCP Hub, and let the fake model find and read its tools. Use it with a message that starts with 'mcp: '."
@@ -128,8 +129,9 @@ const request = Command.make(
       Flag.withDefault(false)
     ),
   },
-  ({ contains, message, waitForLaterMessage, burst, mcp }) =>
+  ({ contains, message, waitForLaterMessage, burst, forward, mcp }) =>
     requestReply({
+      forward: Option.getOrUndefined(forward),
       contains: Option.getOrUndefined(contains),
       waitForLaterMessage,
       burst,
@@ -229,6 +231,7 @@ const control = Command.make("control").pipe(
     request,
     mcpFlow,
     evalCommand,
+    reviewSetCommand,
     map,
     bundle,
   ])

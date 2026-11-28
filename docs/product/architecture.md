@@ -38,7 +38,7 @@ A fired Schedule enters the same Inbox as an Event. Proactive work and Owner mes
 | Tracing | A replayable Trace for every Turn. | MVP |
 | Evals | Eval Cases for full Turn sequences, run as pass^k. | MVP |
 | Helpers | Durable workflows for long work. | Later |
-| Approval | Risk Class, Trust Level, the gate, Pending Approvals, and Owner approval in the Channel. Auto-review comes after the MVP. | MVP |
+| Approval | Risk Class, Trust Level, the gate, Auto-review of `change` calls ([0039](../decisions/0039-auto-review.md)), Pending Approvals, and Owner approval in the Channel. | MVP |
 | Integrations | MCP Connections: the MCP Hub, the MCP Catalog, and OAuth tokens per Owner. | MVP |
 | Workflows | Repeated personal work from general primitives. The design is not decided ([#187](https://github.com/kacperborowieckb/billy/issues/187)). | MVP |
 | Mobile Channel | WebSocket protocol between `apps/mobile` and the Personal Agent. | Later |

@@ -25,6 +25,10 @@ export interface BehaviorConfig {
   readonly burstMaxWaitMillis: number;
   readonly burstMaxRestarts: number;
   readonly pendingApprovalExpiryMillis: number;
+  readonly autoReviewRecentOwnerMessages: number;
+  readonly autoReviewTimeoutMillis: number;
+  readonly autoReviewMaxRefusals: number;
+  readonly autoReviewDailyTokenBudget: number;
   readonly compactionHistoryTokenLimit: number;
   readonly compactionKeptTokens: number;
   readonly maxSummaryTokens: number;
@@ -58,6 +62,10 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   burstMaxWaitMillis: 10_000,
   burstMaxRestarts: 2,
   pendingApprovalExpiryMillis: 24 * 60 * 60 * 1000,
+  autoReviewRecentOwnerMessages: 10,
+  autoReviewTimeoutMillis: 45_000,
+  autoReviewMaxRefusals: 3,
+  autoReviewDailyTokenBudget: 200_000,
   compactionHistoryTokenLimit: 30_000,
   compactionKeptTokens: 8000,
   maxSummaryTokens: 1500,

@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0039](0039-auto-review.md) sends a `change` call of an `untrusted` Turn to a reviewer model, which can allow it with no Approval.
+
 Partly superseded: [0034](0034-architecture-review-changes.md) changes "Which Turns": a Scheduled Task Turn and a Proactive Turn also follow their tool results. The code follows 0034 when [#182](https://github.com/kacperborowieckb/billy/issues/182) ships.
 
 Partly superseded: [0030](0030-untrusted-context-of-a-turn.md) replaces the last "Revisit if" item, which names two ways that Untrusted Content enters an Owner message Turn and that this record does not cover.

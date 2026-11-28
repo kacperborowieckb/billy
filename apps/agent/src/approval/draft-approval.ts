@@ -108,6 +108,7 @@ export const draftApproval = Effect.fnUntraced(function* draftApproval(
     toolName: call.name,
     frozenInput: call.input,
     summary: shownSummary,
+    reviewerReason: call.reviewerReason,
     trustLevel,
     expiresAt: DateTime.addDuration(
       now,

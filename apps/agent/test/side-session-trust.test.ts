@@ -26,6 +26,7 @@ import {
   instructionsAndContextOf,
   resetFakes,
   scriptModel,
+  scriptReviewer,
 } from "./fakes.ts";
 import { quietHoursAndBriefLaterToday } from "./quiet-hours-setup.ts";
 import { addOwner, telegramWebhook, textUpdate } from "./telegram-requests.ts";
@@ -222,6 +223,39 @@ describe(
       expect(await openLoopIdsAmong(ownerId, [forwarded.noteId])).toEqual([
         forwarded.noteId,
       ]);
+    });
+
+    it("closes the Open Loop when the reviewer allows the call", async () => {
+      const ownerId = await ownerInWarsaw(9810);
+      const forwarded = await keepNote(ownerId, {
+        text: `Ana says: ${forwardedInstruction}`,
+        trustLevel: "untrusted",
+        withOpenLoop: true,
+      });
+      scriptModel([closeCall(forwarded.noteId), { say: "Good morning" }]);
+      scriptReviewer([{ answer: "allow" }]);
+
+      await fireAgentSchedule(ownerId, briefPrompt, 1);
+
+      expect(await openLoopIdsAmong(ownerId, [forwarded.noteId])).toEqual([]);
+    });
+
+    it("denies a call that the reviewer refuses with the reason of a Side Session", async () => {
+      const ownerId = await ownerInWarsaw(9811);
+      const forwarded = await keepNote(ownerId, {
+        text: `Ana says: ${forwardedInstruction}`,
+        trustLevel: "untrusted",
+        withOpenLoop: true,
+      });
+      scriptModel([closeCall(forwarded.noteId), { say: "Good morning" }]);
+      scriptReviewer([{ answer: "refuse", reason: "Not asked" }]);
+
+      await fireAgentSchedule(ownerId, briefPrompt, 1);
+
+      expect(toolResultOfLastCall(closeOpenLoopToolName)).toEqual({
+        type: "execution-denied",
+        reason: untrustedChangeWithoutOwnerReason,
+      });
     });
 
     it("fires the follow-up with the fixed prompt and loads its Open Loops again", async () => {

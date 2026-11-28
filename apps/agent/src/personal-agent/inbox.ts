@@ -15,6 +15,7 @@ import type {
 import { Journal } from "../journal/journal.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { makeBurstWaitQueries } from "./burst-wait.ts";
+import { ownWordsQueryOf } from "./own-words.ts";
 import { inboxEvents } from "./storage-schema.ts";
 import { inboxStates } from "./storage-values.ts";
 import { TurnProgress } from "./turn-progress.ts";
@@ -239,6 +240,7 @@ const makeInbox = Effect.gen(function* makeInboxEffect() {
     storeEvent,
     pending,
     ownerMessagesWithIds,
+    ownWordsBefore: ownWordsQueryOf(database),
     answeredApprovalIdOf,
     burstIsDue,
     burstGrewSince,

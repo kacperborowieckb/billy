@@ -32,6 +32,7 @@ export const pendingApprovals = sqliteTable(
     expiresAt: text("expires_at").notNull(),
     channelMessageId: text("channel_message_id"),
     result: text("result"),
+    reviewerReason: text("reviewer_reason"),
   },
   (table) => [
     uniqueIndex("pending_approvals_position").on(table.position),

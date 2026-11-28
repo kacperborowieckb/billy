@@ -7,10 +7,12 @@ import {
   evalRoutes,
   JudgeRequestSchema,
   ObservationRequestSchema,
+  ReviewEvalRequestSchema,
   SeedRequestSchema,
 } from "./eval-contract.ts";
 import { judgeExchanges } from "./eval-judge.ts";
 import { evalPersonalAgentFor } from "./eval-personal-agent.ts";
+import { reviewPlannedCall } from "./eval-review.ts";
 
 export { EvalPersonalAgent as PersonalAgent } from "./eval-personal-agent.ts";
 export { McpHub } from "../src/mcp/mcp-hub.ts";
@@ -59,6 +61,12 @@ const evalHandlers: Record<
           OwnerIdSchema.make(judgeRequest.ownerId),
           judgeRequest
         )
+      )
+    ),
+  [evalRoutes.review]: (request, env) =>
+    readBody(request, ReviewEvalRequestSchema).pipe(
+      Effect.flatMap(({ ownerId, request: reviewRequest }) =>
+        reviewPlannedCall(env, OwnerIdSchema.make(ownerId), reviewRequest)
       )
     ),
 };

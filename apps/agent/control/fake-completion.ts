@@ -14,6 +14,10 @@ export const ChatCompletionBodySchema = Schema.Struct({
   ),
 });
 
+const burstLabel = /^\[Message \d+ of \d+\]\n/u;
+
+export const withoutBurstLabel = (text: string) => text.replace(burstLabel, "");
+
 export const lastOwnerText = (
   messages: (typeof ChatCompletionBodySchema.Type)["messages"]
 ) => {

@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
-import { effectInputSchema, outcomeTool } from "../model-gateway/agent-tool.ts";
+import { effectInputSchema } from "../model-gateway/agent-tool.ts";
+import { outcomeTool } from "../model-gateway/outcome-tool.ts";
 
 export const staySilentToolName = "stay_silent";
 

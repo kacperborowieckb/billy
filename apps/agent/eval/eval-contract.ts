@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 
+import { ReviewRequestSchema } from "../src/auto-review/review-request.ts";
+import { ReviewAnswerSchema } from "../src/auto-review/reviewer.ts";
 import {
   trustLevels,
   modelTasks,
@@ -10,6 +12,7 @@ export const evalRoutes = {
   seed: "/eval/seed",
   observation: "/eval/observation",
   judge: "/eval/judge",
+  review: "/eval/review",
 } as const;
 
 export const NonEmptyString = Schema.String.pipe(
@@ -133,3 +136,18 @@ export const JudgeResultSchema = Schema.Struct({
 });
 
 export type JudgeResult = typeof JudgeResultSchema.Type;
+
+export const ReviewEvalRequestSchema = Schema.Struct({
+  ownerId: NonEmptyString,
+  request: ReviewRequestSchema,
+});
+
+export type ReviewEvalRequest = typeof ReviewEvalRequestSchema.Type;
+
+export const ReviewEvalResultSchema = Schema.Struct({
+  answer: Schema.NullOr(ReviewAnswerSchema),
+  failure: Schema.NullOr(Schema.String),
+  usage: Schema.Array(ObservedUsageSchema),
+});
+
+export type ReviewEvalResult = typeof ReviewEvalResultSchema.Type;

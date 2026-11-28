@@ -8,6 +8,7 @@ import { riskClasses, riskClassified } from "../src/approval/risk-class.ts";
 import type { RiskClass, RiskClassified } from "../src/approval/risk-class.ts";
 import {
   blockedCallReason,
+  decisionAfterReview,
   gateDecisionOf,
   untrustedChangeWithoutOwnerReason,
 } from "../src/approval/tool-gate.ts";
@@ -181,7 +182,7 @@ const expectedDecision = {
   },
   untrusted: {
     read: { _tag: "Run" },
-    change: { _tag: "AskOwner" },
+    change: { _tag: "AskReviewer" },
     approve: { _tag: "AskOwner" },
     blocked: { _tag: "Deny", reason: blockedCallReason },
   },
@@ -253,11 +254,42 @@ describe("The gate in a Turn that cannot ask the Owner for Approval", () => {
     });
   });
 
-  it("denies a change call of an untrusted Side Session with a reason for the model, when the tool has no code-written input", () => {
+  it("sends a change call of an untrusted Side Session to the reviewer, when the tool has no code-written input", () => {
     expect(gateDecisionOf(sideSessionCall("untrusted", false))).toEqual({
-      _tag: "Deny",
-      reason: untrustedChangeWithoutOwnerReason,
+      _tag: "AskReviewer",
     });
+  });
+});
+
+describe("The gate after Auto-review", () => {
+  it("runs an allowed call, asks the Owner with the reason of the reviewer, and denies a refused call", () => {
+    expect(decisionAfterReview({ _tag: "Allow" }, true)).toEqual({
+      _tag: "Run",
+    });
+    expect(
+      decisionAfterReview({ _tag: "Ask", reason: "Not clear" }, true)
+    ).toEqual({ _tag: "AskOwner", reviewerReason: "Not clear" });
+    expect(decisionAfterReview({ _tag: "Ask" }, true)).toEqual({
+      _tag: "AskOwner",
+    });
+    expect(
+      decisionAfterReview({ _tag: "Refuse", reason: "Refused" }, true)
+    ).toEqual({ _tag: "Deny", reason: "Refused" });
+  });
+
+  it("only runs an allowed call in a Turn that cannot ask the Owner, and denies every other answer with the reason of that Turn", () => {
+    expect(decisionAfterReview({ _tag: "Allow" }, false)).toEqual({
+      _tag: "Run",
+    });
+    for (const verdict of [
+      { _tag: "Ask", reason: "Not clear" },
+      { _tag: "Refuse", reason: "Refused" },
+    ] as const) {
+      expect(decisionAfterReview(verdict, false)).toEqual({
+        _tag: "Deny",
+        reason: untrustedChangeWithoutOwnerReason,
+      });
+    }
   });
 });
 

@@ -86,6 +86,7 @@ export const modelTasks = [
   "proactive",
   "eval_judge",
   "compaction",
+  "auto_review",
 ] as const;
 
 export const turnModelTasks = ["reply", "scheduled_task", "proactive"] as const;
@@ -129,6 +130,20 @@ export const proactiveFoldReasons = [
 export const proactiveMuteChanges = ["muted", "unmuted"] as const;
 
 export type ProactiveOutcome = (typeof proactiveOutcomes)[number];
+
+export const reviewAnswers = ["allow", "ask", "refuse"] as const;
+
+export const reviewFallbacks = [
+  "operator_secret",
+  "no_owner_words",
+  "over_budget",
+  "timed_out",
+  "model_failed",
+  "invalid_answer",
+  "review_failed",
+] as const;
+
+export type ReviewFallback = (typeof reviewFallbacks)[number];
 
 export const pendingApprovalStates = [
   "draft",

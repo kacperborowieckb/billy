@@ -34,6 +34,9 @@ const shownApprovalsOf = (
           {
             pendingApprovalId: row.pendingApprovalId,
             summary: row.summary,
+            ...(row.reviewerReason === null
+              ? {}
+              : { reviewerReason: row.reviewerReason }),
             channelMessageId: row.channelMessageId,
             ...(status === undefined ? {} : { status }),
           },

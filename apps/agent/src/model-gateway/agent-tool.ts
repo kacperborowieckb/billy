@@ -1,6 +1,6 @@
 import { asSchema, jsonSchema, tool } from "ai";
 import type { FlexibleSchema, JSONSchema7, Tool } from "ai";
-import { Data, Effect, Option, Result, Schema } from "effect";
+import { Data, Effect, Result, Schema } from "effect";
 
 import { asUnknownOutcome } from "../approval/approval-answering.ts";
 import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
@@ -166,14 +166,29 @@ const executeApprovedOf =
           )
         );
 
-const inputToRun = <Input>(
-  codeWrittenInput: ((input: Input) => Input) | undefined,
+interface GatedRun<Input> {
+  readonly input: Input;
+  readonly toolCallId: string;
+  readonly modelStepKey: number;
+}
+
+const gatedRun = <Input, Output>(
+  definition: AgentToolDefinition<Input, Output>,
   gate: ToolInputGate,
-  input: Input
-): Input =>
-  codeWrittenInput !== undefined && gate(input)._tag === "RunCodeWrittenInput"
-    ? codeWrittenInput(input)
-    : input;
+  { input, ...call }: GatedRun<Input>
+) => {
+  const decision = gate(input);
+  if (decision._tag === "Deny") {
+    return Effect.fail(new ToolFailed({ message: decision.reason }));
+  }
+  const { codeWrittenInput } = definition;
+  return definition.execute(
+    codeWrittenInput !== undefined && decision._tag === "RunCodeWrittenInput"
+      ? codeWrittenInput(input)
+      : input,
+    { ...call, markedUntrusted: decision._tag === "RunMarkedUntrusted" }
+  );
+};
 
 export const agentTool = <Input, Output>(
   definition: AgentToolDefinition<Input, Output>
@@ -211,14 +226,11 @@ export const agentTool = <Input, Output>(
             inputSchema: definition.inputSchema,
             execute: (input: Input, { toolCallId, messages }) =>
               runEffect(
-                definition.execute(
-                  inputToRun(definition.codeWrittenInput, gate, input),
-                  {
-                    toolCallId,
-                    modelStepKey: messages.length,
-                    markedUntrusted: gate(input)._tag === "RunMarkedUntrusted",
-                  }
-                )
+                gatedRun(definition, gate, {
+                  input,
+                  toolCallId,
+                  modelStepKey: messages.length,
+                })
               ),
           }),
   };
@@ -248,30 +260,3 @@ export const runToolEffect =
     }
     return outcome.value;
   };
-
-export const outcomeToolRunMessage =
-  "An outcome tool does nothing by itself, so code cannot run it";
-
-interface OutcomeToolDefinition<Input> {
-  readonly description: string;
-  readonly inputSchema: FlexibleSchema<Input>;
-}
-
-export const outcomeTool = <Input>(
-  definition: OutcomeToolDefinition<Input>
-): AgentTool => ({
-  description: definition.description,
-  inputJsonSchema: () => asSchema(definition.inputSchema).jsonSchema,
-  ...riskClassified("read"),
-  marksItsWorkUntrusted: () => false,
-  hasCodeWrittenInput: false,
-  approvalSummaryOf: () => Effect.succeed(Option.none()),
-  executeApproved: () =>
-    Effect.fail(new ToolFailed({ message: outcomeToolRunMessage })),
-  toAiSdkTool: () =>
-    tool<Input, unknown, Record<string, unknown>>({
-      description: definition.description,
-      inputSchema: definition.inputSchema,
-      outputSchema: jsonSchema<unknown>({}),
-    }),
-});

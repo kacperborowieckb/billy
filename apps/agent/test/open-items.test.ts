@@ -58,6 +58,7 @@ const pendingApproval = (pendingApprovalId: string): PendingApproval => ({
   expiresAt: "2026-11-27T12:00:00.000Z",
   channelMessageId: "message-1",
   result: null,
+  reviewerReason: null,
 });
 
 const nothingOpen: OpenItems = {

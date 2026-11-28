@@ -1,5 +1,6 @@
 import { Data, Effect, Layer, Option, Schema } from "effect";
 
+import { modelReviewerLayer } from "../auto-review/model-reviewer.ts";
 import { telegramChannel } from "../channels/telegram/telegram-channel.ts";
 import { mcpHubClient } from "../mcp/mcp-hub-client.ts";
 import {
@@ -87,7 +88,9 @@ export const liveTurnServices = (env: Env, ownerId: OwnerId) =>
           botToken: config.TELEGRAM_BOT_TOKEN,
           edgeUrl: env.EDGE_PUBLIC_URL,
         }),
-        liveModelGateway(config, ownerId),
+        modelReviewerLayer.pipe(
+          Layer.provideMerge(liveModelGateway(config, ownerId))
+        ),
         mcpHubClient(env.MCP_HUB, ownerId)
       )
     )

@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 
+import type { ReviewRecord } from "../auto-review/review-record.ts";
 import {
   attemptTimeoutMillis,
   modelAttempts,
@@ -95,6 +96,7 @@ export interface ModelTraceInput {
   readonly reaction?: ReactionOutcome | undefined;
   readonly refusedOutcomeTools?: readonly string[];
   readonly rejectedStubReplies?: readonly string[];
+  readonly reviews?: readonly ReviewRecord[];
   readonly restart?: ReplyTurnTrace["restart"];
   readonly trustLevelChange?: ReplyTurnTrace["trustLevelChange"];
 }
@@ -128,6 +130,7 @@ const modelTraceOf = ({
   reaction,
   refusedOutcomeTools = [],
   rejectedStubReplies = [],
+  reviews = [],
   restart,
   trustLevelChange,
 }: ModelTraceInput) => {
@@ -153,6 +156,7 @@ const modelTraceOf = ({
             redactor.redact(text)
           ),
         }),
+    ...(reviews.length === 0 ? {} : { reviews: [...reviews] }),
     ...(restart === undefined ? {} : { restart }),
     ...(trustLevelChange === undefined ? {} : { trustLevelChange }),
   } as const;

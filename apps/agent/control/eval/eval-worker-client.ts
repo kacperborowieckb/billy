@@ -5,9 +5,14 @@ import {
   AgentObservationSchema,
   evalRoutes,
   JudgeResultSchema,
+  ReviewEvalResultSchema,
   SeedResponseSchema,
 } from "../../eval/eval-contract.ts";
-import type { JudgeRequest, SeedRequest } from "../../eval/eval-contract.ts";
+import type {
+  JudgeRequest,
+  ReviewEvalRequest,
+  SeedRequest,
+} from "../../eval/eval-contract.ts";
 import { EvalWorkerFailed } from "./eval-worker-failed.ts";
 import { TurnUnfinished } from "./turn-unfinished.ts";
 
@@ -107,5 +112,7 @@ export const evalWorkerClient = ({
     settled,
     judge: (request: JudgeRequest) =>
       post(evalRoutes.judge, request, JudgeResultSchema),
+    review: (request: ReviewEvalRequest) =>
+      post(evalRoutes.review, request, ReviewEvalResultSchema),
   };
 };

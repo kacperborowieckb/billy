@@ -4,6 +4,8 @@ Status: accepted
 
 Partly superseded: [0038](0038-conversation-tool-history.md) changes "Stub": the Stub of an MCP call is the result of a tool pair, and it names the catalog id and the catalog tool name from the checked input of the call.
 
+Partly superseded: [0039](0039-auto-review.md) sends a `change` call of an `untrusted` Turn, also an edit or a link to an existing Note, to a reviewer model, which can allow it with no Approval.
+
 Date: 2026-11-26
 
 Ticket [#151](https://github.com/kacperborowieckb/billy/issues/151) of spec [#150](https://github.com/kacperborowieckb/billy/issues/150). The spec asked for the number 0027, which is taken. It applies [0033](0033-prompt-and-conversation-architecture.md) and [0034](0034-architecture-review-changes.md), and it builds on [0027](0027-actions-and-approval.md) and [0029](0029-untrusted-tool-results.md). It replaces the MCP paragraph of [0009](0009-agent-loop-and-client-boundaries.md) ("MCP tools come from `this.addMcpServer()` in the Personal Agent"), and it replaces the exception of `capture_note` in 0029. This record covers the read path (#151), Approval (#152), and Side Sessions (#153). The tickets #154 to #158 add connect, tokens, refresh, disconnect, and the Notion entry, and each adds its decisions to this record.

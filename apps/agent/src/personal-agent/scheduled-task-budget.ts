@@ -6,7 +6,7 @@ import { ownerTimeZone } from "../time/owner-current-time.ts";
 import { startOfLocalDay } from "../time/start-of-local-day.ts";
 
 export const tokensSpentToday = Effect.fnUntraced(function* tokensSpentToday(
-  task: "scheduled_task" | "proactive",
+  task: "scheduled_task" | "proactive" | "auto_review",
   behavior: Pick<BehaviorConfig, "defaultTimeZone">
 ) {
   const ledger = yield* UsageLedger;

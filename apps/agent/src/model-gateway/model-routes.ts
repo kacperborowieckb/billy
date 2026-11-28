@@ -11,11 +11,12 @@ const ModelRouteSchema = Schema.Struct({
 
 export type ModelRoute = typeof ModelRouteSchema.Type;
 
-const RouteNameSchema = Schema.Literals(["primary", "secondary"]);
+const RouteNameSchema = Schema.Literals(["primary", "secondary", "reviewer"]);
 
 export const ModelRouteTableSchema = Schema.Struct({
   primary: ModelRouteSchema,
   secondary: ModelRouteSchema,
+  reviewer: ModelRouteSchema,
   tasks: Schema.Record(Schema.Literals(modelTasks), RouteNameSchema),
 });
 

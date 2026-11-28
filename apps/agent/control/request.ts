@@ -11,6 +11,8 @@ import type { FakeModelCall } from "./fake-model-call.ts";
 import { startLocalFakes } from "./local-fakes.ts";
 import type { FakeTelegramMessage } from "./local-fakes.ts";
 import { startLocalWorker, temporarySecrets } from "./local-worker.ts";
+import { messageGroups } from "./message-groups.ts";
+import type { NumberedMessage } from "./message-groups.ts";
 import { addMcpConnection, addOwner, renderAddedOwner } from "./operator.ts";
 import { selectReplyTo } from "./reply-selection.ts";
 import { sendTelegramUpdate } from "./telegram-update.ts";
@@ -19,7 +21,6 @@ const aiGatewayCallLine = (call: FakeModelCall) =>
   `AI Gateway call: gateway ${call.gatewayId ?? "missing"}, metadata ${call.metadata ?? "missing"}, collect log payload ${call.collectLogPayload ?? "missing"}, skip cache ${call.skipCache ?? "missing"}, session affinity ${call.sessionAffinity ?? "missing"}`;
 
 const sampleTelegramUserId = 424_242;
-const sampleMessageId = 7;
 const replyTimeout = "30 seconds";
 const nextPartTimeout = "1 second";
 const laterMessageTimeout = "100 seconds";
@@ -44,21 +45,6 @@ export class ReplyMissing extends Data.TaggedError("ReplyMissing")<{
   }
 }
 
-interface NumberedMessage {
-  readonly text: string;
-  readonly updateId: number;
-  readonly messageId: number;
-}
-
-const messageGroups = (messages: readonly string[], burst: boolean) => {
-  const numbered = messages.map((text, index): NumberedMessage => ({
-    text,
-    updateId: index + 1,
-    messageId: sampleMessageId + index + 1,
-  }));
-  return burst ? [numbered] : numbered.map((sent) => [sent]);
-};
-
 const sendMessages = Effect.fnUntraced(function* sendMessages(
   workerUrl: URL,
   webhookSecret: string,
@@ -75,6 +61,7 @@ const sendMessages = Effect.fnUntraced(function* sendMessages(
         messageId: sent.messageId,
         userId: sampleTelegramUserId,
         text: sent.text,
+        forwardedFrom: sent.forwardedFrom,
       },
     });
     lines.push(
@@ -94,12 +81,14 @@ export const requestReply = ({
   waitForLaterMessage,
   burst = false,
   mcp = false,
+  forward,
 }: {
   readonly messages: readonly string[];
   readonly contains: string | undefined;
   readonly waitForLaterMessage: boolean;
   readonly burst?: boolean;
   readonly mcp?: boolean;
+  readonly forward?: string | undefined;
 }) =>
   Effect.gen(function* requestReplyEffect() {
     const fakes = yield* startLocalFakes();
@@ -136,7 +125,7 @@ export const requestReply = ({
 
     let replyParts: readonly string[] = [];
     const unprompted: FakeTelegramMessage[] = [];
-    for (const group of messageGroups(messages, burst)) {
+    for (const group of messageGroups({ messages, burst, forward })) {
       const callsBefore = fakes.modelCalls().length;
       const callsForMessage = () => fakes.modelCalls().slice(callsBefore);
       const chatActionsBefore = fakes.chatActions().length;
@@ -196,6 +185,9 @@ export const requestReply = ({
           .join(", ")}`,
         `Fake MCP server tool calls: ${fakeMcp.calls().join(", ")}`
       );
+    }
+    for (const review of fakes.reviews()) {
+      lines.push(`Auto-review of ${review.tool}: ${review.answer}`);
     }
     if (contains === undefined) {
       for (const call of fakes.modelCalls()) {

@@ -2,6 +2,7 @@ import { isStepCount, ToolLoopAgent, wrapLanguageModel } from "ai";
 import type { ModelMessage } from "ai";
 import { Clock, Context, Effect, Layer, Schedule } from "effect";
 
+import type { ReviewVerdict } from "../approval/tool-gate.ts";
 import type { TurnTrust } from "../approval/turn-trust.ts";
 import { noTools, runToolEffect } from "./agent-tool.ts";
 import type { AgentTools, RunToolEffect } from "./agent-tool.ts";
@@ -26,11 +27,12 @@ import type {
 import { ModelUnavailable } from "./model-unavailable.ts";
 import { StepLimitReached } from "./step-limit-reached.ts";
 import {
+  alwaysAskReview,
   approvalStatusOf,
   toolInputGateOf,
   blockedCallReachingTheGate,
 } from "./tool-approval.ts";
-import type { TurnGate } from "./tool-approval.ts";
+import type { CallReview, ReviewedCall, TurnGate } from "./tool-approval.ts";
 import { sumUsage, UsageLedger } from "./usage-ledger.ts";
 import type { Usage } from "./usage-ledger.ts";
 
@@ -42,6 +44,7 @@ export interface ModelRequest {
   readonly tools?: AgentTools;
   readonly trust: TurnTrust;
   readonly asksOwnerForApproval: boolean;
+  readonly callReview?: CallReview;
   readonly stepLimit: number;
   readonly maxOutputTokens?: number;
 }
@@ -74,21 +77,29 @@ const aiSdkToolsOf = (
 
 interface AgentRun {
   readonly runTool: RunToolEffect;
+  readonly reviewVerdictOf: (call: ReviewedCall) => Promise<ReviewVerdict>;
   readonly onCallStarted: () => void;
 }
 
 const toolLoopAgentOf = (
   route: ResolvedRoute,
   request: ModelRequest,
-  { runTool, onCallStarted }: AgentRun
+  { runTool, reviewVerdictOf, onCallStarted }: AgentRun
 ) =>
   new ToolLoopAgent({
     model: retryingModelCalls(route.model, onCallStarted),
     instructions: request.system,
     tools: aiSdkToolsOf(request.tools ?? noTools, request, runTool),
-    toolApproval: approvalStatusOf(request.tools ?? noTools, request),
+    toolApproval: approvalStatusOf(
+      request.tools ?? noTools,
+      request,
+      reviewVerdictOf
+    ),
     repairToolCall: blockedCallReachingTheGate(request.tools ?? noTools),
-    stopWhen: isStepCount(request.stepLimit),
+    stopWhen: [
+      isStepCount(request.stepLimit),
+      () => request.callReview?.stopsTurn() === true,
+    ],
     maxRetries: 0,
     ...(request.maxOutputTokens === undefined
       ? {}
@@ -176,8 +187,10 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const runTool = runToolEffect(runPromise);
       const clock = yield* Clock.Clock;
       let callStartedAt = clock.currentTimeMillisUnsafe();
+      const callReview = request.callReview ?? alwaysAskReview;
       const agent = toolLoopAgentOf(route, request, {
         runTool,
+        reviewVerdictOf: (call) => runPromise(callReview.verdictOf(call)),
         onCallStarted: () => {
           callStartedAt = clock.currentTimeMillisUnsafe();
         },
@@ -214,6 +227,7 @@ const makeModelGateway = Effect.gen(function* makeModelGatewayEffect() {
       const awaitingApproval =
         lastStep === undefined ? [] : approvalRequestedCallsOf(lastStep);
       if (
+        !callReview.stopsTurn() &&
         lastStep?.finishReason === "tool-calls" &&
         endedWith.length === 0 &&
         awaitingApproval.length === 0

@@ -2,7 +2,6 @@ import { Effect, Layer, Option, Schema } from "effect";
 
 import { fixedTurnTrust } from "../src/approval/turn-trust.ts";
 import { ModelGateway } from "../src/model-gateway/model-gateway.ts";
-import { UsageLedger } from "../src/model-gateway/usage-ledger.ts";
 import type { Usage } from "../src/model-gateway/usage-ledger.ts";
 import type { OwnerId } from "../src/owner-id.ts";
 import {
@@ -14,8 +13,8 @@ import type {
   JudgedToolCall,
   JudgeRequest,
   JudgeResult,
-  ObservedUsage,
 } from "./eval-contract.ts";
+import { collectedUsageLedger, observedUsageOf } from "./eval-usage.ts";
 
 export const judgeInstructions = (rubric: string) =>
   [
@@ -58,25 +57,6 @@ const verdictOf = (text: string) =>
       onSome: ({ verdict, reason }) => ({ passed: verdict === "pass", reason }),
     })
   );
-
-const observedJudgeUsage = (usage: Usage): ObservedUsage => ({
-  task: "eval_judge",
-  inputTokens: usage.inputTokens ?? null,
-  outputTokens: usage.outputTokens ?? null,
-  cachedInputTokens: usage.cachedInputTokens ?? null,
-  costUsd: usage.costUsd ?? null,
-});
-
-const collectedUsageLedger = (collected: Usage[]) =>
-  Layer.succeed(UsageLedger, {
-    record: (_task, _modelId, usage) =>
-      Effect.sync(() => {
-        collected.push(usage);
-      }),
-    read: Effect.succeed([]),
-    tokensSpent: () => Effect.succeed(0),
-    stepsAfterEvent: () => Effect.succeed([]),
-  });
 
 export const judgeExchanges = Effect.fnUntraced(function* judgeExchanges(
   env: Env,
@@ -122,6 +102,6 @@ export const judgeExchanges = Effect.fnUntraced(function* judgeExchanges(
   );
   return {
     ...verdict,
-    usage: collected.map(observedJudgeUsage),
+    usage: collected.map((usage) => observedUsageOf("eval_judge", usage)),
   } satisfies JudgeResult;
 });
