@@ -373,7 +373,7 @@ describe(
       await runBrief(ownerId);
 
       const [writeBack] = await writeBacksOf(ownerId);
-      expect(writeBack?.kind).toBe("write_back");
+      expect(writeBack?.trust_level).toBe("owner");
       expect(writeBack?.message).not.toContain("Test server");
     });
   }
