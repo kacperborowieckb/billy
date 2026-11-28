@@ -34,6 +34,11 @@ WHERE `sequence` IN (
 			)
 		)
 );--> statement-breakpoint
+DELETE FROM `sqlite_sequence` WHERE `name` = '__new_conversation_messages';--> statement-breakpoint
+INSERT INTO `sqlite_sequence`(`name`, `seq`)
+SELECT '__new_conversation_messages', `seq`
+FROM `sqlite_sequence`
+WHERE `name` = 'conversation_messages';--> statement-breakpoint
 DROP TABLE `conversation_messages`;--> statement-breakpoint
 ALTER TABLE `__new_conversation_messages` RENAME TO `conversation_messages`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint

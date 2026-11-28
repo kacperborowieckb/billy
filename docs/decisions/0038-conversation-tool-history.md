@@ -59,18 +59,18 @@ The rule of [0032](0032-pending-approval-keeps-its-trust.md) and the `capture_no
 - **The stored form of that Turn.** A Turn that is `untrusted` for any reason, also only because of a row, has the `untrusted` stored form: marked parts of the inputs become Stubs, each tool call becomes a pair with a removed input, and no step text is kept. So its reply is `untrusted` too.
 - **A Turn with no reply.** A Turn that ends with a reaction, with silence, or with no answer writes no `untrusted` row. A forward that ends this way leaves the next Turn `owner`.
 - **Prefix.** A Turn whose stored inputs and steps are the bytes that it sent is not a planned miss, also when it is `untrusted`.
-- **Side Sessions.** The Run block quotes an `untrusted` row inside the Untrusted Content marker. So the Side Session is `untrusted` by the rule of 0034, with the same gate rules.
+- **Side Sessions.** The Run block quotes an `untrusted` row inside the Untrusted Content marker. So the Side Session is `untrusted` by the rule of 0034, with the same gate rules. These rules stay until [#140](https://github.com/kacperborowieckb/billy/issues/140) ships and sets the rule for a Side Session in its own record.
 - **Write-back.** The row kind `write_back_stub` is gone. The Turn that is connected to a Proactive Message quotes the sent text inside the marker unless the Write-back of that run is `owner`.
 - **Gate.** No change. In an `untrusted` Turn a `change` call asks the Owner. [#140](https://github.com/kacperborowieckb/billy/issues/140) later sends that call to a reviewer first.
 - **At storage.** The Trust Level of the stored form is `untrusted` when the run says so, when its inputs or steps hold the marker, or when a row in the Conversation at that time is `untrusted`. After a reset, and at the step limit, no model call ran that could give the level of the run: the run says only what its Event or its Pending Approval says, and code reads the other two again. When another run added an `untrusted` row in between, the Turn is stored as `untrusted`. That direction only asks for more Approval.
-- **Migration of the mark.** A versioned migration adds the column. The rows from before hold no model text of an `untrusted` run, so they are `owner`. In the rows that Compaction did not replace, it deletes each reply Stub and each `write_back_stub` row. Their text was never stored, and it stays in the Journal and the Traces. A compacted `write_back_stub` row becomes an `untrusted` `write_back` row.
+- **Migration of the mark.** A versioned migration adds the column. The rows from before hold no model text of an `untrusted` run, so they are `owner`. In the rows that Compaction did not replace, it deletes each reply Stub and each `write_back_stub` row. Their text was never stored, and it stays in the Journal and the Traces. A compacted `write_back_stub` row becomes an `untrusted` `write_back` row. The migration keeps the row counter of the table, so a new row never takes the position of an earlier row that a Trace can point to.
 
 ## What follows from the mark
 
 - The main Conversation does not go back to `owner`. After the first `untrusted` reply, each later Turn is `untrusted`, so its reply is too, and each Compaction passes the mark to the Summary. No rule ends this today.
 - Until #140 ships, each `change` call of an Owner message Turn after that point waits for a tap. `capture_note` of a new Note with no link still runs, and code marks the Note `untrusted`.
 - Each later tool call is stored with a removed input and a Stub as its result, also a call that read only data of the Owner. The agent reads the data again when it needs it.
-- A Side Session whose Run block quotes an `untrusted` reply or Write-back cannot close an Open Loop, and code writes the prompt of its follow-up. Its own Write-back is `untrusted`.
+- Until #140 ships, a Side Session whose Run block quotes an `untrusted` reply or Write-back cannot close an Open Loop, and code writes the prompt of its follow-up. Its own Write-back is `untrusted`.
 
 ## The generic Stub of `call_mcp_tool`
 

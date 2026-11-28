@@ -204,7 +204,14 @@ const rowsBeforeRowTrust = [
   { kind: "summary", content: "A Summary", compactedAt: null },
   { kind: "reply", content: replyStub, compactedAt: null },
   { kind: "write_back_stub", content: writeBackStub, compactedAt: null },
+  { kind: "reply", content: "Deleted before the migration", compactedAt: null },
 ];
+
+const deleteNewestRowBeforeTheMigration = (storage: DurableObjectStorage) => {
+  storage.sql.exec(
+    "DELETE FROM conversation_messages WHERE sequence = (SELECT max(sequence) FROM conversation_messages)"
+  );
+};
 
 const seedBeforeRowTrust = (storage: DurableObjectStorage) =>
   Effect.runPromise(
@@ -240,6 +247,7 @@ describe("the migration of the Trust Level of the Conversation rows", () => {
       agent,
       async (_instance, state) => {
         await seedBeforeRowTrust(state.storage);
+        deleteNewestRowBeforeTheMigration(state.storage);
         await migrateTo(state.storage);
         state.storage.sql.exec(
           "INSERT INTO conversation_messages (event_id, kind, message, trust_level, recorded_at) VALUES ('later', 'input', '{}', 'owner', '2026-11-28T00:00:00.000Z')"
@@ -260,7 +268,7 @@ describe("the migration of the Trust Level of the Conversation rows", () => {
       "4 write_back owner",
       "5 reply owner",
       "6 summary owner",
-      "9 input owner",
+      "10 input owner",
     ]);
   });
 });
