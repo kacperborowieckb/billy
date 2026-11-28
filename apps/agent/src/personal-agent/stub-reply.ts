@@ -1,11 +1,11 @@
 import type { ModelStep } from "../model-gateway/model-step.ts";
-import { removedInputStub } from "./tool-call-stubs.ts";
 import { toolPartsOf } from "./turn-record.ts";
 
 export const stubOnlyReplyReason =
   "The model sent only history Stubs in place of a reply";
 
 const stubPatterns = [
+  /\{\s*"removed"\s*:\s*"\[Input removed from the history\]"\s*\}/gu,
   /\[[^[\]]*\]\s*sent to the Owner\. Text removed from the history/giu,
   /\[[^[\]]*removed from the history[^[\]]*\]/giu,
 ];
@@ -15,7 +15,7 @@ const writeBackRunLine = /^\((?:done in this run|read): .*\)$/gmu;
 const letterOrDigit = /[\p{L}\p{N}]/u;
 
 export const holdsOnlyStubs = (text: string) => {
-  let rest = text.replaceAll(JSON.stringify(removedInputStub), "");
+  let rest = text;
   for (const pattern of stubPatterns) {
     rest = rest.replaceAll(pattern, "");
   }

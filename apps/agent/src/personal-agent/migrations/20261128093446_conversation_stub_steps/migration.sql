@@ -17,7 +17,7 @@ WITH RECURSIVE
       AND json_extract(part.value, '$.type') = 'text'
   ),
   lines(text, line, rest) AS (
-    SELECT text, '', replace(text, char(13), '') || char(10)
+    SELECT text, '', replace(replace(text, char(13, 10), char(10)), char(13), char(10)) || char(10)
     FROM candidates
     UNION ALL
     SELECT
@@ -35,6 +35,7 @@ HAVING sum(line <> '') > 0
     line <> ''
     AND NOT (
       substr(line, 1, 1) = '['
+      AND instr(substr(line, 2), '[') = 0
       AND instr(line, ']') = length(line)
       AND line LIKE '%removed from the history%'
     )

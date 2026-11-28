@@ -338,6 +338,8 @@ describe("A reply that holds only Stubs", () => {
     `[Result removed from the history. call_mcp_tool: done. ${recordAndRetry}`,
     "[Brief, Mon 08:00] sent to the Owner. Text removed from the history\n(read: Notion)",
     JSON.stringify(removedInputStub),
+    '{ "removed": "[Input removed from the history]" }',
+    '{\n  "removed": "[Input removed from the history]"\n}',
   ])("is %s", (text) => {
     expect(holdsOnlyStubs(text)).toBe(true);
   });
@@ -349,6 +351,7 @@ describe("A reply that holds only Stubs", () => {
     "(read: the page)",
     "I removed the line from the history of the page.",
     `The page says Friday.\n${untrustedReplyStub}`,
+    '{ "removed": "[Input removed from the history]", "due": "Friday" }',
   ])("is not %s", (text) => {
     expect(holdsOnlyStubs(text)).toBe(false);
   });

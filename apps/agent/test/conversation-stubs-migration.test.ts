@@ -108,6 +108,7 @@ const deletedRows = [
   ),
   seeded("step", [{ type: "text", text: toolStubLine }]),
   seeded("reply", `  ${toolStubLine}\r\n\r\n${replyStub}\r\n`),
+  seeded("reply", `${toolStubLine}\r${replyStub}`),
 ];
 
 const copiedTextWithCall = seeded("step", [
@@ -122,6 +123,7 @@ const keptRows = [
   seeded("reply", `I wrote this: ${toolStubLine}`),
   seeded("reply", `${toolStubLine}\nYour call is at 15:00 [Calendar]`),
   seeded("reply", `${toolStubLine} Your call is at 15:00 [Calendar]`),
+  seeded("reply", `[Calendar note: call at 15:00. ${toolStubLine}`),
   seeded("step", [
     { type: "text", text: `${toolStubLine}\nI look again [Notion]` },
     toolCallPart,
