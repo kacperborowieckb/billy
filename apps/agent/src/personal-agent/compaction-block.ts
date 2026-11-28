@@ -1,9 +1,9 @@
 import type { ModelMessage } from "ai";
 import { Option } from "effect";
 
-import { trustLevelOfParts } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { ReportedStep } from "../model-gateway/usage-ledger.ts";
+import { trustLevelOfParts } from "../notes/note.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import type { StoredConversationRow } from "./conversation.ts";
 

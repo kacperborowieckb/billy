@@ -141,6 +141,7 @@ const approvalResultRecovery = (approval: PendingApproval) => ({
   resumeUnsent: () => Effect.succeed("unanswered" as const),
   failureNoticeText: Effect.succeed(honestFailureText),
   session: mainConversation,
+  trustLevel: approval.trustLevel,
   inputs: [approvalResultInput(approval)],
 });
 

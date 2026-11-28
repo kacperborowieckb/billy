@@ -4,7 +4,8 @@ import { Effect } from "effect";
 import { PendingApprovals } from "../approval/pending-approvals.ts";
 import { Journal } from "../journal/journal.ts";
 import type { JournalEntry } from "../journal/journal.ts";
-import { burstInputs, newestEventOf } from "./burst.ts";
+import type { TrustLevel } from "../notes/note.ts";
+import { burstInputs, newestEventOf, trustLevelOfBurst } from "./burst.ts";
 import type { Burst } from "./burst.ts";
 import { sendReaction } from "./delivery-reaction.ts";
 import {
@@ -48,7 +49,7 @@ const endingOf = (state: DeliveryState): TurnEnding => {
 const recordConversation = Effect.fnUntraced(function* recordConversation(
   event: InboxEvent,
   state: DeliveryState,
-  { session, inputs }: RecoveredTurn
+  { session, inputs, trustLevel }: RecoveredTurn
 ) {
   const progress = yield* TurnProgress;
   yield* session.commit({
@@ -57,6 +58,7 @@ const recordConversation = Effect.fnUntraced(function* recordConversation(
     inputs: inputs ?? [yield* inputMessageOf(event)],
     steps: yield* progress.completedFor(event.eventId),
     ending: endingOf(state),
+    trustLevel,
   });
 });
 
@@ -67,6 +69,7 @@ interface SkippedScheduledTask {
 
 interface RecoveredTurn {
   readonly session: TurnSession;
+  readonly trustLevel: TrustLevel;
   readonly inputs?: readonly ModelMessage[];
 }
 
@@ -89,6 +92,7 @@ export const ownerMessageRecovery = (burst: Burst) => ({
   resumeUnsent: () => Effect.succeed("unanswered" as const),
   failureNoticeText: Effect.succeed(honestFailureText),
   session: mainConversation,
+  trustLevel: trustLevelOfBurst(burst),
   inputs: burstInputs(burst),
   replyTo: newestEventOf(burst),
 });

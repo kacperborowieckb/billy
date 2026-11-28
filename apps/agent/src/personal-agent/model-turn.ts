@@ -81,12 +81,17 @@ export const runModelTurn = <Failure, Requirements>({
       redactor
     );
     const turn = { eventId, turnContext, inputs: kind.inputs };
-    const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
-      session.commit({ ...turn, steps, ending });
     const trust = turnTrustGiven(
       { ...kind, ...preparation, ...turn, historyTrustLevel },
       earlier
     );
+    const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
+      session.commit({
+        ...turn,
+        steps,
+        ending,
+        trustLevel: trust.current(),
+      });
     const callReview = yield* turnReviewOf(eventId, behavior);
     const decided = yield* generateWithOutcomeTools({
       eventId,

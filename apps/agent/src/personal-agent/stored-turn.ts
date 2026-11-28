@@ -3,7 +3,7 @@ import { Effect } from "effect";
 
 import type { McpCatalog } from "../mcp/mcp-catalog.ts";
 import { McpConnections } from "../mcp/mcp-connections.ts";
-import { holdsUntrustedContent } from "../notes/note.ts";
+import { leastTrusted, trustLevelOfContent } from "../notes/note.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import {
@@ -99,6 +99,7 @@ export interface FinishedTurn {
   readonly inputs: readonly ModelMessage[];
   readonly steps: readonly ModelMessage[];
   readonly ending: TurnEnding;
+  readonly trustLevel: TrustLevel;
 }
 
 const endingRowsOf = (
@@ -143,6 +144,7 @@ const storedFormWithStubsOf = Effect.fnUntraced(function* storedFormWithStubsOf(
     inputs,
     steps,
     ending,
+    trustLevel: runTrustLevel,
     historyTrustLevel,
   }: TurnInConversation,
   { redactor, limits, mcpCatalog }: StoredFormRules
@@ -153,11 +155,11 @@ const storedFormWithStubsOf = Effect.fnUntraced(function* storedFormWithStubsOf(
   const sentInputs = withTurnContext(turnContext, inputs).map((input) =>
     redactor.redactMessage(input)
   );
-  const trustLevel: TrustLevel =
-    historyTrustLevel === "untrusted" ||
-    holdsUntrustedContent([sentInputs, steps])
-      ? "untrusted"
-      : "owner";
+  const trustLevel = leastTrusted([
+    runTrustLevel,
+    historyTrustLevel,
+    trustLevelOfContent([sentInputs, steps]),
+  ]);
   const source = { turnEventId: eventId, mcpCatalog };
   const storedInputs =
     trustLevel === "untrusted" ? sentInputs.map(inputStubbed) : sentInputs;
@@ -187,7 +189,7 @@ export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
 ) {
   const conversation = yield* Conversation;
   const { rows, withStub } = yield* storedFormWithStubsOf(
-    { ...turn, historyTrustLevel: yield* conversation.historyTrustLevel },
+    { ...turn, historyTrustLevel: yield* conversation.uncompactedTrustLevel },
     {
       redactor: yield* Redactor,
       limits: yield* StoredFormLimits,

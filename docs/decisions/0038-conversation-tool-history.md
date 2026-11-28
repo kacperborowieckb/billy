@@ -1,10 +1,10 @@
-# 0038: The stored Turn keeps pairs for tool calls, keeps replies, and carries the Trust Level
+# 0038: Old tool calls are stored as pairs with a Stub as the result
 
 Status: accepted
 
 Date: 2026-11-28
 
-Ticket [#246](https://github.com/kacperborowieckb/billy/issues/246) of spec [#255](https://github.com/kacperborowieckb/billy/issues/255), after the investigation [#243](https://github.com/kacperborowieckb/billy/issues/243). This is one record for #246 and [#251](https://github.com/kacperborowieckb/billy/issues/251), because both change the stored form of a Turn. "Tool history" holds the rules of #246. "Replies and the Trust Level" holds the rules of #251, which the repository owner decided on 2026-11-28.
+Ticket [#246](https://github.com/kacperborowieckb/billy/issues/246) of spec [#255](https://github.com/kacperborowieckb/billy/issues/255), after the investigation [#243](https://github.com/kacperborowieckb/billy/issues/243). This is one record for #246 and [#251](https://github.com/kacperborowieckb/billy/issues/251), because both change the stored form of a Turn. "Tool history" holds the rules of #246. "Replies and the Trust Level" holds the rules of #251, which the repository owner decided on 2026-11-28. #251 adds rules and changes no text of #246. Where the two differ, the rules of #251 apply.
 
 The spec calls the Stub that stands in place of a tool result a "placeholder". `CONTEXT.md` keeps one term: Stub.
 
@@ -13,6 +13,8 @@ It supersedes these rules. All other rules of the named records stay in force.
 - [0033](0033-prompt-and-conversation-architecture.md), "Untrusted Content and Stubs": each tool call of an `untrusted` Turn becomes a Stub as text of the agent. The call is now a pair, and the Stub is its result.
 - [0034](0034-architecture-review-changes.md), "The Stub of an MCP result keeps ordered ids": the ids and their shape rule stay. The place of the Stub and the way code names the Connection and the tool change.
 - [0036](0036-mcp-connections.md), "Stub": the names of the Connection and the tool come from the input of the call, checked against the MCP Catalog.
+
+[0029](0029-untrusted-tool-results.md) and [0030](0030-untrusted-context-of-a-turn.md) do not change with #246.
 
 #251 also supersedes or changes these rules.
 
@@ -44,11 +46,12 @@ The rule of [0032](0032-pending-approval-keeps-its-trust.md) and the `capture_no
 - **Call again.** The Stub and the system text tell the model to call a tool that reads the data by itself, and not to ask the Owner for data that a tool can read. They also tell it never to repeat a change, because a Stub also stands for a change that is done.
 - **Reply guard.** A reply that holds only Stubs is never sent and never stored. Code drops its text, keeps the tool calls that ran, and runs the model step again. After `maxStubReplyRetries` retries (first value 2) the Turn ends as a failed model call, with the honest failure text for an Owner message Turn. Each retry counts against the step limit. The Trace records each refused text in `rejectedStubReplies`. A step text that holds only Stubs is also left out of the stored form of a trusted Turn.
 - **Prefix.** Code builds the stored form once, from the Turn Event id and the steps, so the normal path and the recovery path store the same bytes, and the rule of 0033 stays: the next requests send the stored rows unchanged. A Turn that was stored with a Stub is still the planned miss `stub_in_turn_before`.
-- **Migration.** A versioned migration removes the Stubs that the next request would show to the model as its own text, which it then copies. A text holds only Stubs here when each of its lines with text is one bracket group that says that something was removed from the history. A line with other words, or with a second opening bracket, keeps the whole text. In the rows that Compaction did not replace, the migration deletes each `step` and `reply` row with such a text, and it removes each such text part from a `step` row. Such rows come from the old form of an `untrusted` Turn, and from replies and step texts in which the model copied Stubs in a trusted Turn. This migration keeps the reply Stub, and the migration of #251 removes it. The old rows cannot become pairs, because they hold no call id and no pair. The Owner messages, the other replies, the Journal, and the Traces stay. A replay of a Trace that sent a changed or deleted row reports changed Conversation rows. Compacted rows are never sent again and stay until the retention step.
+- **Reply Stub.** The reply of an `untrusted` Turn stays a Stub as assistant text until #251.
+- **Migration.** A versioned migration removes the Stubs that the next request would show to the model as its own text, which it then copies. A text holds only Stubs here when each of its lines with text is one bracket group that says that something was removed from the history. A line with other words, or with a second opening bracket, keeps the whole text. In the rows that Compaction did not replace, the migration deletes each `step` and `reply` row with such a text, and it removes each such text part from a `step` row. Such rows come from the old form of an `untrusted` Turn, and from replies and step texts in which the model copied Stubs in a trusted Turn. The reply Stub stays until #251. The old rows cannot become pairs, because they hold no call id and no pair. The Owner messages, the other replies, the Journal, and the Traces stay. A replay of a Trace that sent a changed or deleted row reports changed Conversation rows. Compacted rows are never sent again and stay until the retention step.
 
 ### Replies and the Trust Level (#251)
 
-- **Replies.** The stored form of an `untrusted` Turn holds the reply text that the Owner got. The reply Stub is gone.
+- **Replies.** The stored form of an `untrusted` Turn holds the reply text that the Owner got. This ends the rule "Reply Stub" above.
 - **The mark.** Each Conversation row has the column `trust_level` (`owner` or `untrusted`). It says where the model text of the row came from. It is `untrusted` on three kinds of row: the reply of an `untrusted` Turn, the Write-back of an `untrusted` run, and the Summary of a Compaction that read an `untrusted` row (the earlier Summary included). All other rows are `owner`: they hold words of the Owner, text of code, or pairs that code wrote.
 - **A Turn from the rows.** An Owner message Turn starts `untrusted` when a row of its request is `untrusted`. Code reads the column and never marker text. The text of the row goes to the model as it is.
 - **The stored form of that Turn.** A Turn that is `untrusted` for any reason, also only because of a row, has the `untrusted` stored form: marked parts of the inputs become Stubs, each tool call becomes a pair with a removed input, and no step text is kept. So its reply is `untrusted` too.
@@ -57,8 +60,8 @@ The rule of [0032](0032-pending-approval-keeps-its-trust.md) and the `capture_no
 - **Side Sessions.** The Run block quotes an `untrusted` row inside the Untrusted Content marker. So the Side Session is `untrusted` by the rule of 0034, with the same gate rules.
 - **Write-back.** The row kind `write_back_stub` is gone. The Turn that is connected to a Proactive Message quotes the sent text inside the marker unless the Write-back of that run is `owner`.
 - **Gate.** No change. In an `untrusted` Turn a `change` call asks the Owner. [#140](https://github.com/kacperborowieckb/billy/issues/140) later sends that call to a reviewer first.
-- **After a reset.** Code computes the Trust Level of the stored form from the inputs, the steps, and the rows that are in the Conversation when it stores the Turn. When another run added an `untrusted` row in between, the Turn is stored as `untrusted`. That direction only asks for more Approval.
-- **Migration.** A versioned migration adds the column. The rows from before hold no model text of an `untrusted` run, so they are `owner`. In the rows that Compaction did not replace, it deletes each reply Stub and each `write_back_stub` row. Their text was never stored, and it stays in the Journal and the Traces. A compacted `write_back_stub` row becomes an `untrusted` `write_back` row.
+- **At storage.** The Trust Level of the stored form is `untrusted` when the run says so, when its inputs or steps hold the marker, or when a row in the Conversation at that time is `untrusted`. After a reset, the run says only what its Event or its Pending Approval says, and code reads the other two again. When another run added an `untrusted` row in between, the Turn is stored as `untrusted`. That direction only asks for more Approval.
+- **Migration of the mark.** A versioned migration adds the column. The rows from before hold no model text of an `untrusted` run, so they are `owner`. In the rows that Compaction did not replace, it deletes each reply Stub and each `write_back_stub` row. Their text was never stored, and it stays in the Journal and the Traces. A compacted `write_back_stub` row becomes an `untrusted` `write_back` row.
 
 ## What follows from the mark
 

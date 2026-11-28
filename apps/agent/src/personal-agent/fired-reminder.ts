@@ -173,6 +173,7 @@ export const deliverReminder = Effect.fnUntraced(function* deliverReminder({
     inputs: [],
     steps: [],
     ending: replied(text),
+    trustLevel: "owner",
   });
   yield* inbox.markDone([event]);
 });

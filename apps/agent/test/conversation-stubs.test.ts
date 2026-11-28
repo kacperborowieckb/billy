@@ -59,10 +59,19 @@ const searchStep = (
   },
 ];
 
+interface StoredTurnSources {
+  readonly input?: string | undefined;
+  readonly historyTrustLevel?: TrustLevel;
+  readonly runTrustLevel?: TrustLevel;
+}
+
 const storedRows = (
   steps: readonly ModelMessage[],
-  input = "What about Ana?",
-  historyTrustLevel: TrustLevel = "owner"
+  {
+    input = "What about Ana?",
+    historyTrustLevel = "owner",
+    runTrustLevel = "owner",
+  }: StoredTurnSources = {}
 ) =>
   Effect.runPromise(
     storedFormOf(
@@ -73,6 +82,7 @@ const storedRows = (
         steps,
         ending: replied("Ana wants tea."),
         historyTrustLevel,
+        trustLevel: runTrustLevel,
       },
       {
         redactor,
@@ -83,7 +93,7 @@ const storedRows = (
   );
 
 const storedTurn = async (steps: readonly ModelMessage[], input?: string) => {
-  const rows = await storedRows(steps, input);
+  const rows = await storedRows(steps, { input });
   return rows.map((row) => row.message);
 };
 
@@ -209,8 +219,7 @@ describe("The stored form of an untrusted Turn", () => {
 
     const rows = await storedRows(
       [call as ModelMessage, result as ModelMessage],
-      "What about Ana?",
-      "untrusted"
+      { historyTrustLevel: "untrusted" }
     );
     const messages = rows.map((row) => row.message);
 
@@ -223,6 +232,12 @@ describe("The stored form of an untrusted Turn", () => {
       message: { role: "assistant", content: "Ana wants tea." },
       trustLevel: "untrusted",
     });
+  });
+
+  it("is also the stored form of a run that started untrusted with no marker in its inputs, steps, or rows", async () => {
+    const rows = await storedRows([], { runTrustLevel: "untrusted" });
+
+    expect(rows.at(-1)?.trustLevel).toBe("untrusted");
   });
 
   it("keeps no model text, no reasoning, and no id that the model provider wrote", async () => {

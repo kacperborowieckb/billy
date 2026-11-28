@@ -1,10 +1,13 @@
 import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
-import { trustLevelOfParts } from "../approval/turn-trust.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { McpConnections } from "../mcp/mcp-connections.ts";
-import { holdsUntrustedContent } from "../notes/note.ts";
+import {
+  leastTrusted,
+  trustLevelOfContent,
+  trustLevelOfParts,
+} from "../notes/note.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import { Profile } from "../profile/profile.ts";
 import {
@@ -155,6 +158,7 @@ interface SentRun {
   readonly inputs: readonly ModelMessage[];
   readonly steps: readonly ModelMessage[];
   readonly text: string;
+  readonly trustLevel: TrustLevel;
 }
 
 const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
@@ -165,11 +169,9 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
   inputs,
   steps,
   text,
+  trustLevel,
 }: SentRun) {
   const conversation = yield* Conversation;
-  const trustLevel = holdsUntrustedContent([turnContext, inputs, steps, text])
-    ? "untrusted"
-    : "owner";
   yield* conversation.append({
     eventId,
     recordedAs,
@@ -177,7 +179,10 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
       {
         kind: "write_back",
         message: writeBackMessageOf({ marker, text, steps }),
-        trustLevel,
+        trustLevel: leastTrusted([
+          trustLevel,
+          trustLevelOfContent([turnContext, inputs, steps, text]),
+        ]),
       },
     ],
   });
@@ -185,7 +190,7 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
 
 const writeBackOf = (
   marker: WriteBackMarker,
-  { eventId, turnContext, inputs, steps, ending }: FinishedTurn
+  { eventId, turnContext, inputs, steps, ending, trustLevel }: FinishedTurn
 ) =>
   ending._tag === "Replied"
     ? appendWriteBack({
@@ -195,6 +200,7 @@ const writeBackOf = (
         inputs,
         steps,
         text: ending.text,
+        trustLevel,
       })
     : Effect.void;
 
@@ -213,6 +219,7 @@ const failureNoticeWriteBackOf = Effect.fnUntraced(
       inputs: [],
       steps: yield* progress.completedFor(eventId),
       text,
+      trustLevel: "owner",
     });
   }
 );

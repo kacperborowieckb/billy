@@ -154,6 +154,7 @@ export const handleFiredSchedule = Effect.fnUntraced(
       resumeUnsent: resumeUnsentFor({ ownerId, event, schedule, session }),
       failureNoticeText: failureNoticeTextOf(schedule),
       session,
+      trustLevel: "owner",
     });
     if (outcome === "settled") {
       return;

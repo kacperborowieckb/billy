@@ -5,6 +5,13 @@ import type { trustLevels } from "../personal-agent/storage-values.ts";
 
 export type TrustLevel = (typeof trustLevels)[number];
 
+export const leastTrusted = (levels: readonly TrustLevel[]): TrustLevel =>
+  levels.includes("untrusted") ? "untrusted" : "owner";
+
+export const trustLevelOfParts = (
+  parts: readonly { readonly trustLevel: TrustLevel }[]
+): TrustLevel => leastTrusted(parts.map((part) => part.trustLevel));
+
 export interface NoteSourceLocation {
   readonly channel: OwnerMessage["channel"];
   readonly conversationId: string;
@@ -61,3 +68,6 @@ export const holdsUntrustedContent = (value: unknown): boolean => {
   }
   return false;
 };
+
+export const trustLevelOfContent = (value: unknown): TrustLevel =>
+  holdsUntrustedContent(value) ? "untrusted" : "owner";

@@ -3,11 +3,11 @@ import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
-import { trustLevelOfParts } from "../approval/turn-trust.ts";
 import {
   ModelMessageJsonSchema,
   ModelMessageSchema,
 } from "../model-gateway/model-message-schema.ts";
+import { trustLevelOfParts } from "../notes/note.ts";
 import type { TrustLevel } from "../notes/note.ts";
 import type { SentConversationRows } from "../tracing/traced-request.ts";
 import { AgentStorage } from "./agent-storage.ts";
@@ -100,7 +100,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
     )
     .pipe(Effect.map(([row]) => row?.eventId));
 
-  const historyTrustLevel = database
+  const uncompactedTrustLevel = database
     .selectDistinct({ trustLevel: conversationMessages.trustLevel })
     .from(conversationMessages)
     .where(isNull(conversationMessages.compactedAt))
@@ -244,7 +244,7 @@ const makeConversation = Effect.gen(function* makeConversationEffect() {
 
   return {
     history,
-    historyTrustLevel,
+    uncompactedTrustLevel,
     uncompactedRows,
     sentRows,
     summaryEventId,

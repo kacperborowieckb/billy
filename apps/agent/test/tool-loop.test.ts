@@ -397,6 +397,7 @@ describe("Conversation history", () => {
               inputs: turn.slice(0, 1),
               steps: turn.slice(1, 3),
               ending: replied(`done ${index}`),
+              trustLevel: "owner",
             });
           }
           return {

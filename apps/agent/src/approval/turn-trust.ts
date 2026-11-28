@@ -54,11 +54,6 @@ const untrustedChangeOf = (
     }))
   );
 
-export const trustLevelOfParts = (
-  parts: readonly { readonly trustLevel: TrustLevel }[]
-): TrustLevel =>
-  parts.some((part) => part.trustLevel === "untrusted") ? "untrusted" : "owner";
-
 const turnTrust = (
   startTrustLevel: TrustLevel,
   followsToolResults: boolean,
