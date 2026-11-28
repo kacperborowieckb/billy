@@ -50,6 +50,7 @@ export const modelTraceFields = {
   refusedOutcomeTools: Schema.Array(Schema.String).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed([]))
   ),
+  rejectedStubReplies: Schema.optionalKey(Schema.Array(Schema.String)),
   restart: Schema.optionalKey(RestartRecordSchema),
   trustLevelChange: Schema.optionalKey(
     Schema.Struct({

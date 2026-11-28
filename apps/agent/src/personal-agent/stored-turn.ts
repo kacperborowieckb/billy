@@ -1,6 +1,8 @@
 import type { AssistantContent, ModelMessage, ToolContent } from "ai";
 import { Effect } from "effect";
 
+import type { McpCatalog } from "../mcp/mcp-catalog.ts";
+import { McpConnections } from "../mcp/mcp-connections.ts";
 import { holdsUntrustedContent } from "../notes/note.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import {
@@ -125,21 +127,27 @@ interface StoredForm {
   readonly withStub: boolean;
 }
 
-const storedFormWithStubsOf = (
-  { turnContext, inputs, steps, ending }: FinishedTurn,
-  redactor: Redactor["Service"],
-  limits: StoredFormLimitValues
-): StoredForm => {
+export interface StoredFormRules {
+  readonly redactor: Redactor["Service"];
+  readonly limits: StoredFormLimitValues;
+  readonly mcpCatalog: McpCatalog;
+}
+
+const storedFormWithStubsOf = Effect.fnUntraced(function* storedFormWithStubsOf(
+  { eventId, turnContext, inputs, steps, ending }: FinishedTurn,
+  { redactor, limits, mcpCatalog }: StoredFormRules
+) {
   if (ending._tag === "Unanswered" && steps.length === 0) {
-    return { rows: [], withStub: false };
+    return { rows: [], withStub: false } satisfies StoredForm;
   }
   const sentInputs = withTurnContext(turnContext, inputs).map((input) =>
     redactor.redactMessage(input)
   );
   const heldUntrustedContent = holdsUntrustedContent([sentInputs, steps]);
+  const source = { turnEventId: eventId, mcpCatalog };
   const storedSteps = heldUntrustedContent
-    ? untrustedStepsStubbed(steps)
-    : trustedStepsLimited(steps, limits);
+    ? yield* untrustedStepsStubbed(steps, source)
+    : trustedStepsLimited(steps, limits, source);
   return {
     rows: [
       ...rowsOfKind(
@@ -152,26 +160,21 @@ const storedFormWithStubsOf = (
     withStub:
       heldUntrustedContent ||
       JSON.stringify(storedSteps) !== JSON.stringify(steps),
-  };
-};
+  } satisfies StoredForm;
+});
 
-export const storedFormOf = (
-  turn: FinishedTurn,
-  redactor: Redactor["Service"],
-  limits: StoredFormLimitValues
-): readonly ConversationRow[] =>
-  storedFormWithStubsOf(turn, redactor, limits).rows;
+export const storedFormOf = (turn: FinishedTurn, rules: StoredFormRules) =>
+  storedFormWithStubsOf(turn, rules).pipe(Effect.map((form) => form.rows));
 
 export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
   turn: FinishedTurn
 ) {
   const conversation = yield* Conversation;
-  const redactor = yield* Redactor;
-  const { rows, withStub } = storedFormWithStubsOf(
-    turn,
-    redactor,
-    yield* StoredFormLimits
-  );
+  const { rows, withStub } = yield* storedFormWithStubsOf(turn, {
+    redactor: yield* Redactor,
+    limits: yield* StoredFormLimits,
+    mcpCatalog: (yield* McpConnections).catalog,
+  });
   if (rows.length > 0) {
     yield* conversation.append({
       eventId: turn.eventId,

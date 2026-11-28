@@ -17,6 +17,8 @@ import type { Schedule } from "../schedule/schedule.ts";
 import { setScheduleToolName } from "../schedule/set-schedule-tool.ts";
 import { localTimeOf } from "../time/local-time.ts";
 import { ownerTimeZone } from "../time/owner-current-time.ts";
+import type { ScheduleFiredEvent } from "./inbox.ts";
+import type { WriteBackKind } from "./storage-values.ts";
 import {
   assistantPartsOf,
   isToolCall,
@@ -24,9 +26,7 @@ import {
   storedToolNameOf,
   toolCallStatusOf,
   toolOutputsOf,
-} from "./conversation-stubs.ts";
-import type { ScheduleFiredEvent } from "./inbox.ts";
-import type { WriteBackKind } from "./storage-values.ts";
+} from "./tool-steps.ts";
 
 export interface WriteBackMarker {
   readonly kind: WriteBackKind;

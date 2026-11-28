@@ -455,7 +455,7 @@ describe("The answer after an approved MCP call", { timeout: 40_000 }, () => {
     expect(stored).not.toContain("ran create_page");
     expect(stored).not.toContain(untrustedContentOpening);
     expect(stored).toContain(
-      "[Test server create_page: done. Result removed from the history. Call the tool again to read it]"
+      "[Result removed from the history. call_mcp_tool on connection test_server, tool create_page: done."
     );
   });
 

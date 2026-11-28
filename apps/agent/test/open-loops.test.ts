@@ -719,7 +719,9 @@ describe("Open Loops on Notes", () => {
           .map((row) => row.message)
           .join("\n")
     );
-    expect(savedSteps).toContain(`[${captureNoteToolName}: done. Note ids: `);
+    expect(savedSteps).toContain(
+      `[Result removed from the history. ${captureNoteToolName}: done. Note ids: `
+    );
     expect(savedSteps).not.toContain("waiting");
     expect(offered).toContain(updateNoteToolName);
   });

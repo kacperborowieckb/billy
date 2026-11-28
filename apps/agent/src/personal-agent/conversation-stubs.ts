@@ -1,19 +1,29 @@
 import type {
-  AssistantContent,
   ModelMessage,
   ToolCallPart,
   ToolResultPart,
   UserContent,
 } from "ai";
-import { Context, Layer, Schema } from "effect";
+import { Context, Effect, Layer } from "effect";
 
-import { pendingApprovalIdOfOutput } from "../approval/draft-approval.ts";
-import { mcpCallStubOf, McpCallOutputSchema } from "../mcp/mcp-call-output.ts";
-import { callMcpToolToolName } from "../mcp/mcp-tool-names.ts";
 import {
   untrustedContentClosing,
   untrustedContentOpening,
 } from "../notes/note.ts";
+import { holdsOnlyStubs } from "./stub-reply.ts";
+import {
+  removedInputStub,
+  resultStubOf,
+  storedCallIdOf,
+} from "./tool-call-stubs.ts";
+import type { StubSource } from "./tool-call-stubs.ts";
+import {
+  assistantPartsOf,
+  isToolCall,
+  storedToolNameOf,
+  toolOutputsOf,
+} from "./tool-steps.ts";
+import type { ToolOutput } from "./tool-steps.ts";
 
 export interface StoredFormLimitValues {
   readonly maxStoredToolResultCharacters: number;
@@ -32,97 +42,6 @@ export const untrustedContentStub =
 
 export const untrustedReplyStub =
   "[Reply sent to the Owner. Text removed from the history]";
-
-const untrustedModelTextStub = "[Model text removed from the history]";
-
-const isNoteId = Schema.is(Schema.String.pipe(Schema.check(Schema.isUUID())));
-
-const collectNoteIds = (value: unknown, found: Set<string>): void => {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectNoteIds(item, found);
-    }
-    return;
-  }
-  if (typeof value !== "object" || value === null) {
-    return;
-  }
-  for (const [key, field] of Object.entries(value)) {
-    if (key === "noteId" && isNoteId(field)) {
-      found.add(field);
-    } else {
-      collectNoteIds(field, found);
-    }
-  }
-};
-
-export const noteIdsOf = (value: unknown): readonly string[] => {
-  const found = new Set<string>();
-  collectNoteIds(value, found);
-  return [...found];
-};
-
-const noteIdsText = (value: unknown) => {
-  const ids = noteIdsOf(value);
-  return ids.length === 0 ? "" : ` Note ids: ${ids.join(", ")}.`;
-};
-
-type ToolOutput = ToolResultPart["output"];
-
-const failedOutputTypes: ReadonlySet<ToolOutput["type"]> = new Set([
-  "error-text",
-  "error-json",
-  "execution-denied",
-]);
-
-export const toolCallStatusOf = (output: ToolOutput | undefined) => {
-  if (output === undefined) {
-    return "no result";
-  }
-  if (failedOutputTypes.has(output.type)) {
-    return "failed";
-  }
-  const pendingApprovalId =
-    output.type === "text"
-      ? pendingApprovalIdOfOutput(output.value)
-      : undefined;
-  return pendingApprovalId === undefined
-    ? "done"
-    : `waits for Approval ${pendingApprovalId}`;
-};
-
-const sizeOf = (output: ToolOutput) => JSON.stringify(output).length;
-
-export const largeToolResultStub = (toolName: string, output: ToolOutput) =>
-  `[${toolName} result of ${sizeOf(output)} characters removed from the history.${noteIdsText(output)} Call the tool again to read it]`;
-
-const isToolName = Schema.is(
-  Schema.String.pipe(
-    Schema.check(Schema.isPattern(/^[a-z]+(?:_[a-z]+){0,3}$/u))
-  )
-);
-
-export const storedToolNameOf = (toolName: string) =>
-  isToolName(toolName) ? toolName : "unknown_tool";
-
-const decodeMcpCallOutput = Schema.decodeUnknownOption(McpCallOutputSchema);
-
-const mcpCallStubOfOutput = (output: ToolOutput | undefined) => {
-  if (output?.type !== "json") {
-    return;
-  }
-  const decoded = decodeMcpCallOutput(output.value);
-  return decoded._tag === "Some" ? mcpCallStubOf(decoded.value) : undefined;
-};
-
-export const untrustedToolCallStub = (
-  toolName: string,
-  output: ToolOutput | undefined
-) =>
-  (toolName === callMcpToolToolName
-    ? mcpCallStubOfOutput(output)
-    : undefined) ??
-  `[${storedToolNameOf(toolName)}: ${toolCallStatusOf(output)}.${noteIdsText(output)} Input and result removed from the history]`;
 
 export const withUntrustedContentStubbed = (text: string): string => {
   const start = text.indexOf(untrustedContentOpening);
@@ -149,84 +68,132 @@ export const inputStubbed = (message: ModelMessage): ModelMessage =>
     ? { ...message, content: userContentStubbed(message.content) }
     : message;
 
-export const toolOutputsOf = (steps: readonly ModelMessage[]) => {
-  const outputs = new Map<string, ToolOutput>();
-  for (const message of steps) {
-    if (message.role === "tool") {
-      for (const part of message.content) {
-        if (part.type === "tool-result") {
-          outputs.set(part.toolCallId, part.output);
-        }
-      }
-    }
+const pairStubbed = Effect.fnUntraced(function* pairStubbed(
+  call: ToolCallPart,
+  output: ToolOutput | undefined,
+  source: StubSource
+) {
+  const toolCallId = yield* storedCallIdOf(source.turnEventId, call.toolCallId);
+  const toolName = storedToolNameOf(call.toolName);
+  return {
+    call: {
+      type: "tool-call",
+      toolCallId,
+      toolName,
+      input: removedInputStub,
+    } satisfies ToolCallPart,
+    result: {
+      type: "tool-result",
+      toolCallId,
+      toolName,
+      output: resultStubOf({ removed: "Result", call, output, source }),
+    } satisfies ToolResultPart,
+  };
+});
+
+const stepStubbed = Effect.fnUntraced(function* stepStubbed(
+  message: ModelMessage,
+  outputs: ReadonlyMap<string, ToolOutput>,
+  source: StubSource
+) {
+  const pairs = yield* Effect.all(
+    assistantPartsOf(message)
+      .filter(isToolCall)
+      .map((call) => pairStubbed(call, outputs.get(call.toolCallId), source))
+  );
+  const stored: readonly ModelMessage[] =
+    pairs.length === 0
+      ? []
+      : [
+          { role: "assistant", content: pairs.map((pair) => pair.call) },
+          { role: "tool", content: pairs.map((pair) => pair.result) },
+        ];
+  return stored;
+});
+
+export const untrustedStepsStubbed = Effect.fnUntraced(
+  function* untrustedStepsStubbed(
+    steps: readonly ModelMessage[],
+    source: StubSource
+  ) {
+    const outputs = toolOutputsOf(steps);
+    const stored = yield* Effect.all(
+      steps.map((message) => stepStubbed(message, outputs, source))
+    );
+    return stored.flat();
   }
-  return outputs;
-};
+);
 
-type AssistantPart = Exclude<AssistantContent, string>[number];
-
-export const assistantPartsOf = (
+const withoutStubReplyText = (
   message: ModelMessage
-): readonly AssistantPart[] => {
-  if (message.role !== "assistant") {
-    return [];
-  }
-  return typeof message.content === "string"
-    ? [{ type: "text", text: message.content }]
-    : message.content;
-};
-
-export const isToolCall = (part: AssistantPart): part is ToolCallPart =>
-  part.type === "tool-call";
-
-const holdsModelText = (parts: readonly AssistantPart[]) =>
-  parts.some((part) => part.type === "text" && part.text.trim() !== "");
-
-export const untrustedStepsStubbed = (
-  steps: readonly ModelMessage[]
 ): readonly ModelMessage[] => {
-  const outputs = toolOutputsOf(steps);
-  const stubs = steps.flatMap((message) => {
-    const parts = assistantPartsOf(message);
-    return [
-      ...(holdsModelText(parts) ? [untrustedModelTextStub] : []),
-      ...parts
-        .filter(isToolCall)
-        .map((call) =>
-          untrustedToolCallStub(call.toolName, outputs.get(call.toolCallId))
-        ),
-    ];
-  });
-  return stubs.length === 0
-    ? []
-    : [{ role: "assistant", content: stubs.join("\n") }];
+  if (message.role !== "assistant") {
+    return [message];
+  }
+  const parts = assistantPartsOf(message);
+  const kept = parts.filter(
+    (part) => part.type !== "text" || !holdsOnlyStubs(part.text)
+  );
+  if (kept.length === parts.length) {
+    return [message];
+  }
+  return kept.length === 0 ? [] : [{ ...message, content: kept }];
 };
 
-const toolResultLimited = (
+const sizeOf = (output: ToolOutput) => JSON.stringify(output).length;
+
+interface LargeResultRules {
+  readonly calls: ReadonlyMap<string, ToolCallPart>;
+  readonly limits: StoredFormLimitValues;
+  readonly source: StubSource;
+}
+
+const largeResultStubbed = (
   part: ToolResultPart,
-  { maxStoredToolResultCharacters }: StoredFormLimitValues
-): ToolResultPart =>
-  sizeOf(part.output) > maxStoredToolResultCharacters
+  { calls, limits, source }: LargeResultRules
+): ToolResultPart => {
+  const size = sizeOf(part.output);
+  if (size <= limits.maxStoredToolResultCharacters) {
+    return part;
+  }
+  return {
+    ...part,
+    output: resultStubOf({
+      removed: `Result of ${size} characters`,
+      call: calls.get(part.toolCallId) ?? {
+        toolName: part.toolName,
+        input: undefined,
+      },
+      output: part.output,
+      source,
+    }),
+  };
+};
+
+const largeResultsStubbed = (
+  message: ModelMessage,
+  rules: LargeResultRules
+): ModelMessage =>
+  message.role === "tool"
     ? {
-        ...part,
-        output: {
-          type: "text",
-          value: largeToolResultStub(part.toolName, part.output),
-        },
+        ...message,
+        content: message.content.map((part) =>
+          part.type === "tool-result" ? largeResultStubbed(part, rules) : part
+        ),
       }
-    : part;
+    : message;
 
 export const trustedStepsLimited = (
   steps: readonly ModelMessage[],
-  limits: StoredFormLimitValues
-): readonly ModelMessage[] =>
-  steps.map((message) =>
-    message.role === "tool"
-      ? {
-          ...message,
-          content: message.content.map((part) =>
-            part.type === "tool-result" ? toolResultLimited(part, limits) : part
-          ),
-        }
-      : message
+  limits: StoredFormLimitValues,
+  source: StubSource
+): readonly ModelMessage[] => {
+  const calls = new Map(
+    steps
+      .flatMap((message) => assistantPartsOf(message).filter(isToolCall))
+      .map((call) => [call.toolCallId, call])
   );
+  return steps
+    .flatMap(withoutStubReplyText)
+    .map((message) => largeResultsStubbed(message, { calls, limits, source }));
+};

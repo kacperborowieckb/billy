@@ -73,3 +73,105 @@ describe("the Conversation Stubs migration", () => {
     expect(counts).toEqual({ messages: 0, recordedEvents: 0 });
   });
 });
+
+const stubStepsMigration = "20261128093446_conversation_stub_steps";
+
+const migrationsBeforeStubSteps = Object.fromEntries(
+  Object.entries(personalAgentMigrations.migrations).filter(
+    ([name]) => name < stubStepsMigration
+  )
+);
+
+const toolStubLine =
+  "[search_notes: done. Input and result removed from the history]";
+
+const toolCallPart = {
+  type: "tool-call",
+  toolCallId: "call-1",
+  toolName: "search_notes",
+  input: {},
+};
+
+const replyStub = "[Reply sent to the Owner. Text removed from the history]";
+
+const seeded = (
+  kind: "step" | "reply",
+  content: unknown,
+  compactedAt: string | null = null
+) => ({ kind, compactedAt, message: { role: "assistant", content } });
+
+const deletedRows = [
+  seeded("step", `[Model text removed from the history]\n${toolStubLine}`),
+  seeded(
+    "reply",
+    `${toolStubLine}\n[Notion notion-fetch: done. Result removed from the history. Call the tool again to read it]\n`
+  ),
+  seeded("step", [{ type: "text", text: toolStubLine }]),
+  seeded("reply", `  ${toolStubLine}\r\n\r\n${replyStub}\r\n`),
+  seeded("reply", `${toolStubLine}\r${replyStub}`),
+];
+
+const copiedTextWithCall = seeded("step", [
+  { type: "text", text: toolStubLine },
+  toolCallPart,
+]);
+
+const keptRows = [
+  seeded("step", toolStubLine, "2026-11-27T00:00:00.000Z"),
+  seeded("step", [{ type: "text", text: "I look at your Notes." }]),
+  seeded("reply", replyStub),
+  seeded("reply", `I wrote this: ${toolStubLine}`),
+  seeded("reply", `${toolStubLine}\nYour call is at 15:00 [Calendar]`),
+  seeded("reply", `${toolStubLine} Your call is at 15:00 [Calendar]`),
+  seeded("reply", `[Calendar note: call at 15:00. ${toolStubLine}`),
+  seeded("step", [
+    { type: "text", text: `${toolStubLine}\nI look again [Notion]` },
+    toolCallPart,
+  ]),
+];
+
+const seededRows = [...deletedRows, copiedTextWithCall, ...keptRows];
+
+const seedStubSteps = (storage: DurableObjectStorage) =>
+  Effect.runPromise(
+    Effect.gen(function* seedEffect() {
+      const { database } = yield* AgentStorage;
+      for (const { kind, compactedAt, message } of seededRows) {
+        yield* database.run(
+          sql`INSERT INTO conversation_messages (event_id, kind, message, recorded_at, compacted_at) VALUES ('turn', ${kind}, ${JSON.stringify(message)}, '2026-11-27T00:00:00.000Z', ${compactedAt})`
+        );
+      }
+    }).pipe(
+      Effect.provide(
+        AgentStorage.layer(storage, {
+          migrations: migrationsBeforeStubSteps,
+        }).pipe(Layer.orDie)
+      )
+    )
+  );
+
+describe("the migration of the Stub steps", () => {
+  it("removes each Stub that the next request would send as model text, and keeps the other rows", async () => {
+    const ownerId = await addOwner(9703);
+    const agent = await personalAgentFor(
+      env.PERSONAL_AGENT,
+      OwnerIdSchema.make(ownerId)
+    );
+
+    const kept = await runInDurableObject(agent, async (_instance, state) => {
+      await seedStubSteps(state.storage);
+      await migrateFully(state.storage);
+      return state.storage.sql
+        .exec<{ message: string }>(
+          "SELECT message FROM conversation_messages ORDER BY sequence"
+        )
+        .toArray()
+        .map((row) => JSON.parse(row.message) as unknown);
+    });
+
+    expect(kept).toEqual([
+      { role: "assistant", content: [toolCallPart] },
+      ...keptRows.map((row) => row.message),
+    ]);
+  });
+});
