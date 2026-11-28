@@ -39,11 +39,11 @@ The fake OAuth server now sends `response_types_supported` in its metadata and `
 
 ### Associated data: can the adapter derive it from the key?
 
-Yes, with conditions.
+In part. The catalog id and the purpose: yes. The Owner Id: no.
 
 - The key of the provider is `/<client name>/<server id>/...`. The rest names the purpose: `<client id>/token`, `<client id>/client_info/`, `<client id>/code_verifier...`, `state/<nonce>`, or `oauth_discovery` (provider, `keyPrefix` and the functions after it).
-- The adapter does not parse the key. It binds the Owner Id and the whole key. The key holds the server id and the purpose, so a record that is copied to another Connection, purpose, or Owner does not open. Tests: `does not open a record that was copied to another Connection`, `... another purpose`, `does not open the record of another Owner`.
-- The Owner Id is not in the key. The adapter gets it in its constructor. The client name cannot carry it, because the library also sends the client name to the authorization server as `client_name`.
+- The adapter does not parse the key. It binds the whole key, which holds the server id and the purpose. A record that is copied to another Connection or purpose does not open. The server id is the catalog id only if Billy registers the server under the catalog id. Tests: `does not open a record that was copied to another Connection`, `... another purpose`, `does not open the record of another Owner`.
+- The Owner Id is not in the key. The adapter gets it in its constructor and binds it too, so a record of another Owner does not open. The client name cannot carry the Owner Id, because the library also sends the client name to the authorization server as `client_name`.
 
 Conditions for a replacement:
 
@@ -55,7 +55,7 @@ Conditions for a replacement:
 
 ### Refresh: one request for two calls?
 
-No. Two calls at the same time send two refresh requests. The transport calls `auth()` for each 401 (auth, line 283), and nothing joins the calls. Test: `makes one token request for each call that needs it`.
+No. Two calls at the same time send two refresh requests. The transport calls `auth()` for each 401 (auth, `handleOAuthUnauthorized`, line 252), and nothing joins the calls. Test: `makes one token request for each call that needs it`.
 
 With rotation, the order matters. The first refresh saves the new tokens. The second refresh gets `invalid_grant` for the old token, and `auth()` then deletes the stored tokens (auth, line 640). The Connection that was good needs a new sign-in. Test: `deletes a rotated token when an older refresh is refused later`.
 
@@ -74,7 +74,7 @@ The library also refreshes only after a 401. It does not read `expires_in`.
 | A wrong `iss` is refused | Yes | `refuses a wrong iss and uses up the state` |
 | A missing `iss` is refused when the server promised it | Yes | `refuses no iss and uses up the state` |
 | A refused `iss` changes nothing | **No.** The manager uses up the state before the `iss` check, and marks the connection failed. The real callback is then refused | same tests, manager line 1882 |
-| An unknown state changes nothing | Yes | `ignores an unknown state and keeps the pending request` |
+| An unknown state changes nothing | **In part.** The pending request stays. The callback is refused only while the connection object is `authenticating` or `failed`. In other states it reports success (see the replay row) | `ignores an unknown state and keeps the pending request`, `exchanges one time and reports success for any later callback` |
 | One exchange for one state | Yes, also for two callbacks at the same time | `exchanges one time and reports success for any later callback` |
 | A replay is checked | **No.** When the connection object is `connecting`, `connected`, `discovering`, or `ready`, every callback with a state of that server reports success, also an unknown state and a second callback while the exchange still runs | same test, manager line 1339 |
 | A replay finishes a connect that failed after the exchange | **No** | spike |
@@ -187,6 +187,14 @@ Two shims kept known gaps from hiding other results: the fetch function kept the
 `mcp-refresh-units.test.ts` tests classes of Billy with fakes. It passes and says nothing about the library.
 
 "Reads our records" means that the test reads the `oauth:`, `tokens:`, or `client:` records or the state format. A replacement must rewrite these 17 tests. The results do not show if the behavior behind them holds.
+
+The 17 tests that read our records:
+
+| File | Tests |
+| --- | --- |
+| `mcp-connect.test.ts` | `uses up the login proof at the first POST`; `sends the Owner to the authorization server with PKCE S256 and a state without the Owner` |
+| `mcp-oauth-callback.test.ts` | `refuses a wrong nonce`; `refuses no nonce`; `refuses an unknown routing id`; `refuses a routing id of the wrong shape`; `refuses a routing id of another namespace`; `refuses an empty code and keeps the request`; `refuses an empty error and keeps the request`; `keeps no token, client secret, code, or verifier in plain text after a full connect`; `opens a sealed record only for its own Owner and Connection`; `opens a record that an older key sealed after a rotation`; `keeps the old refresh token when a refresh brings no new one` |
+| `mcp-token-refresh.test.ts` | `refreshes before the call when the stored token is about to expire`; `keeps the old refresh token when the response has no new one`; `reads an old sealed client record with no token endpoint and moves to needs sign-in at the next refresh`; `refreshes stored tokens before an Operator add connects` |
 
 "Behavior" means that the library with the wiring of the spike does not keep a rule. More Billy code can close some of these gaps. The 23 tests, by cause:
 
