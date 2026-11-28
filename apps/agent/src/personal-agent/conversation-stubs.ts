@@ -142,7 +142,7 @@ const withoutStubReplyText = (
 
 const sizeOf = (output: ToolOutput) => JSON.stringify(output).length;
 
-interface StoredLimits {
+interface LargeResultRules {
   readonly calls: ReadonlyMap<string, ToolCallPart>;
   readonly limits: StoredFormLimitValues;
   readonly source: StubSource;
@@ -150,7 +150,7 @@ interface StoredLimits {
 
 const largeResultStubbed = (
   part: ToolResultPart,
-  { calls, limits, source }: StoredLimits
+  { calls, limits, source }: LargeResultRules
 ): ToolResultPart => {
   const size = sizeOf(part.output);
   if (size <= limits.maxStoredToolResultCharacters) {
@@ -172,13 +172,13 @@ const largeResultStubbed = (
 
 const largeResultsStubbed = (
   message: ModelMessage,
-  stored: StoredLimits
+  rules: LargeResultRules
 ): ModelMessage =>
   message.role === "tool"
     ? {
         ...message,
         content: message.content.map((part) =>
-          part.type === "tool-result" ? largeResultStubbed(part, stored) : part
+          part.type === "tool-result" ? largeResultStubbed(part, rules) : part
         ),
       }
     : message;

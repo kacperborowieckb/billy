@@ -4,7 +4,6 @@ import type { ModelStep } from "../model-gateway/model-step.ts";
 import { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
 import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
-import { unusableReplyFailure } from "./needed-text-reply.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import type {
   ModelFailure,
@@ -81,7 +80,16 @@ export const unusableReply = (
   records: OutcomeRecords,
   { reply, steps }: EndedGeneration,
   reason: string
-) => failedWith(records, unusableReplyFailure(reply, reason, steps));
+) =>
+  failedWith(
+    records,
+    new ModelUnavailable({
+      modelId: reply.modelId,
+      reasoningEffort: reply.reasoningEffort,
+      cause: new Error(reason),
+      steps,
+    })
+  );
 
 interface Decision extends EndedGeneration {
   readonly kind: OutcomeKind;

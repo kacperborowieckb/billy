@@ -70,7 +70,8 @@
         "docs/decisions/0027-actions-and-approval.md",
         "docs/decisions/0033-prompt-and-conversation-architecture.md",
         "docs/decisions/0034-architecture-review-changes.md",
-        "docs/decisions/0035-summary-open-items.md"
+        "docs/decisions/0035-summary-open-items.md",
+        "docs/decisions/0038-conversation-tool-history.md"
       ]
     },
     {
@@ -202,7 +203,8 @@
         "docs/decisions/0024-reaction-plan-on-reply-planned.md",
         "docs/decisions/0025-restart-mid-turn.md",
         "docs/decisions/0033-prompt-and-conversation-architecture.md",
-        "docs/decisions/0034-architecture-review-changes.md"
+        "docs/decisions/0034-architecture-review-changes.md",
+        "docs/decisions/0038-conversation-tool-history.md"
       ]
     },
     {
@@ -230,7 +232,8 @@
         "docs/decisions/0025-restart-mid-turn.md",
         "docs/decisions/0027-actions-and-approval.md",
         "docs/decisions/0033-prompt-and-conversation-architecture.md",
-        "docs/decisions/0034-architecture-review-changes.md"
+        "docs/decisions/0034-architecture-review-changes.md",
+        "docs/decisions/0038-conversation-tool-history.md"
       ]
     },
     {
@@ -284,7 +287,8 @@
       "adrs": [
         "docs/decisions/0009-agent-loop-and-client-boundaries.md",
         "docs/decisions/0029-untrusted-tool-results.md",
-        "docs/decisions/0036-mcp-connections.md"
+        "docs/decisions/0036-mcp-connections.md",
+        "docs/decisions/0038-conversation-tool-history.md"
       ]
     },
     {

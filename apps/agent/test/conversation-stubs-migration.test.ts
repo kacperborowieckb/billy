@@ -82,42 +82,46 @@ const migrationsBeforeStubSteps = Object.fromEntries(
   )
 );
 
-const seededRows = [
-  {
-    kind: "step",
-    compactedAt: null,
-    message: {
-      role: "assistant",
-      content:
-        "[Model text removed from the history]\n[search_notes: done. Input and result removed from the history]",
-    },
-  },
-  {
-    kind: "step",
-    compactedAt: "2026-11-27T00:00:00.000Z",
-    message: {
-      role: "assistant",
-      content:
-        "[search_notes: done. Input and result removed from the history]",
-    },
-  },
-  {
-    kind: "step",
-    compactedAt: null,
-    message: {
-      role: "assistant",
-      content: [{ type: "text", text: "I look at your Notes." }],
-    },
-  },
-  {
-    kind: "reply",
-    compactedAt: null,
-    message: {
-      role: "assistant",
-      content: "[Reply sent to the Owner. Text removed from the history]",
-    },
-  },
+const toolStubLine =
+  "[search_notes: done. Input and result removed from the history]";
+
+const toolCallPart = {
+  type: "tool-call",
+  toolCallId: "call-1",
+  toolName: "search_notes",
+  input: {},
+};
+
+const replyStub = "[Reply sent to the Owner. Text removed from the history]";
+
+const seeded = (
+  kind: "step" | "reply",
+  content: unknown,
+  compactedAt: string | null = null
+) => ({ kind, compactedAt, message: { role: "assistant", content } });
+
+const deletedRows = [
+  seeded("step", `[Model text removed from the history]\n${toolStubLine}`),
+  seeded(
+    "reply",
+    `${toolStubLine}\n[Notion notion-fetch: done. Result removed from the history. Call the tool again to read it]\n`
+  ),
+  seeded("step", [{ type: "text", text: toolStubLine }]),
 ];
+
+const copiedTextWithCall = seeded("step", [
+  { type: "text", text: toolStubLine },
+  toolCallPart,
+]);
+
+const keptRows = [
+  seeded("step", toolStubLine, "2026-11-27T00:00:00.000Z"),
+  seeded("step", [{ type: "text", text: "I look at your Notes." }]),
+  seeded("reply", replyStub),
+  seeded("reply", `I wrote this: ${toolStubLine}`),
+];
+
+const seededRows = [...deletedRows, copiedTextWithCall, ...keptRows];
 
 const seedStubSteps = (storage: DurableObjectStorage) =>
   Effect.runPromise(
@@ -138,7 +142,7 @@ const seedStubSteps = (storage: DurableObjectStorage) =>
   );
 
 describe("the migration of the Stub steps", () => {
-  it("deletes each sent step row that holds Stubs as model text, and keeps the other rows", async () => {
+  it("removes each Stub that the next request would send as model text, and keeps the other rows", async () => {
     const ownerId = await addOwner(9703);
     const agent = await personalAgentFor(
       env.PERSONAL_AGENT,
@@ -156,6 +160,9 @@ describe("the migration of the Stub steps", () => {
         .map((row) => JSON.parse(row.message) as unknown);
     });
 
-    expect(kept).toEqual(seededRows.slice(1).map((row) => row.message));
+    expect(kept).toEqual([
+      { role: "assistant", content: [toolCallPart] },
+      ...keptRows.map((row) => row.message),
+    ]);
   });
 });

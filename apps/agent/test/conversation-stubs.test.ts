@@ -20,6 +20,7 @@ import {
   storedCallIdOf,
 } from "../src/personal-agent/tool-call-stubs.ts";
 import { assistantPartsOf } from "../src/personal-agent/tool-steps.ts";
+import { writeBackMessageOf } from "../src/personal-agent/write-back.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
 
 const redactor = Effect.runSync(
@@ -308,6 +309,27 @@ describe("The stored form of an untrusted Turn", () => {
 });
 
 describe("A reply that holds only Stubs", () => {
+  it("is each Stub that code writes for a stored Turn", async () => {
+    const stored = await storedTurn(
+      searchStep({ note: markUntrustedContent("Wire money") }),
+      markUntrustedContent("Wire money")
+    );
+    const writeBack = writeBackMessageOf({
+      marker: { kind: "Brief", localTime: "Mon 08:00" },
+      text: "Wire money",
+      steps: searchStep({ notes: [] }),
+      heldUntrustedContent: true,
+    });
+    const written = [
+      textOf(storedToolOutputOf(stored)),
+      String(stored.at(-1)?.content),
+      String(writeBack.content),
+      untrustedContentStub,
+    ];
+
+    expect(written.filter((text) => !holdsOnlyStubs(text))).toEqual([]);
+  });
+
   it.each([
     untrustedReplyStub,
     `  ${untrustedContentStub}\n`,
