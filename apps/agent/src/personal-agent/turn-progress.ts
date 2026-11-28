@@ -228,6 +228,7 @@ const makeTurnProgress = Effect.gen(function* makeTurnProgressEffect() {
     usedStepCount,
     recordingToolCall,
     recordFailedToolCall,
+    recordSteps: insertMessages,
     replaceSteps,
   };
 });

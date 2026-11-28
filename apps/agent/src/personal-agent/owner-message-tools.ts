@@ -118,10 +118,10 @@ export const ownerMessageTools = (
     behavior,
     mcp,
     ...noteServices
-  }: OwnerMessageToolServices
+  }: OwnerMessageToolServices,
+  eventId = turnEventOf(burst).eventId
 ) => {
   const { progress, redactor } = noteServices;
-  const { eventId } = turnEventOf(burst);
   const scheduleServices = scheduleToolServicesOf(
     {
       schedules,
@@ -143,7 +143,8 @@ export const ownerMessageTools = (
   return {
     ...noteToolsFor(
       { ...noteServices, ownerTimeZone: scheduleServices.ownerTimeZone },
-      burst
+      burst,
+      eventId
     ),
     [updateProfileToolName]: updateProfileTool(
       {

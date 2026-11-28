@@ -11,13 +11,19 @@ import { blockedCallReason } from "../src/approval/tool-gate.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { testMcpCatalogId } from "../src/mcp/mcp-test-catalog.ts";
 import { callMcpToolToolName } from "../src/mcp/mcp-tool-names.ts";
+import { untrustedContentOpening } from "../src/notes/note.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { failedApprovedCallMessage } from "../src/personal-agent/approval-result-turn.ts";
+import { untrustedReplyStub } from "../src/personal-agent/conversation-stubs.ts";
+import { honestFailureText } from "../src/personal-agent/delivery.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
+import { unconfirmedToolMessage } from "../src/personal-agent/recorded-tool.ts";
 import {
   fakeMcpLimits,
   fakeMcpServer,
   fakeModel,
   fakeTelegram,
+  holdModel,
   resetFakes,
   scriptModel,
 } from "./fakes.ts";
@@ -359,5 +365,271 @@ describe("Approval for an MCP call that changes a service", () => {
       expect(await statesOf(ownerId)).toEqual(["unconfirmed"])
     );
     expect(fakeMcpServer.calls).toHaveLength(1);
+  });
+});
+
+interface ConversationRow extends Record<string, SqlStorageValue> {
+  kind: string;
+  message: string;
+}
+
+const conversationOf = async (ownerId: string) => {
+  const rows = await runInDurableObject(await agentOf(ownerId), (_, state) =>
+    state.storage.sql
+      .exec<ConversationRow>(
+        "SELECT kind, message FROM conversation_messages ORDER BY sequence"
+      )
+      .toArray()
+  );
+  return rows.map((row) => ({
+    kind: row.kind,
+    message: JSON.parse(row.message) as { role: string; content: unknown },
+  }));
+};
+
+const lastToolResultIdOf = (
+  prompt: (typeof fakeModel.doGenerateCalls)[number]["prompt"]
+) =>
+  prompt
+    .flatMap((message) => (message.role === "tool" ? message.content : []))
+    .findLast((part) => part.type === "tool-result")?.toolCallId;
+
+const lastPromptText = () =>
+  JSON.stringify(fakeModel.doGenerateCalls.at(-1)?.prompt ?? []);
+
+const pressApprove = (userId: number, approval: ApprovalRow) =>
+  press(
+    userId,
+    `approve:${approval.pending_approval_id}`,
+    Number(approval.channel_message_id)
+  );
+
+const waitForSentAfter = (sentBefore: number, count = 1) =>
+  vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(sentBefore + count), {
+    timeout: 10_000,
+  });
+
+describe("The answer after an approved MCP call", { timeout: 40_000 }, () => {
+  it("sends a new message that uses the result of an approved read", async () => {
+    fakeMcpServer.listHiddenTools();
+    const { approval } = await askFor(9970, "hidden_new_tool", {});
+    const modelCalls = fakeModel.doGenerateCalls.length;
+    scriptModel([{ say: "The service answered: ran hidden_new_tool." }]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9970, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls + 1);
+    expect(toolOutputOf()).toContain("ran hidden_new_tool");
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(
+      "The service answered: ran hidden_new_tool."
+    );
+    expect(fakeTelegram.sent.at(-1)?.body.reply_markup).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(fakeTelegram.edits.at(-1)?.body.text).toContain("Approved, done")
+    );
+  });
+
+  it("gives the result to the model as Untrusted Content and keeps only Stubs in the history", async () => {
+    const { ownerId, approval } = await askFor(9971, "create_page", {
+      title: "New",
+    });
+    scriptModel([{ say: "I created the page New." }]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9971, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(toolOutputOf()).toContain(untrustedContentOpening);
+    expect(toolOutputOf()).toContain('"status":"done"');
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("I created the page New.");
+    await vi.waitFor(async () => {
+      const rows = await conversationOf(ownerId);
+      expect(rows.at(-1)).toEqual({
+        kind: "reply",
+        message: { role: "assistant", content: untrustedReplyStub },
+      });
+    });
+    const stored = JSON.stringify(await conversationOf(ownerId));
+    expect(stored).not.toContain("ran create_page");
+    expect(stored).not.toContain(untrustedContentOpening);
+    expect(stored).toContain(
+      "[Test server create_page: done. Result removed from the history. Call the tool again to read it]"
+    );
+  });
+
+  it("makes the answering Turn untrusted, so a change call from the result waits for a tap", async () => {
+    const { ownerId, approval } = await askFor(9972, "create_page", {
+      title: "New",
+    });
+    scriptModel([
+      callOf("rename_page", { id: "1", title: fakeMcpInjection }),
+      { say: "The rename waits for your Approval." },
+    ]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9972, approval);
+    await waitForSentAfter(sentBefore, 2);
+
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["executed", "pending"])
+    );
+    expect(fakeMcpServer.calls).toEqual([
+      { tool: "create_page", arguments: { title: "New" } },
+    ]);
+    const [, rename] = await approvalsOf(ownerId);
+    expect(
+      fakeTelegram.sent.at(-1)?.body.reply_markup?.inline_keyboard[0]
+    ).toContainEqual({
+      text: "Approve",
+      callback_data: `approve:${rename?.pending_approval_id}`,
+    });
+    scriptModel([{ say: "Renamed." }]);
+
+    await pressApprove(9972, rename as ApprovalRow);
+    await waitForSentAfter(sentBefore, 3);
+
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["executed", "executed"])
+    );
+    expect(fakeMcpServer.calls).toHaveLength(2);
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Renamed.");
+  });
+
+  it("gives the model the failure of an approved call, never a done result", async () => {
+    const { approval } = await askFor(9973, "failing_write", {});
+    scriptModel([{ say: "The write failed." }]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9973, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(toolOutputOf()).toContain(
+      failedApprovedCallMessage("The service reported an error")
+    );
+    expect(toolOutputOf()).toContain("error-text");
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("The write failed.");
+  });
+
+  it("gives the model the unconfirmed outcome of an approved call that timed out", async () => {
+    fakeMcpLimits.callTimeoutMillis = 100;
+    const { approval } = await askFor(9974, "slow_write", { title: "Slow" });
+    scriptModel([{ say: "I cannot confirm that it ran." }]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9974, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(toolOutputOf()).toContain(unconfirmedToolMessage);
+    expect(toolOutputOf()).not.toContain('"status":"done"');
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(
+      "I cannot confirm that it ran."
+    );
+  });
+
+  it("refuses silence and a reaction, so the Owner gets a text", async () => {
+    const { approval } = await askFor(9975, "create_page", { title: "New" });
+    scriptModel([
+      { callTool: "stay_silent", input: {} },
+      { say: "I created the page." },
+    ]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9975, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(lastPromptText()).toContain("must get a text reply");
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("I created the page.");
+    expect(fakeTelegram.reactions).toEqual([]);
+  });
+
+  it("answers two approved calls with two ordered messages and no duplicate", async () => {
+    const ownerId = await ownerWithConnection(9976);
+    scriptModel([
+      {
+        callTools: [
+          {
+            tool: callMcpToolToolName,
+            input: callOf("create_page", { title: "One" }).input,
+          },
+          {
+            tool: callMcpToolToolName,
+            input: callOf("create_page", { title: "Two" }).input,
+          },
+        ],
+      },
+      { say: "These wait for your Approval." },
+    ]);
+    await say(9976, "create two pages", 0);
+    const [first, second] = await vi.waitFor(async () => {
+      const rows = await approvalsOf(ownerId);
+      expect(rows.filter((row) => row.state === "pending")).toHaveLength(2);
+      return rows;
+    });
+    scriptModel([
+      { say: "Page One is created." },
+      { say: "Page Two is created." },
+    ]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await Promise.all([
+      pressApprove(9976, first as ApprovalRow),
+      pressApprove(9976, second as ApprovalRow),
+    ]);
+    await waitForSentAfter(sentBefore, 2);
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["executed", "executed"])
+    );
+
+    expect(
+      fakeTelegram.sent.slice(sentBefore).map((request) => request.body.text)
+    ).toEqual(["Page One is created.", "Page Two is created."]);
+    const answeredIds = fakeModel.doGenerateCalls
+      .slice(-2)
+      .map((call) => lastToolResultIdOf(call.prompt));
+    expect(answeredIds.toSorted()).toEqual(
+      [first?.pending_approval_id, second?.pending_approval_id].toSorted()
+    );
+  });
+
+  it("sends the honest failure text when the model gives no text for the answer", async () => {
+    const { approval } = await askFor(9978, "create_page", { title: "New" });
+    scriptModel([{ say: "" }]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9978, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(honestFailureText);
+  });
+
+  it("answers once after the Durable Object aborts before the answer", async () => {
+    const { ownerId, approval } = await askFor(9977, "create_page", {
+      title: "New",
+    });
+    const sentBefore = fakeTelegram.sent.length;
+    const releaseModel = holdModel(fakeModel.doGenerateCalls.length);
+    scriptModel([{ say: "I created the page New." }]);
+    await pressApprove(9977, approval);
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["executed"])
+    );
+
+    await abortAllDurableObjects();
+    releaseModel();
+    scriptModel([
+      { say: "I created the page New." },
+      { say: "I created the page New." },
+    ]);
+    await runDurableObjectAlarm(await agentOf(ownerId));
+    await waitForSentAfter(sentBefore);
+
+    expect(fakeMcpServer.calls).toHaveLength(1);
+    expect(
+      fakeTelegram.sent.filter(
+        (request) => request.body.text === "I created the page New."
+      )
+    ).toHaveLength(1);
   });
 });

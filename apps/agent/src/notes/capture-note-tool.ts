@@ -115,10 +115,11 @@ const resolveCapture = (
 
 export const captureNoteTool = (
   { notes, ownerTimeZone, progress, redactor }: NoteToolServices,
-  burst: Burst
+  burst: Burst,
+  eventId = turnEventOf(burst).eventId
 ) =>
   recordedTool(
-    { eventId: turnEventOf(burst).eventId, progress, redactor },
+    { eventId, progress, redactor },
     {
       name: captureNoteToolName,
       riskClass: "change",

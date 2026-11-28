@@ -96,6 +96,7 @@ export const runModelTurn = <Failure, Requirements>({
       tools: kind.tools,
       defaultReaction: behavior.defaultReaction,
       approvalAsking: approvalAskingOf(behavior, kind.asksOwnerForApproval),
+      textReplyNeeded: kind.needsTextReply === true,
     });
     const { outcome } = decided;
     yield* recordModelSteps({

@@ -9,7 +9,8 @@ export interface ApprovalPathStep {
     | "run_could_not_start"
     | "run_failed_unexpectedly"
     | "lost_run_set_unconfirmed"
-    | "message_has_nothing_to_edit";
+    | "message_has_nothing_to_edit"
+    | "result_turn_without_tools";
   readonly toolName?: string;
   readonly result?: "executed" | "failed" | "unconfirmed";
   readonly reason?: string;

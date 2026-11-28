@@ -15,6 +15,7 @@ import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import { answerApprovalRequests } from "./approval-step.ts";
 import type { ApprovalAsking } from "./approval-step.ts";
+import { missesNeededText, missingTextFailure } from "./needed-text-reply.ts";
 import {
   defaultReactionAllowed,
   outcomeWhileApprovalWaitsMessage,
@@ -67,6 +68,7 @@ interface OutcomeGeneration {
   readonly tools: AgentTools;
   readonly defaultReaction: string;
   readonly approvalAsking: ApprovalAsking;
+  readonly textReplyNeeded: boolean;
 }
 
 export const generateWithOutcomeTools = Effect.fnUntraced(
@@ -77,6 +79,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     tools,
     defaultReaction,
     approvalAsking,
+    textReplyNeeded,
   }: OutcomeGeneration) {
     const modelGateway = yield* ModelGateway;
     const channel = yield* Channel;
@@ -177,6 +180,17 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         continue;
       }
       if (calls.length === 0) {
+        if (missesNeededText({ textReplyNeeded, drafts, text: reply.text })) {
+          return {
+            outcome: {
+              _tag: "ModelFailed",
+              error: missingTextFailure(reply, steps),
+            },
+            kind: undefined,
+            refusedOutcomeTools: refused,
+            drafts,
+          } satisfies DecidedOutcome;
+        }
         const reactionInstead =
           drafts.length === 0 &&
           reply.text.trim().length === 0 &&
@@ -186,6 +200,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
             earlierMessages,
             tools,
             approvalWaits: false,
+            textReplyNeeded,
           }));
         return reactionInstead
           ? replied(steps, "reaction", { emoji: defaultReaction })
@@ -200,6 +215,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
             earlierMessages,
             tools,
             approvalWaits: drafts.length > 0,
+            textReplyNeeded,
           })
         )
       );

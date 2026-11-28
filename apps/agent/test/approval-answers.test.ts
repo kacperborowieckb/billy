@@ -13,6 +13,8 @@ import {
   rejectedStatus,
 } from "../src/approval/approval-status.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
+import { failedApprovedCallMessage } from "../src/personal-agent/approval-result-turn.ts";
+import { untrustedReplyStub } from "../src/personal-agent/conversation-stubs.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import {
@@ -225,13 +227,15 @@ beforeEach(() => {
 });
 
 describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
-  it("runs the approved call once, edits the message, and records the answer", async () => {
+  it("runs the approved call once, edits the message, records the answer, and answers with the outcome in a new message", async () => {
     const { ownerId, id, messageId } = await askForReminder(9201, 1);
     const modelCalls = fakeModel.doGenerateCalls.length;
+    scriptModel([{ say: "Your Reminder is set." }]);
 
     const response = await press(9201, `approve:${id}`, { messageId });
     expect(response.status).toBe(200);
     await waitForEdits(1);
+    await waitForSends(4);
     await waitForInboxDone(ownerId);
 
     expect(await countOf(ownerId, "schedules WHERE set_by = 'owner'")).toBe(1);
@@ -255,12 +259,17 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
       expect.objectContaining({ pendingApprovalId: id, result: "executed" }),
     ]);
     expect(await ownerScheduleSetEntries(ownerId)).toHaveLength(1);
-    expect(await lastConversationEntry(ownerId)).toEqual({
+    expect(await conversationTexts(ownerId)).toContainEqual({
       role: "assistant",
       content: `Approval ${id} (${setScheduleToolName}): approved, done`,
     });
-    expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls);
-    expect(fakeTelegram.sent).toHaveLength(3);
+    expect(await lastConversationEntry(ownerId)).toEqual({
+      role: "assistant",
+      content: untrustedReplyStub,
+    });
+    expect(fakeModel.doGenerateCalls).toHaveLength(modelCalls + 1);
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe("Your Reminder is set.");
+    expect(fakeTelegram.sent.at(-1)?.body.reply_markup).toBeUndefined();
   });
 
   it("runs nothing on Reject, shows Rejected, and names only the id, the tool, and the status of the untrusted Pending Approval in the Conversation", async () => {
@@ -382,10 +391,13 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     await waitForPending(ownerId, 1);
     const [approval] = await pendingApprovalsOf(ownerId);
 
+    scriptModel([{ say: "Keeping the word failed: the list is full." }]);
+
     await press(9206, `approve:${approval?.pending_approval_id}`, {
       messageId: Number(approval?.channel_message_id),
     });
     await waitForEdits(1);
+    await waitForSends(3);
     await waitForInboxDone(ownerId);
 
     const edited = fakeTelegram.edits[0]?.body.text ?? "";
@@ -401,6 +413,12 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
         reason: "The word list is full",
       }),
     ]);
+    expect(JSON.stringify(fakeModel.doGenerateCalls.at(-1)?.prompt)).toContain(
+      failedApprovedCallMessage("The word list is full")
+    );
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(
+      "Keeping the word failed: the list is full."
+    );
   });
 
   it("lets each row of two work on its own", async () => {
@@ -486,12 +504,15 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     const { ownerId, id, messageId } = await askForReminder(9208, 1);
     const releaseEdit = fakeTelegram.holdEdits();
 
+    scriptModel([{ say: "Your Reminder is set." }]);
+
     await press(9208, `approve:${id}`, { messageId });
     await waitForEdits(1);
     await abortAllDurableObjects();
     releaseEdit();
     await runDurableObjectAlarm(await agentOf(ownerId));
     await waitForEdits(2);
+    await waitForSends(4);
     await waitForInboxDone(ownerId);
 
     expect(await countOf(ownerId, "schedules WHERE set_by = 'owner'")).toBe(1);
@@ -499,5 +520,10 @@ describe("Approve or Reject with a button", { timeout: 40_000 }, () => {
     expect(await journalOf(ownerId, "ApprovalRun")).toHaveLength(1);
     expect(fakeTelegram.edits[1]?.body.text).toContain(doneStatus);
     expect(fakeTelegram.pressAnswers).toHaveLength(1);
+    expect(
+      fakeTelegram.sent.filter(
+        (request) => request.body.text === "Your Reminder is set."
+      )
+    ).toHaveLength(1);
   });
 });
