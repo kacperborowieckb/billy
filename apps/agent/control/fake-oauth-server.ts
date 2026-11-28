@@ -1,5 +1,6 @@
 import { identityFieldsOf } from "./fake-oauth-identity.ts";
 import { createFakeRefreshGrant } from "./fake-oauth-refresh.ts";
+import { answerFakeRegistration } from "./fake-oauth-registration.ts";
 import { createFakeRevocationEndpoint } from "./fake-oauth-revocation.ts";
 import {
   answerInvalidChallengeLayout,
@@ -50,6 +51,7 @@ export const createFakeOAuthServer = () => {
     token_endpoint: state.tokenEndpoint ?? `${issuer}/token`,
     ...revocation.metadataOf(issuer),
     authorization_response_iss_parameter_supported: state.sendsIssuer,
+    response_types_supported: ["code"],
     code_challenge_methods_supported: state.supportsPkce ? ["S256"] : [],
     client_id_metadata_document_supported: state.supportsClientIdMetadata,
   });
@@ -144,17 +146,12 @@ export const createFakeOAuthServer = () => {
       return Response.json(metadataOf(origin));
     }
     if (url.pathname.endsWith("/register") && request.method === "POST") {
-      registrations.push(await request.json());
-      return Response.json(
-        {
-          client_id: "fake-dcr-client",
-          ...(state.registeredMethod === "none"
-            ? {}
-            : { client_secret: fakeOAuthSecrets.clientSecret }),
-          token_endpoint_auth_method: state.registeredMethod,
-        },
-        { status: 201 }
-      );
+      const metadata = (await request.json()) as Record<string, unknown>;
+      registrations.push(metadata);
+      return answerFakeRegistration(metadata, {
+        method: state.registeredMethod,
+        secret: fakeOAuthSecrets.clientSecret,
+      });
     }
     return null;
   };

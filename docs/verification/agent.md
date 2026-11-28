@@ -253,6 +253,10 @@ Known limit: the scripted model writes the answer text, so the tests prove what 
 
 Known limits: the fake Notion server, model, and Telegram stand in for the real ones. The tests cannot prove the real argument names of Notion tools, the real token response, or real revocation. They stay unproven until the real run of #158, which is not done yet.
 
+### MCP Connections: the OAuth flow of the library (not used)
+
+Ticket #250, research [`2026-11-28-mcp-library-oauth-flow.md`](../research/2026-11-28-mcp-library-oauth-flow.md). No production code uses the library flow. `test/mcp-sealed-oauth-storage.test.ts` checks the sealing storage adapter in real hub storage: a stored record is sealed, it does not open for another Connection, purpose, or Owner, list and delete work, and a value that is not one JSON value is refused. `test/mcp-library-oauth-flow.test.ts` runs the library provider over the adapter in the MCP client of a hub. The requests go through the outbound guard to the fake MCP server. It asserts the behavior of the library, also where Billy must not have it. Examples are two refresh requests for two calls and deleted tokens after a late refresh. Other examples are a used up state after a wrong `iss` and tokens that a second callback replaces. A failure after a library upgrade means that the research needs a new look. It does not mean that Billy is broken.
+
 ## Control CLI
 
 Run the commands from `apps/agent` with `pnpm control <command>`, or from the root with `pnpm --filter @repo/agent control <command>`.
