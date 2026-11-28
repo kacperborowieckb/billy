@@ -29,7 +29,7 @@ export interface AgentSettings {
   readonly burstWait: () => BurstWait;
   readonly traceRetention: () => TraceRetention;
   readonly storedFormLimits: () => StoredFormLimitValues;
-  readonly mcpCatalog: McpCatalog;
+  readonly mcpCatalog: () => McpCatalog;
 }
 
 export const personalAgentLayer = (

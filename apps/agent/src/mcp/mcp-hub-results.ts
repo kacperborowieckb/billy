@@ -41,7 +41,7 @@ interface ServerTool {
 export const toolCopyOf = (tool: ServerTool): McpToolCopy => ({
   name: tool.name,
   description: tool.description ?? "",
-  inputSchema: { ...(tool.inputSchema as Record<string, unknown>) },
+  inputSchema: { ...(tool.inputSchema as McpToolCopy["inputSchema"]) },
   annotations: {
     ...(tool.annotations?.destructiveHint === undefined
       ? {}

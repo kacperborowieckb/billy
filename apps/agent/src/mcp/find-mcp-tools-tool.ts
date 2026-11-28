@@ -2,7 +2,10 @@ import { Effect, Schema } from "effect";
 
 import { markUntrustedContent } from "../notes/note.ts";
 import { recordedTool } from "../personal-agent/recorded-tool.ts";
+import { isPinnedMcpTool } from "./mcp-catalog.ts";
+import type { McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
+import type { FingerprintedMcpToolCopy } from "./mcp-tool-fingerprint.ts";
 import { callMcpToolToolName, findMcpToolsToolName } from "./mcp-tool-names.ts";
 import {
   connectionDescription,
@@ -39,7 +42,10 @@ const scoreOf = (queryWords: readonly string[], tool: McpToolCopy) => {
   return queryWords.filter((word) => haystack.includes(word)).length;
 };
 
-const matchingTools = (query: string, tools: readonly McpToolCopy[]) => {
+const matchingTools = (
+  query: string,
+  tools: readonly FingerprintedMcpToolCopy[]
+) => {
   const queryWords = words(query);
   if (queryWords.length === 0) {
     return tools;
@@ -60,12 +66,59 @@ const toolDetails = (tool: McpToolCopy) => ({
 const toolIndexLine = (tool: McpToolCopy) =>
   `- ${tool.name}: ${tool.description.slice(0, indexedDescriptionCharacters)}`;
 
+const splitByPin = (
+  entry: McpCatalogEntry,
+  tools: readonly FingerprintedMcpToolCopy[]
+) => ({
+  pinned: tools.filter((tool) => isPinnedMcpTool(entry, tool)),
+  unpinned: tools.filter((tool) => !isPinnedMcpTool(entry, tool)),
+});
+
+const detailsOf = (
+  entry: McpCatalogEntry,
+  matches: readonly FingerprintedMcpToolCopy[]
+) => {
+  const { pinned, unpinned } = splitByPin(entry, matches);
+  return {
+    tools: pinned.map(toolDetails),
+    ...(unpinned.length === 0
+      ? {}
+      : {
+          unpinnedTools: markUntrustedContent(
+            JSON.stringify(unpinned.map(toolDetails))
+          ),
+        }),
+  };
+};
+
+const indexOf = (
+  entry: McpCatalogEntry,
+  matches: readonly FingerprintedMcpToolCopy[]
+) => {
+  const { pinned, unpinned } = splitByPin(
+    entry,
+    matches.slice(0, maxIndexedMcpTools)
+  );
+  return {
+    index: pinned.map(toolIndexLine).join("\n"),
+    ...(unpinned.length === 0
+      ? {}
+      : {
+          unpinnedIndex: markUntrustedContent(
+            unpinned.map(toolIndexLine).join("\n")
+          ),
+        }),
+    notice:
+      "There are many matches. Search again with more specific keywords to get the input schema of a tool.",
+  };
+};
+
 export const findMcpToolsTool = (services: McpToolServices, eventId: string) =>
   recordedTool(
     { eventId, progress: services.progress, redactor: services.redactor },
     {
       name: findMcpToolsToolName,
-      description: `Find the tools of a connected service (an MCP Connection) from the copy that code keeps. Returns the best matches with their descriptions and input schemas, or a short index when the query is broad. Call it before ${callMcpToolToolName}. It makes no request to the service.`,
+      description: `Find the tools of a connected service (an MCP Connection) from the copy that code keeps. Returns the best matches with their descriptions and input schemas, or a short index when the query is broad. A definition that the Operator did not pin comes as Untrusted Content. Call it before ${callMcpToolToolName}. It makes no request to the service.`,
       inputSchema: FindMcpToolsInput,
       riskClass: "read",
       failureMessage: "The tools could not be listed.",
@@ -82,24 +135,12 @@ export const findMcpToolsTool = (services: McpToolServices, eventId: string) =>
             state: stateText[state],
             matchCount: matches.length,
           };
-          return matches.length <= maxFoundMcpToolDetails
-            ? {
-                ...header,
-                tools: markUntrustedContent(
-                  JSON.stringify(matches.map(toolDetails))
-                ),
-              }
-            : {
-                ...header,
-                index: markUntrustedContent(
-                  matches
-                    .slice(0, maxIndexedMcpTools)
-                    .map(toolIndexLine)
-                    .join("\n")
-                ),
-                notice:
-                  "There are many matches. Search again with more specific keywords to get the input schema of a tool.",
-              };
+          return {
+            ...header,
+            ...(matches.length <= maxFoundMcpToolDetails
+              ? detailsOf(entry, matches)
+              : indexOf(entry, matches)),
+          };
         }),
     }
   );

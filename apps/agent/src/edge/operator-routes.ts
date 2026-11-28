@@ -3,6 +3,8 @@ import { Effect, Schema } from "effect";
 import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import { telegramIdentity } from "../directory/channel-identity.ts";
 import { Directory } from "../directory/directory.ts";
+import { OwnerIdSchema } from "../owner-id.ts";
+import { personalAgentFor } from "../personal-agent/personal-agent.ts";
 import {
   AddMcpConnectionRequestSchema,
   AddOwnerRequestSchema,
@@ -104,19 +106,31 @@ export const handleRefreshMcpConnection = (request: Request, env: Env) =>
         error: "Send a JSON body with an ownerId and a catalogId.",
       });
     }
-    const hub = env.MCP_HUB.getByName(body.value.ownerId);
+    const { ownerId, catalogId } = body.value;
+    const hub = env.MCP_HUB.getByName(ownerId);
     const answer = yield* Effect.tryPromise(async () => ({
       refreshed: await hub.refreshToolCatalog(
-        body.value.catalogId,
+        catalogId,
         defaultBehaviorConfig.mcpConnectTimeoutMillis
       ),
-      lastError: await hub.lastError(body.value.catalogId),
+      lastError: await hub.lastError(catalogId),
     })).pipe(Effect.option);
     if (answer._tag === "None") {
       return json(502, { error: "The MCP Hub did not answer." });
     }
-    return json(200, {
-      outcome: answer.value.refreshed.outcome,
-      lastError: answer.value.lastError ?? null,
-    });
+    const { outcome } = answer.value.refreshed;
+    const report = { outcome, lastError: answer.value.lastError ?? null };
+    if (outcome !== "refreshed") {
+      return json(200, report);
+    }
+    const tools = yield* Effect.tryPromise(async () => {
+      const agent = await personalAgentFor(
+        env.PERSONAL_AGENT,
+        OwnerIdSchema.make(ownerId)
+      );
+      return await agent.mcpToolDefinitions(catalogId);
+    }).pipe(Effect.option);
+    return tools._tag === "None"
+      ? json(502, { error: "The Personal Agent did not answer." })
+      : json(200, { ...report, tools: tools.value });
   });

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 
 import type { JudgeResult, ObservedUsage } from "../../eval/eval-contract.ts";
-import type { OwnerNotAdded } from "../operator.ts";
+import type { OwnerAddFailure } from "../operator.ts";
 import type { EvalCase } from "./eval-case.ts";
 import { evaluateCodeCheck } from "./eval-checks.ts";
 import type { CheckOutcome, EvalCheck } from "./eval-checks.ts";
@@ -15,7 +15,7 @@ export interface EvalAgent {
     evalCase: EvalCase
   ) => Effect.Effect<
     EvalRun,
-    TurnUnfinished | EvalWorkerFailed | OwnerNotAdded
+    TurnUnfinished | EvalWorkerFailed | OwnerAddFailure
   >;
   readonly judge: (
     run: OwnerRun,
@@ -77,7 +77,7 @@ const runOnce = (
   agent: EvalAgent,
   evalCase: EvalCase,
   run: number
-): Effect.Effect<RunResult, EvalWorkerFailed | OwnerNotAdded> =>
+): Effect.Effect<RunResult, EvalWorkerFailed | OwnerAddFailure> =>
   agent.runCase(evalCase).pipe(
     Effect.flatMap((evalRun) =>
       Effect.all(

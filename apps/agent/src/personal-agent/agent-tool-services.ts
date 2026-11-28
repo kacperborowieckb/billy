@@ -4,7 +4,8 @@ import { Journal } from "../journal/journal.ts";
 import { McpConnections } from "../mcp/mcp-connections.ts";
 import { McpHubPort } from "../mcp/mcp-hub-contract.ts";
 import type { McpRevocation } from "../mcp/mcp-hub-contract.ts";
-import type { McpToolCopy } from "../mcp/mcp-tool-copy.ts";
+import { fingerprintedMcpCopiesOf } from "../mcp/mcp-tool-fingerprint.ts";
+import type { FingerprintedMcpToolCopy } from "../mcp/mcp-tool-fingerprint.ts";
 import { removeMcpConnection } from "../mcp/receive-mcp-copy.ts";
 import { Notes } from "../notes/notes.ts";
 import { OwnerPreferences } from "../preferences/owner-preferences.ts";
@@ -29,9 +30,13 @@ const mcpSnapshot = Effect.gen(function* mcpSnapshotEffect() {
       state,
     ])
   );
-  const copies = new Map<string, readonly McpToolCopy[]>();
+  const copies = new Map<string, readonly FingerprintedMcpToolCopy[]>();
   for (const catalogId of states.keys()) {
-    copies.set(catalogId, yield* connections.tools(catalogId));
+    const tools = yield* connections.tools(catalogId);
+    copies.set(
+      catalogId,
+      yield* Effect.promise(() => fingerprintedMcpCopiesOf(tools))
+    );
   }
   return {
     catalog: connections.catalog,

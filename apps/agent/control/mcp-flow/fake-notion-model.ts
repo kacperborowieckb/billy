@@ -33,8 +33,6 @@ const ToolOutputSchema = Schema.fromJsonString(
     resultIds: Schema.optionalKey(
       Schema.Array(Schema.Struct({ id: Schema.String }))
     ),
-    tools: Schema.optionalKey(Schema.String),
-    index: Schema.optionalKey(Schema.String),
     notice: Schema.optionalKey(Schema.String),
   })
 );
@@ -65,15 +63,10 @@ const connect: Step = (_rest, toolResult) =>
     ? toolCall("notion-connect", "connect_mcp_server", { connection })
     : say("Tap the button to connect Notion.");
 
-const find: Step = (query, toolResult) => {
-  if (toolResult === undefined) {
-    return toolCall("notion-find", "find_mcp_tools", { connection, query });
-  }
-  const output = Option.getOrUndefined(decodeOutput(toolResult));
-  return say(
-    `Found tools: ${toolNamesIn(output?.tools ?? output?.index ?? "").join(", ")}`
-  );
-};
+const find: Step = (query, toolResult) =>
+  toolResult === undefined
+    ? toolCall("notion-find", "find_mcp_tools", { connection, query })
+    : say(`Found tools: ${toolNamesIn(toolResult).join(", ")}`);
 
 const read: Step = (query, toolResult) => {
   if (toolResult === undefined) {

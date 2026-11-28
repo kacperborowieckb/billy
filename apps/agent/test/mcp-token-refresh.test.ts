@@ -640,7 +640,7 @@ describe("the Operator refresh route", () => {
       const refreshed = await operatorRefresh(ownerId, env.OPERATOR_TOKEN);
 
       expect(refused.status).toBe(401);
-      expect(await refreshed.json()).toEqual({
+      expect(await refreshed.json()).toMatchObject({
         outcome: "refreshed",
         lastError: null,
       });
