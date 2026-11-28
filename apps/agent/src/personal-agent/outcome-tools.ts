@@ -15,6 +15,7 @@ import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import { answerApprovalRequests } from "./approval-step.ts";
 import type { ApprovalAsking } from "./approval-step.ts";
+import { missesNeededText, missingTextFailure } from "./needed-text-reply.ts";
 import {
   defaultReactionAllowed,
   outcomeWhileApprovalWaitsMessage,
@@ -179,6 +180,17 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         continue;
       }
       if (calls.length === 0) {
+        if (missesNeededText({ textReplyNeeded, drafts, text: reply.text })) {
+          return {
+            outcome: {
+              _tag: "ModelFailed",
+              error: missingTextFailure(reply, steps),
+            },
+            kind: undefined,
+            refusedOutcomeTools: refused,
+            drafts,
+          } satisfies DecidedOutcome;
+        }
         const reactionInstead =
           drafts.length === 0 &&
           reply.text.trim().length === 0 &&

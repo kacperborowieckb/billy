@@ -15,6 +15,7 @@ import { untrustedContentOpening } from "../src/notes/note.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { failedApprovedCallMessage } from "../src/personal-agent/approval-result-turn.ts";
 import { untrustedReplyStub } from "../src/personal-agent/conversation-stubs.ts";
+import { honestFailureText } from "../src/personal-agent/delivery.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { unconfirmedToolMessage } from "../src/personal-agent/recorded-tool.ts";
 import {
@@ -386,6 +387,13 @@ const conversationOf = async (ownerId: string) => {
   }));
 };
 
+const lastToolResultIdOf = (
+  prompt: (typeof fakeModel.doGenerateCalls)[number]["prompt"]
+) =>
+  prompt
+    .flatMap((message) => (message.role === "tool" ? message.content : []))
+    .findLast((part) => part.type === "tool-result")?.toolCallId;
+
 const lastPromptText = () =>
   JSON.stringify(fakeModel.doGenerateCalls.at(-1)?.prompt ?? []);
 
@@ -577,6 +585,23 @@ describe("The answer after an approved MCP call", { timeout: 40_000 }, () => {
     expect(
       fakeTelegram.sent.slice(sentBefore).map((request) => request.body.text)
     ).toEqual(["Page One is created.", "Page Two is created."]);
+    const answeredIds = fakeModel.doGenerateCalls
+      .slice(-2)
+      .map((call) => lastToolResultIdOf(call.prompt));
+    expect(answeredIds.toSorted()).toEqual(
+      [first?.pending_approval_id, second?.pending_approval_id].toSorted()
+    );
+  });
+
+  it("sends the honest failure text when the model gives no text for the answer", async () => {
+    const { approval } = await askFor(9978, "create_page", { title: "New" });
+    scriptModel([{ say: "" }]);
+
+    const sentBefore = fakeTelegram.sent.length;
+    await pressApprove(9978, approval);
+    await waitForSentAfter(sentBefore);
+
+    expect(fakeTelegram.sent.at(-1)?.body.text).toBe(honestFailureText);
   });
 
   it("answers once after the Durable Object aborts before the answer", async () => {
