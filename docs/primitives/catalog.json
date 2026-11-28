@@ -245,7 +245,7 @@
       "roots": ["apps/agent/control"],
       "adrs": [
         "docs/decisions/0001-repository-foundation.md",
-        "docs/decisions/0002-agent-authority.md",
+        "docs/decisions/0037-agent-merge-and-automations.md",
         "docs/decisions/0011-eval-runner.md",
         "docs/decisions/0012-eval-owners-and-judge-evidence.md",
         "docs/decisions/0033-prompt-and-conversation-architecture.md"
@@ -256,7 +256,7 @@
       "purpose": "The Eval runner. pnpm control eval runs each Eval Case k times against the real model through AI Gateway and reports pass^k, the failed checks, and the tokens of the agent and the judge. Each run uses a new Owner in the real Worker under the wrangler test harness, with temporary storage and a fake Telegram API. The eval Worker entry (apps/agent/eval) is the real Edge and Personal Agent plus seed, observation, and judge routes behind the Operator token; the deployed Worker does not include it. A case is a typed file in control/eval/cases, decoded by a schema before any model call: optional seeded Notes and Profile entries, Owner Events (text or forwarded), and checks. Code checks read Notes, links, the Profile, and the tool calls of the Trace; reply_judged uses the eval_judge Model Task with a fixed rubric.",
       "roots": ["apps/agent/eval", "apps/agent/control/eval"],
       "adrs": [
-        "docs/decisions/0002-agent-authority.md",
+        "docs/decisions/0037-agent-merge-and-automations.md",
         "docs/decisions/0009-agent-loop-and-client-boundaries.md",
         "docs/decisions/0011-eval-runner.md",
         "docs/decisions/0012-eval-owners-and-judge-evidence.md"
@@ -292,7 +292,7 @@
       "purpose": "pnpm control mcp-flow proves MCP Connections on the local Worker with the Notion entry and no network: connect through the Edge, find, read, propose a create, Details, Approve, disconnect, and the Journal. The flow Worker (apps/agent/mcp-flow) is the real Edge, Personal Agent, and MCP Hub plus a Journal and fake server call route behind the Operator token, and a Hub whose outbound requests go to a fake Notion server; the deployed Worker does not include it.",
       "roots": ["apps/agent/mcp-flow", "apps/agent/control/mcp-flow"],
       "adrs": [
-        "docs/decisions/0002-agent-authority.md",
+        "docs/decisions/0037-agent-merge-and-automations.md",
         "docs/decisions/0036-mcp-connections.md"
       ]
     }

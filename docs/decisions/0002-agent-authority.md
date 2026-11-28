@@ -1,6 +1,6 @@
 # 0002: Repository owner approval and local foundation scope
 
-Status: accepted
+Status: superseded by [0037](0037-agent-merge-and-automations.md)
 
 Date: 2026-11-13
 

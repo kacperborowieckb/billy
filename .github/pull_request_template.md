@@ -20,6 +20,8 @@ List commands run and results, checks omitted, and failures the change did not c
 
 ## System recap
 
-State the risk and affected area. Describe how the change uses, extends, or adds existing parts.
+Risk: low | medium | high (tiers: `docs/agents/merge-policy.md`). Keep one value.
+
+State the affected area. Describe how the change uses, extends, or adds existing parts.
 
 When a primitive, workspace, or decision changes, update the catalog, decision links, and verification targets in the same PR. For app behavior, include control CLI proof and update the generated Feature Map when routes change. State why any of these do not apply.

@@ -1,0 +1,11 @@
+{
+  "reviewers": {
+    "low": [],
+    "medium": ["coderabbitai"],
+    "high": ["coderabbitai"]
+  },
+  "humanApprovalFor": ["high"],
+  "autoMergeFor": ["low", "medium"],
+  "mergeMethod": "squash",
+  "deployCheck": null
+}

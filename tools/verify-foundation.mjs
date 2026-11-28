@@ -84,6 +84,24 @@ for (const primitive of primitives) {
   }
 }
 
+const decisionNumbersSharedBeforeTheCheck = new Set(["0025"]);
+
+const decisionNumbers = readdirSync(
+  nodePath.resolve(repository, "docs/decisions")
+)
+  .filter((file) => file.endsWith(".md"))
+  .map((file) => {
+    const number = file.match(/^(?<number>\d{4})-/u)?.groups?.number;
+    assert.ok(number, `Decision file needs a four-digit number: ${file}`);
+    return number;
+  });
+
+for (const number of new Set(decisionNumbers)) {
+  const count = decisionNumbers.filter((other) => other === number).length;
+  const allowed = decisionNumbersSharedBeforeTheCheck.has(number) ? 2 : 1;
+  assert.ok(count <= allowed, `Duplicate decision number: ${number}`);
+}
+
 const { targets } = readJson("docs/verification/targets.json");
 assert.ok(Array.isArray(targets), "Verification must contain a targets array");
 requireUnique(
