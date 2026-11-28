@@ -20,7 +20,7 @@ List commands run and results, checks omitted, and failures the change did not c
 
 ## System recap
 
-Risk: low | medium | high (tiers: `docs/decisions/0037-agent-merge-and-automations.md`). Keep one value.
+Risk: low | medium | high (tiers: `docs/agents/merge-policy.md`). Keep one value.
 
 State the affected area. Describe how the change uses, extends, or adds existing parts.
 

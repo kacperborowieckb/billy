@@ -2,10 +2,9 @@
 
 - Setup, verification, PRs, and issue triage: [CONTRIBUTING.md](CONTRIBUTING.md). Run `pnpm verify` before handoff; CI and local Git hooks use the same command.
 - Toolchain changes: [repository foundation decision](docs/decisions/0001-repository-foundation.md) and `.agents/skills/turborepo/SKILL.md`.
-- External actions, approval questions, risk tiers, and who merges: [decision 0037](docs/decisions/0037-agent-merge-and-automations.md).
-- After you open a PR: ship it with `.agents/skills/ship-pr/SKILL.md`.
+- External actions and approval questions: [decision 0037](docs/decisions/0037-agent-merge-and-automations.md).
+- Repository config for army skills (merge policy, sweeps): [docs/agents](docs/agents/merge-policy.md). Rate every PR's tier and merge by the merge policy.
 - Proving app behavior in `apps/agent`: `.agents/skills/control-billy/SKILL.md`.
-- Scheduled agent work (friction sweep, docs freshness, test pruning, legacy reaper): [automations](docs/automations.md).
 - JavaScript, TypeScript, lint, and format changes: `.agents/skills/ultracite/SKILL.md`.
 - shadcn UI (used only in `apps/site`): `.agents/skills/shadcn/SKILL.md`.
 - Motion in the Expo app (animations, gestures, sheets, haptics): `.agents/skills/animate-expo/SKILL.md`. Take curves and durations from [@repo/tokens](packages/tokens/README.md): where the skill's tables and a token disagree, the token wins (press feedback is `duration-quick`, not the recipe's 120ms). Spring configs come from the skill.

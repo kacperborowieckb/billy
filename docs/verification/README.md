@@ -20,7 +20,7 @@ For applications with routes, generate a Feature Map from the framework's route 
 
 The implementing agent updates affected catalog entries, decision links, verification guides, and generated maps with the code. It runs `pnpm verify` plus the relevant control CLI proof, and reports commands, results, and checks omitted in the PR. A generic successful health check does not prove a changed feature.
 
-The repository owner decides product behavior, authorizes protected actions, and reviews the evidence. Routine catalog and guide updates belong to the agent that changes the code. The docs freshness automation ([automations](../automations.md)) finds the ones that drift.
+The repository owner decides product behavior, authorizes protected actions, and reviews the evidence. Routine catalog and guide updates belong to the agent that changes the code. The docs sweep ([sweeps](../agents/sweeps.md)) finds the ones that drift.
 
 The structural check proves that required records exist and link to current files. It cannot prove that a guide is accurate or that a workspace's verification script covers its behavior. Those remain implementation and review duties.
 

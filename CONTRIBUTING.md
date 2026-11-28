@@ -22,7 +22,7 @@ Add a short decision record for a choice that affects several PRs. Include the d
 
 Use the PR template. State the problem, resulting behavior, risk, reversibility, verification results, and cleanup work. Report checks you did not run and failures the change did not cause. Test expectation changes must follow the intended behavior and have an explanation.
 
-Changes reach `main` only through a pull request with a passing `Verify` check. Set the risk tier in the System recap. Then take the PR through the ship loop (`.agents/skills/ship-pr/SKILL.md`). The agent merges low and medium PRs when the loop says `ready-to-merge`. The repository owner merges high PRs and controls publishing and releases. [Decision 0037](docs/decisions/0037-agent-merge-and-automations.md) defines the tiers.
+Changes reach `main` only through a pull request with a passing `Verify` check. Set the risk tier in the System recap. The [merge policy](docs/agents/merge-policy.md) names the tiers, their gates, and who merges each one. The repository owner merges high PRs and controls publishing and releases.
 
 ## Friction, cleanup, and priorities
 
@@ -37,4 +37,4 @@ Give each issue a priority:
 
 Use `needs-decision` when an issue needs an owner decision. Record the question and wait for the answer before dependent work. Work on the highest-priority unblocked issue first. Record skipped friction and its reason as `friction-skipped`.
 
-The forms record priority and decision status in the issue body. Apply the matching `friction`, `friction-skipped`, `P0` through `P3`, and `needs-decision` labels during triage. Agents file and label issues as part of PR work and of the [scheduled automations](docs/automations.md); the repository owner resolves decision-marked issues. Every issue an agent files gets a priority label.
+The forms record priority and decision status in the issue body. Apply the matching `friction`, `friction-skipped`, `P0` through `P3`, and `needs-decision` labels during triage. Agents file and label issues as part of PR work and of the [sweeps](docs/agents/sweeps.md); the repository owner resolves decision-marked issues. Every issue an agent files gets a priority label.
