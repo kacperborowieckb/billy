@@ -12,6 +12,7 @@ It supersedes these rules. All other rules of the named records stay in force.
 - [0029](0029-untrusted-tool-results.md): the same rule for a `change` call after an untrusted tool result.
 - [0034](0034-architecture-review-changes.md), "A Side Session follows its Trust Level": `close_open_loop` is denied in an `untrusted` Side Session.
 - [0036](0036-mcp-connections.md), "Approval" and "`capture_note` in an untrusted Turn": a `change` call, and an edit or a link to an existing Note, need Approval.
+- [0038](0038-conversation-tool-history.md), "Reply guard": code runs the model step again for a reply that holds only Stubs. A Turn that stops at the refusal limit is the exception: it sends no text of the model, so it has no Stub check and no new model step.
 
 ## Decision
 
@@ -31,7 +32,7 @@ It supersedes these rules. All other rules of the named records stay in force.
 
 A call that names existing data only by an id gives the reviewer no way to check the target, so its instructions say to ask.
 
-An earlier message asked for its change at an earlier time, and the reviewer cannot see if it was done. So its instructions count it only when a message of the Burst continues it, or when it asks for the change to happen later or again. In every other case they say to ask. This is a rule for the model, not a check in code.
+An earlier message asked for its change at an earlier time, and the reviewer cannot see if it was done. So its instructions count it only when a message of the Burst continues it, or when it is a standing instruction to make this kind of change each time something happens. An earlier request to set or change something, for example a Reminder with a due time in the future, counts one time. In every other case they say to ask. This is a rule for the model, not a check in code.
 
 ### What the reviewer answers
 
@@ -43,13 +44,13 @@ An earlier message asked for its change at an earlier time, and the reviewer can
 
 ### Limits
 
-- **Refusals.** After `autoReviewMaxRefusals` (3) `refuse` answers in one Turn, code reviews and runs no more `change` calls in that Turn, also a call of the same model step that the reviewer allowed before or that needs no review, makes no more model step, and adds a fixed line to the reply: "I stopped here: a safety check refused several changes that your messages did not ask for, so I did not make them. If you want one of them, tell me directly." A reply text of that step that holds only Stubs is dropped, with no new model step ([0038](0038-conversation-tool-history.md)).
+- **Refusals.** After `autoReviewMaxRefusals` (3) `refuse` answers in one Turn, code reviews and runs no more `change` calls in that Turn, also a call of the same model step that the reviewer allowed before or that needs no review, makes no more model step, and sends only a fixed line: "I stopped here: a safety check refused several changes that your messages did not ask for, so I did not make them. If you want one of them, tell me directly." The model wrote the text of that step before it got the refusals, so it can claim a change that did not run. Code sends none of it. So the reply also does not name a change that ran earlier in the Turn. Approval buttons of the same step still go with the line. The Trace keeps the text of the model.
 - The count of refusals lives in the running Turn. A Turn that runs again after a Restart or a reset starts a new count. The step limit and the daily budget still bound it.
 - **Cost.** Each Owner has a daily token budget for the reviewer, `autoReviewDailyTokenBudget` (200,000 input and output tokens, local day of the Owner). Over it, code asks the Owner with no model call. A step limit and the refusal limit bound one Turn.
 
 ### What the Owner sees for `refuse`
 
-The model gets the reason and answers the Owner in its own words. The rules of the outcome tools already refuse silence and a reaction after a failed changing call, so the Owner always gets a text. Code adds its own line only at the refusal limit.
+The model gets the reason and answers the Owner in its own words. The rules of the outcome tools already refuse silence and a reaction after a failed changing call, so the Owner always gets a text. Code writes its own line only at the refusal limit.
 
 ### Side Sessions
 

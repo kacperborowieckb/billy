@@ -13,7 +13,6 @@ import {
   failedModelCall,
   reachedStepLimit,
   repliedWith,
-  stoppedReply,
   unusableReply,
 } from "./decided-outcome.ts";
 import type { OutcomeRecords } from "./decided-outcome.ts";
@@ -128,7 +127,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           ),
         ]);
         if (stopped) {
-          return stoppedReply(records, { reply, steps: earlier });
+          return replied(earlier, "reply");
         }
         if (earlier.length >= request.stepLimit) {
           return reachedStepLimit(

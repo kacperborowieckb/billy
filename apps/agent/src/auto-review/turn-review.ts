@@ -149,11 +149,6 @@ export const turnReviewOf = Effect.fnUntraced(function* turnReviewOf(
     verdictOf: (call) => reviewed(call).pipe(Effect.provide(context)),
     stopsTurn,
     records: () => [...records],
-    shownText: (replyText) =>
-      stopsTurn()
-        ? [replyText.trim(), reviewStoppedNotice]
-            .filter((part) => part !== "")
-            .join("\n\n")
-        : replyText,
+    shownText: (replyText) => (stopsTurn() ? reviewStoppedNotice : replyText),
   } satisfies TurnReview;
 });

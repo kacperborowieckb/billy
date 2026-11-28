@@ -432,27 +432,32 @@ describe("Auto-review of a change call in an untrusted Turn", () => {
     expect(await rowsOf(ownerId, "SELECT note_id FROM notes")).toEqual([]);
   });
 
-  it("never sends a Stub that the model wrote in the step that reaches the refusal limit", async () => {
-    const ownerId = await ownerInWarsaw(9619);
-    const copiedStub = "[set_schedule: done. Result removed from the history]";
-    scriptModel([
-      {
-        say: copiedStub,
-        callTools: ["One", "Two", "Three"].map(scheduleCallOf),
-      },
-    ]);
-    scriptReviewer([refusal, refusal, refusal]);
+  it.each([
+    { name: "a claim of a change", userId: 9619, said: "Reminder set." },
+    {
+      name: "a copied Stub",
+      userId: 9620,
+      said: "[set_schedule: done. Result removed from the history]",
+    },
+  ])(
+    "sends only the fixed line, with $name in the step that reaches the refusal limit",
+    async ({ userId, said }) => {
+      await ownerInWarsaw(userId);
+      scriptModel([
+        {
+          say: said,
+          callTools: ["One", "Two", "Three"].map(scheduleCallOf),
+        },
+      ]);
+      scriptReviewer([refusal, refusal, refusal]);
 
-    await forwardWithRequest(9619, "What is this about?");
-    await waitForSends(1);
+      await forwardWithRequest(userId, "What is this about?");
+      await waitForSends(1);
 
-    expect(fakeTelegram.sent[0]?.body.text).toBe(reviewStoppedNotice);
-    const traces = await inAgent(
-      ownerId,
-      TurnTraces.pipe(Effect.flatMap((stored) => stored.readReplies))
-    );
-    expect(traces.at(-1)?.trace.rejectedStubReplies).toEqual([copiedStub]);
-  });
+      expect(fakeTelegram.sent[0]?.body.text).toBe(reviewStoppedNotice);
+      expect(fakeModel.doGenerateCalls).toHaveLength(1);
+    }
+  );
 
   it("counts the refusals of every step of the Turn", async () => {
     await ownerInWarsaw(9612);
