@@ -1,0 +1,2524 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "8271b159-3300-4b82-acb3-bdabef0ac320",
+  "prevIds": ["218da77f-5af2-406d-9c57-06568623e571"],
+  "ddl": [
+    {
+      "name": "inbox_events",
+      "entityType": "tables"
+    },
+    {
+      "name": "journal_entries",
+      "entityType": "tables"
+    },
+    {
+      "name": "model_usage",
+      "entityType": "tables"
+    },
+    {
+      "name": "note_links",
+      "entityType": "tables"
+    },
+    {
+      "name": "notes",
+      "entityType": "tables"
+    },
+    {
+      "name": "owner_channel_conversations",
+      "entityType": "tables"
+    },
+    {
+      "name": "profile_entries",
+      "entityType": "tables"
+    },
+    {
+      "name": "schedules",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_traces",
+      "entityType": "tables"
+    },
+    {
+      "name": "conversation_messages",
+      "entityType": "tables"
+    },
+    {
+      "name": "conversation_recorded_events",
+      "entityType": "tables"
+    },
+    {
+      "name": "refused_compaction_blocks",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_context_blocks",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_model_steps",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_progress",
+      "entityType": "tables"
+    },
+    {
+      "name": "write_back_markers",
+      "entityType": "tables"
+    },
+    {
+      "name": "prefix_cache_sessions",
+      "entityType": "tables"
+    },
+    {
+      "name": "owner_preferences",
+      "entityType": "tables"
+    },
+    {
+      "name": "proactive_messages",
+      "entityType": "tables"
+    },
+    {
+      "name": "schedule_open_loops",
+      "entityType": "tables"
+    },
+    {
+      "name": "pending_approvals",
+      "entityType": "tables"
+    },
+    {
+      "name": "mcp_connect_requests",
+      "entityType": "tables"
+    },
+    {
+      "name": "mcp_connections",
+      "entityType": "tables"
+    },
+    {
+      "name": "mcp_tools",
+      "entityType": "tables"
+    },
+    {
+      "name": "trace_request_part_uses",
+      "entityType": "tables"
+    },
+    {
+      "name": "trace_request_parts",
+      "entityType": "tables"
+    },
+    {
+      "name": "trace_retention_runs",
+      "entityType": "tables"
+    },
+    {
+      "table": "inbox_events",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'OwnerMessage'",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "channel",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "channel_update_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "conversation_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "channel_message_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "text",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "forward_origin",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "sent_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "schedule_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "due_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "press_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "pending_approval_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "answer",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "received_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "state",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "journal_entries",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "journal_entries",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "journal_entries",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "journal_entries",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "journal_entries",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "journal_entries",
+      "name": "record",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "task",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "model_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "input_tokens",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "output_tokens",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "cached_input_tokens",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "model_usage",
+      "name": "cost_usd",
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "note_links",
+      "name": "from_note_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "note_links",
+      "name": "to_note_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "note_links",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "note_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "text",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "url",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "source_event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "source_channel",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "source_conversation_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "source_channel_message_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "source_forward_origin",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "trust_level",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "text_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "captured_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "last_checked_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "open_loop_kind",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "open_loop_state",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "open_loop_closed_reason",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "notes",
+      "name": "open_loop_due_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_channel_conversations",
+      "name": "slot",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_channel_conversations",
+      "name": "channel",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_channel_conversations",
+      "name": "conversation_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_channel_conversations",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "profile_entries",
+      "name": "entry_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "profile_entries",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "profile_entries",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "profile_entries",
+      "name": "text",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "profile_entries",
+      "name": "source_event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "profile_entries",
+      "name": "added_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "schedule_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "action",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "set_by",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "text",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "note_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "next_due_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "recurrence",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "recurrence_time_zone",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "state",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "source_event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "request_key",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedules",
+      "name": "changed_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "owner_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "result",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_traces",
+      "name": "record",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "message",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "trust_level",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "compacted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "conversation_recorded_events",
+      "name": "event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "refused_compaction_blocks",
+      "name": "slot",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "refused_compaction_blocks",
+      "name": "last_compacted_sequence",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "refused_compaction_blocks",
+      "name": "refused_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_context_blocks",
+      "name": "event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_context_blocks",
+      "name": "text",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_context_blocks",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_model_steps",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_model_steps",
+      "name": "model_step_key",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_progress",
+      "name": "sequence",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_progress",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_progress",
+      "name": "message",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "turn_progress",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "local_time",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "recorded_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "task",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "last_call_at_millis",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "system_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "tools_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "owner_context_hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "history_break",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "key",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "value",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "source",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'owner'",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "source_event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "changed_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "sent_message_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "open_loop_ids",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "outcome",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "planned_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "sent_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "window_ends_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "connected_event_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedule_open_loops",
+      "name": "schedule_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "schedule_open_loops",
+      "name": "note_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approval_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "position",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "turn_event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "tool_call_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "tool_name",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "frozen_input",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "summary",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "trust_level",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'untrusted'",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "state",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "expires_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "channel_message_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "result",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "reviewer_reason",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_connect_requests",
+      "name": "event_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_connect_requests",
+      "name": "catalog_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_connections",
+      "name": "catalog_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_connections",
+      "name": "state",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_connections",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_tools",
+      "name": "catalog_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_tools",
+      "name": "name",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_tools",
+      "name": "description",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_tools",
+      "name": "input_schema",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "mcp_tools",
+      "name": "annotations",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_sequence",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "task",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "task",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "hash",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "content",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "last_used_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "slot",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "ran_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_state",
+      "columns": [
+        {
+          "value": "state",
+          "isExpression": false
+        },
+        {
+          "value": "received_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "model_usage",
+      "name": "model_usage_budget",
+      "columns": [
+        {
+          "value": "owner_id",
+          "isExpression": false
+        },
+        {
+          "value": "task",
+          "isExpression": false
+        },
+        {
+          "value": "recorded_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "model_usage",
+      "name": "model_usage_event",
+      "columns": [
+        {
+          "value": "event_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "note_links",
+      "name": "note_links_to_note",
+      "columns": [
+        {
+          "value": "to_note_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "notes",
+      "name": "notes_open_loops",
+      "columns": [
+        {
+          "value": "open_loop_state",
+          "isExpression": false
+        },
+        {
+          "value": "open_loop_due_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_state_due",
+      "columns": [
+        {
+          "value": "state",
+          "isExpression": false
+        },
+        {
+          "value": "next_due_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_note",
+      "columns": [
+        {
+          "value": "note_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "turn_traces",
+      "name": "turn_traces_event",
+      "columns": [
+        {
+          "value": "event_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "conversation_messages_event",
+      "columns": [
+        {
+          "value": "event_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "conversation_messages_compacted",
+      "columns": [
+        {
+          "value": "compacted_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "turn_progress",
+      "name": "turn_progress_event",
+      "columns": [
+        {
+          "value": "event_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "proactive_messages_sent_at",
+      "columns": [
+        {
+          "value": "sent_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "schedule_open_loops",
+      "name": "schedule_open_loops_note",
+      "columns": [
+        {
+          "value": "note_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_position",
+      "columns": [
+        {
+          "value": "position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_turn",
+      "columns": [
+        {
+          "value": "turn_event_id",
+          "isExpression": false
+        },
+        {
+          "value": "state",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_state_expiry",
+      "columns": [
+        {
+          "value": "state",
+          "isExpression": false
+        },
+        {
+          "value": "expires_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_part",
+      "columns": [
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "task",
+          "isExpression": false
+        },
+        {
+          "value": "hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "note_links",
+      "name": "fk_note_links_from_note_id_notes_note_id_fk",
+      "columns": ["from_note_id"],
+      "tableTo": "notes",
+      "columnsTo": ["note_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "note_links",
+      "name": "fk_note_links_to_note_id_notes_note_id_fk",
+      "columns": ["to_note_id"],
+      "tableTo": "notes",
+      "columnsTo": ["note_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "schedules",
+      "name": "fk_schedules_note_id_notes_note_id_fk",
+      "columns": ["note_id"],
+      "tableTo": "notes",
+      "columnsTo": ["note_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "schedule_open_loops",
+      "name": "fk_schedule_open_loops_schedule_id_schedules_schedule_id_fk",
+      "columns": ["schedule_id"],
+      "tableTo": "schedules",
+      "columnsTo": ["schedule_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "schedule_open_loops",
+      "name": "fk_schedule_open_loops_note_id_notes_note_id_fk",
+      "columns": ["note_id"],
+      "tableTo": "notes",
+      "columnsTo": ["note_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "fk_trace_request_part_uses_trace_sequence_turn_traces_sequence_fk",
+      "columns": ["trace_sequence"],
+      "tableTo": "turn_traces",
+      "columnsTo": ["sequence"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "note_links",
+      "name": "note_links_pk",
+      "columns": ["from_note_id", "to_note_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "turn_model_steps",
+      "name": "turn_model_steps_pk",
+      "columns": ["event_id", "model_step_key"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "schedule_open_loops",
+      "name": "schedule_open_loops_pk",
+      "columns": ["schedule_id", "note_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "mcp_connect_requests",
+      "name": "mcp_connect_requests_pk",
+      "columns": ["event_id", "catalog_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "mcp_tools",
+      "name": "mcp_tools_pk",
+      "columns": ["catalog_id", "name"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_pk",
+      "columns": ["trace_sequence", "kind"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "trace_request_parts_pk",
+      "columns": ["kind", "task", "hash"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "journal_entries",
+      "name": "journal_entries_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "model_usage",
+      "name": "model_usage_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "notes",
+      "name": "notes_pk",
+      "columns": ["note_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "owner_channel_conversations",
+      "name": "owner_channel_conversations_pk",
+      "columns": ["slot"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "profile_entries",
+      "name": "profile_entries_pk",
+      "columns": ["entry_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_pk",
+      "columns": ["schedule_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "turn_traces",
+      "name": "turn_traces_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "conversation_messages_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "conversation_recorded_events",
+      "name": "conversation_recorded_events_pk",
+      "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "refused_compaction_blocks",
+      "name": "refused_compaction_blocks_pk",
+      "columns": ["slot"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "turn_context_blocks",
+      "name": "turn_context_blocks_pk",
+      "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "turn_progress",
+      "name": "turn_progress_pk",
+      "columns": ["sequence"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "write_back_markers_pk",
+      "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_pk",
+      "columns": ["task"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "owner_preferences_pk",
+      "columns": ["key"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "proactive_messages_pk",
+      "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_pk",
+      "columns": ["pending_approval_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "mcp_connections",
+      "name": "mcp_connections_pk",
+      "columns": ["catalog_id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "trace_retention_runs_pk",
+      "columns": ["slot"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_channel_channel_update_id_unique",
+      "columns": ["channel", "channel_update_id"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_schedule_id_due_at_unique",
+      "columns": ["schedule_id", "due_at"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_channel_press_id_unique",
+      "columns": ["channel", "press_id"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "notes",
+      "name": "notes_source_event_id_text_hash_unique",
+      "columns": ["source_event_id", "text_hash"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "profile_entries",
+      "name": "profile_entries_kind_text_unique",
+      "columns": ["kind", "text"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_source_event_id_request_key_unique",
+      "columns": ["source_event_id", "request_key"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_event_id_unique",
+      "columns": ["event_id"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "proactive_messages_connected_event_id_unique",
+      "columns": ["connected_event_id"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_state_check",
+      "value": "\"state\" IN ('pending', 'done', 'failed')",
+      "entityType": "checks"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_kind_check",
+      "value": "\"kind\" IN ('OwnerMessage', 'ScheduleFired', 'ApprovalAnswered')",
+      "entityType": "checks"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_answer_check",
+      "value": "\"answer\" IN ('approve', 'reject')",
+      "entityType": "checks"
+    },
+    {
+      "table": "inbox_events",
+      "name": "inbox_events_fields_check",
+      "value": "(\"kind\" = 'OwnerMessage' AND \"channel\" IS NOT NULL AND \"channel_update_id\" IS NOT NULL AND \"conversation_id\" IS NOT NULL AND \"channel_message_id\" IS NOT NULL AND \"text\" IS NOT NULL AND \"sent_at\" IS NOT NULL AND \"schedule_id\" IS NULL AND \"due_at\" IS NULL AND \"press_id\" IS NULL AND \"pending_approval_id\" IS NULL AND \"answer\" IS NULL) OR (\"kind\" = 'ScheduleFired' AND \"schedule_id\" IS NOT NULL AND \"due_at\" IS NOT NULL AND \"channel\" IS NULL AND \"channel_update_id\" IS NULL AND \"conversation_id\" IS NULL AND \"channel_message_id\" IS NULL AND \"text\" IS NULL AND \"forward_origin\" IS NULL AND \"sent_at\" IS NULL AND \"press_id\" IS NULL AND \"pending_approval_id\" IS NULL AND \"answer\" IS NULL) OR (\"kind\" = 'ApprovalAnswered' AND \"channel\" IS NOT NULL AND \"press_id\" IS NOT NULL AND \"conversation_id\" IS NOT NULL AND \"channel_message_id\" IS NOT NULL AND \"pending_approval_id\" IS NOT NULL AND \"answer\" IS NOT NULL AND \"channel_update_id\" IS NULL AND \"text\" IS NULL AND \"forward_origin\" IS NULL AND \"sent_at\" IS NULL AND \"schedule_id\" IS NULL AND \"due_at\" IS NULL)",
+      "entityType": "checks"
+    },
+    {
+      "table": "note_links",
+      "name": "note_links_ordered_check",
+      "value": "\"from_note_id\" < \"to_note_id\"",
+      "entityType": "checks"
+    },
+    {
+      "table": "notes",
+      "name": "notes_trust_level_check",
+      "value": "\"trust_level\" IN ('owner', 'untrusted')",
+      "entityType": "checks"
+    },
+    {
+      "table": "notes",
+      "name": "notes_open_loop_check",
+      "value": "(\"open_loop_kind\" IS NULL AND \"open_loop_state\" IS NULL AND \"open_loop_closed_reason\" IS NULL AND \"open_loop_due_at\" IS NULL) OR (\"open_loop_kind\" IS NOT NULL AND trim(\"open_loop_kind\") <> '' AND \"open_loop_state\" IS 'open' AND \"open_loop_closed_reason\" IS NULL) OR (\"open_loop_kind\" IS NOT NULL AND trim(\"open_loop_kind\") <> '' AND \"open_loop_state\" IS 'closed' AND \"open_loop_closed_reason\" IS NOT NULL AND \"open_loop_closed_reason\" IN ('done', 'dropped', 'replaced'))",
+      "entityType": "checks"
+    },
+    {
+      "table": "owner_channel_conversations",
+      "name": "owner_channel_conversations_one_row",
+      "value": "\"slot\" = 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "profile_entries",
+      "name": "profile_entries_kind_check",
+      "value": "\"kind\" IN ('fact', 'style_rule')",
+      "entityType": "checks"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_action_check",
+      "value": "\"action\" IN ('send_text', 'run_prompt')",
+      "entityType": "checks"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_set_by_check",
+      "value": "\"set_by\" IN ('owner', 'agent')",
+      "entityType": "checks"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_state_check",
+      "value": "\"state\" IN ('active', 'done', 'cancelled')",
+      "entityType": "checks"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_recurrence_check",
+      "value": "(\"recurrence\" IS NULL) = (\"recurrence_time_zone\" IS NULL)",
+      "entityType": "checks"
+    },
+    {
+      "table": "turn_traces",
+      "name": "turn_traces_result_check",
+      "value": "\"result\" IN ('model_replied', 'model_failed', 'reminder_delivered', 'reminder_delivery_failed', 'scheduled_task_replied', 'scheduled_task_failed', 'scheduled_task_skipped', 'proactive_message_sent', 'proactive_message_failed', 'proactive_message_held', 'proactive_message_folded', 'proactive_message_skipped')",
+      "entityType": "checks"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "conversation_messages_kind_check",
+      "value": "\"kind\" IN ('input', 'step', 'reply', 'write_back', 'approval_status', 'summary')",
+      "entityType": "checks"
+    },
+    {
+      "table": "conversation_messages",
+      "name": "conversation_messages_trust_level_check",
+      "value": "\"trust_level\" IN ('owner', 'untrusted')",
+      "entityType": "checks"
+    },
+    {
+      "table": "refused_compaction_blocks",
+      "name": "refused_compaction_blocks_one_row",
+      "value": "\"slot\" = 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "write_back_markers",
+      "name": "write_back_markers_kind_check",
+      "value": "\"kind\" IN ('Brief', 'Follow-up', 'Scheduled Task', 'Reminder', 'Schedule')",
+      "entityType": "checks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive', 'compaction')",
+      "entityType": "checks"
+    },
+    {
+      "table": "prefix_cache_sessions",
+      "name": "prefix_cache_sessions_history_break_check",
+      "value": "\"history_break\" IS NULL OR \"history_break\" IN ('compaction', 'stub_in_turn_before')",
+      "entityType": "checks"
+    },
+    {
+      "table": "owner_preferences",
+      "name": "owner_preferences_key_check",
+      "value": "\"key\" IN ('time_zone', 'quiet_hours', 'muted_proactive_messages', 'proactive_message_budget')",
+      "entityType": "checks"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "proactive_messages_outcome_check",
+      "value": "\"outcome\" IS NULL OR \"outcome\" IN ('acted', 'replied', 'muted', 'ignored')",
+      "entityType": "checks"
+    },
+    {
+      "table": "proactive_messages",
+      "name": "proactive_messages_outcome_sent_check",
+      "value": "\"outcome\" IS NULL OR (\"sent_message_id\" IS NOT NULL AND \"window_ends_at\" IS NOT NULL)",
+      "entityType": "checks"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_state_check",
+      "value": "\"state\" IN ('draft', 'pending', 'approved', 'rejected', 'expired', 'executed', 'failed', 'unconfirmed')",
+      "entityType": "checks"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_trust_level_check",
+      "value": "\"trust_level\" IN ('owner', 'untrusted')",
+      "entityType": "checks"
+    },
+    {
+      "table": "pending_approvals",
+      "name": "pending_approvals_draft_check",
+      "value": "\"state\" <> 'draft' OR (\"channel_message_id\" IS NULL AND \"result\" IS NULL)",
+      "entityType": "checks"
+    },
+    {
+      "table": "mcp_connections",
+      "name": "mcp_connections_state_check",
+      "value": "\"state\" IN ('authenticating', 'ready', 'failed', 'needs_sign_in')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_kind_check",
+      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_part_uses",
+      "name": "trace_request_part_uses_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "trace_request_parts_kind_check",
+      "value": "\"kind\" IN ('system', 'tool_definitions', 'owner_context')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_request_parts",
+      "name": "trace_request_parts_task_check",
+      "value": "\"task\" IN ('reply', 'scheduled_task', 'proactive')",
+      "entityType": "checks"
+    },
+    {
+      "table": "trace_retention_runs",
+      "name": "trace_retention_runs_one_row",
+      "value": "\"slot\" = 0",
+      "entityType": "checks"
+    }
+  ],
+  "renames": []
+}

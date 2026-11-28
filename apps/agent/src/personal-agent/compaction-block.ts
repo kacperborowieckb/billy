@@ -3,11 +3,14 @@ import { Option } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { ReportedStep } from "../model-gateway/usage-ledger.ts";
+import { trustLevelOfParts } from "../notes/note.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import type { StoredConversationRow } from "./conversation.ts";
 
 export interface CompactionBlock {
   readonly previousSummary: Option.Option<ModelMessage>;
   readonly messages: readonly ModelMessage[];
+  readonly trustLevel: TrustLevel;
   readonly lastCompactedSequence: number;
 }
 
@@ -103,13 +106,13 @@ export const compactionBlockOf = (
     Option.flatMap((cut) => {
       const blockRows = turns.slice(0, cut).flatMap((turn) => turn.rows);
       const lastRow = blockRows.at(-1);
+      const summaryRows = rows.filter((row) => row.kind === "summary");
       return lastRow === undefined
         ? Option.none()
         : Option.some({
-            previousSummary: Option.fromNullishOr(
-              rows.find((row) => row.kind === "summary")?.message
-            ),
+            previousSummary: Option.fromNullishOr(summaryRows[0]?.message),
             messages: blockRows.map((row) => row.message),
+            trustLevel: trustLevelOfParts([...summaryRows, ...blockRows]),
             lastCompactedSequence: lastRow.sequence,
           });
     })

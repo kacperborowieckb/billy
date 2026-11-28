@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { markUntrustedContent } from "../src/notes/note.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
+import type { AgentMigrations } from "../src/personal-agent/agent-storage.ts";
 import personalAgentMigrations from "../src/personal-agent/migrations/migrations.js";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { addOwner } from "./telegram-requests.ts";
@@ -42,10 +43,13 @@ const seedBeforeStubs = (storage: DurableObjectStorage) =>
     )
   );
 
-const migrateFully = (storage: DurableObjectStorage) =>
+const migrateTo = (
+  storage: DurableObjectStorage,
+  migrations?: AgentMigrations
+) =>
   Effect.runPromise(
     Effect.void.pipe(
-      Effect.provide(AgentStorage.layer(storage).pipe(Layer.orDie))
+      Effect.provide(AgentStorage.layer(storage, migrations).pipe(Layer.orDie))
     )
   );
 
@@ -59,7 +63,7 @@ describe("the Conversation Stubs migration", () => {
 
     const counts = await runInDurableObject(agent, async (_instance, state) => {
       await seedBeforeStubs(state.storage);
-      await migrateFully(state.storage);
+      await migrateTo(state.storage);
       const countOf = (table: string) =>
         state.storage.sql
           .exec<{ rows: number }>(`SELECT count(*) AS rows FROM ${table}`)
@@ -79,6 +83,14 @@ const stubStepsMigration = "20261128093446_conversation_stub_steps";
 const migrationsBeforeStubSteps = Object.fromEntries(
   Object.entries(personalAgentMigrations.migrations).filter(
     ([name]) => name < stubStepsMigration
+  )
+);
+
+const rowTrustMigration = "20261128110721_conversation_row_trust";
+
+const migrationsBeforeRowTrust = Object.fromEntries(
+  Object.entries(personalAgentMigrations.migrations).filter(
+    ([name]) => name < rowTrustMigration
   )
 );
 
@@ -160,7 +172,9 @@ describe("the migration of the Stub steps", () => {
 
     const kept = await runInDurableObject(agent, async (_instance, state) => {
       await seedStubSteps(state.storage);
-      await migrateFully(state.storage);
+      await migrateTo(state.storage, {
+        migrations: migrationsBeforeRowTrust,
+      });
       return state.storage.sql
         .exec<{ message: string }>(
           "SELECT message FROM conversation_messages ORDER BY sequence"
@@ -172,6 +186,89 @@ describe("the migration of the Stub steps", () => {
     expect(kept).toEqual([
       { role: "assistant", content: [toolCallPart] },
       ...keptRows.map((row) => row.message),
+    ]);
+  });
+});
+
+const writeBackStub =
+  "[Brief, Mon 08:00] sent to the Owner. Text removed from the history";
+
+const compactedAt = "2026-11-27T00:00:00.000Z";
+
+const rowsBeforeRowTrust = [
+  { kind: "input", content: "hello", compactedAt: null },
+  { kind: "reply", content: replyStub, compactedAt },
+  { kind: "write_back_stub", content: writeBackStub, compactedAt },
+  { kind: "write_back", content: "[Brief, Mon 08:00] Hi", compactedAt: null },
+  { kind: "reply", content: `I wrote this: ${replyStub}`, compactedAt: null },
+  { kind: "summary", content: "A Summary", compactedAt: null },
+  { kind: "reply", content: replyStub, compactedAt: null },
+  { kind: "write_back_stub", content: writeBackStub, compactedAt: null },
+  { kind: "reply", content: "Deleted before the migration", compactedAt: null },
+];
+
+const deleteNewestRowBeforeTheMigration = (storage: DurableObjectStorage) => {
+  storage.sql.exec(
+    "DELETE FROM conversation_messages WHERE sequence = (SELECT max(sequence) FROM conversation_messages)"
+  );
+};
+
+const seedBeforeRowTrust = (storage: DurableObjectStorage) =>
+  Effect.runPromise(
+    Effect.gen(function* seedEffect() {
+      const { database } = yield* AgentStorage;
+      for (const row of rowsBeforeRowTrust) {
+        const message = JSON.stringify({
+          role: "assistant",
+          content: row.content,
+        });
+        yield* database.run(
+          sql`INSERT INTO conversation_messages (event_id, kind, message, recorded_at, compacted_at) VALUES ('turn', ${row.kind}, ${message}, '2026-11-27T00:00:00.000Z', ${row.compactedAt})`
+        );
+      }
+    }).pipe(
+      Effect.provide(
+        AgentStorage.layer(storage, {
+          migrations: migrationsBeforeRowTrust,
+        }).pipe(Layer.orDie)
+      )
+    )
+  );
+
+describe("the migration of the Trust Level of the Conversation rows", () => {
+  it("removes each removed-text Stub that a later request would send, marks the other rows, and never reuses a row position", async () => {
+    const ownerId = await addOwner(9704);
+    const agent = await personalAgentFor(
+      env.PERSONAL_AGENT,
+      OwnerIdSchema.make(ownerId)
+    );
+
+    const migrated = await runInDurableObject(
+      agent,
+      async (_instance, state) => {
+        await seedBeforeRowTrust(state.storage);
+        deleteNewestRowBeforeTheMigration(state.storage);
+        await migrateTo(state.storage);
+        state.storage.sql.exec(
+          "INSERT INTO conversation_messages (event_id, kind, message, trust_level, recorded_at) VALUES ('later', 'input', '{}', 'owner', '2026-11-28T00:00:00.000Z')"
+        );
+        return state.storage.sql
+          .exec<{ sequence: number; kind: string; trust_level: string }>(
+            "SELECT sequence, kind, trust_level FROM conversation_messages ORDER BY sequence"
+          )
+          .toArray()
+          .map((row) => `${row.sequence} ${row.kind} ${row.trust_level}`);
+      }
+    );
+
+    expect(migrated).toEqual([
+      "1 input owner",
+      "2 reply owner",
+      "3 write_back untrusted",
+      "4 write_back owner",
+      "5 reply owner",
+      "6 summary owner",
+      "10 input owner",
     ]);
   });
 });

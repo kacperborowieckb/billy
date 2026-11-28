@@ -87,6 +87,7 @@ export const fixedTurnTrust = (trustLevel: TrustLevel): TurnTrust =>
 
 export interface TurnTrustSource {
   readonly trustLevel: TrustLevel;
+  readonly historyTrustLevel: TrustLevel;
   readonly inputs: readonly ModelMessage[];
   readonly turnContext: string;
   readonly listsUntrustedPendingApproval?: boolean | undefined;
@@ -94,12 +95,14 @@ export interface TurnTrustSource {
 
 const startTrustLevelOf = ({
   trustLevel,
+  historyTrustLevel,
   inputs,
   turnContext,
   listsUntrustedPendingApproval,
 }: TurnTrustSource): TrustLevel =>
   trustLevel === "owner" &&
-  (listsUntrustedPendingApproval === true ||
+  (historyTrustLevel === "untrusted" ||
+    listsUntrustedPendingApproval === true ||
     holdsUntrustedContent([inputs, turnContext]))
     ? "untrusted"
     : trustLevel;

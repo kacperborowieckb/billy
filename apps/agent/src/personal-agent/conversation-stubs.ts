@@ -40,9 +40,6 @@ export class StoredFormLimits extends Context.Service<
 export const untrustedContentStub =
   "[Untrusted Content removed from the history]";
 
-export const untrustedReplyStub =
-  "[Reply sent to the Owner. Text removed from the history]";
-
 export const withUntrustedContentStubbed = (text: string): string => {
   const start = text.indexOf(untrustedContentOpening);
   if (start === -1) {

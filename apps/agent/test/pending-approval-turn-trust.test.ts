@@ -7,6 +7,7 @@ import { markUntrustedContent } from "../src/notes/note.ts";
 
 const ownerMessageTurn = {
   trustLevel: "owner",
+  historyTrustLevel: "owner",
   turnContext: "No marker here.",
 } as const;
 
@@ -29,6 +30,12 @@ describe("The trust of an Owner message Turn given its open Pending Approvals", 
 
   it("starts owner when no open Pending Approval is flagged untrusted", () => {
     expect(trustWith({ listsUntrustedPendingApproval: false })).toBe("owner");
+  });
+});
+
+describe("The trust of an Owner message Turn given the Conversation that its request holds", () => {
+  it("starts untrusted when a stored row is untrusted, with no marker in the context", () => {
+    expect(trustWith({ historyTrustLevel: "untrusted" })).toBe("untrusted");
   });
 });
 

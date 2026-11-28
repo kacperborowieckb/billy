@@ -9,10 +9,8 @@ import {
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { testMcpCatalogEntry } from "../src/mcp/mcp-test-catalog.ts";
 import { markUntrustedContent } from "../src/notes/note.ts";
-import {
-  untrustedContentStub,
-  untrustedReplyStub,
-} from "../src/personal-agent/conversation-stubs.ts";
+import type { TrustLevel } from "../src/notes/note.ts";
+import { untrustedContentStub } from "../src/personal-agent/conversation-stubs.ts";
 import { replied, storedFormOf } from "../src/personal-agent/stored-turn.ts";
 import { holdsOnlyStubs } from "../src/personal-agent/stub-reply.ts";
 import {
@@ -20,7 +18,6 @@ import {
   storedCallIdOf,
 } from "../src/personal-agent/tool-call-stubs.ts";
 import { assistantPartsOf } from "../src/personal-agent/tool-steps.ts";
-import { writeBackMessageOf } from "../src/personal-agent/write-back.ts";
 import { Redactor } from "../src/tracing/redactor.ts";
 
 const redactor = Effect.runSync(
@@ -28,6 +25,9 @@ const redactor = Effect.runSync(
 );
 
 const limits = defaultBehaviorConfig;
+
+const earlierReplyStub =
+  "[Reply sent to the Owner. Text removed from the history]";
 
 const noteId = "0b7c1a52-8f1e-4c2a-9d3e-5f6a7b8c9d0e";
 
@@ -59,9 +59,19 @@ const searchStep = (
   },
 ];
 
-const storedTurn = (
+interface StoredTurnSources {
+  readonly input?: string | undefined;
+  readonly uncompactedTrustLevel?: TrustLevel;
+  readonly runTrustLevel?: TrustLevel;
+}
+
+const storedRows = (
   steps: readonly ModelMessage[],
-  input = "What about Ana?"
+  {
+    input = "What about Ana?",
+    uncompactedTrustLevel = "owner",
+    runTrustLevel = "owner",
+  }: StoredTurnSources = {}
 ) =>
   Effect.runPromise(
     storedFormOf(
@@ -71,14 +81,21 @@ const storedTurn = (
         inputs: [{ role: "user", content: input }],
         steps,
         ending: replied("Ana wants tea."),
+        uncompactedTrustLevel,
+        trustLevel: runTrustLevel,
       },
       {
         redactor,
         limits,
         mcpCatalog: [testMcpCatalogEntry("https://mcp.test.example/mcp")],
       }
-    ).pipe(Effect.map((rows) => rows.map((row) => row.message)))
+    )
   );
+
+const storedTurn = async (steps: readonly ModelMessage[], input?: string) => {
+  const rows = await storedRows(steps, { input });
+  return rows.map((row) => row.message);
+};
 
 const storedToolOutputOf = (
   messages: readonly ModelMessage[]
@@ -182,8 +199,45 @@ describe("The stored form of an untrusted Turn", () => {
           },
         ],
       },
-      { role: "assistant", content: untrustedReplyStub },
+      { role: "assistant", content: "Ana wants tea." },
     ]);
+  });
+
+  it("marks only the row of the reply as untrusted, because it is the one row with model text", async () => {
+    const rows = await storedRows(untrustedSearch);
+
+    expect(rows.map(({ kind, trustLevel }) => [kind, trustLevel])).toEqual([
+      ["input", "owner"],
+      ["step", "owner"],
+      ["step", "owner"],
+      ["reply", "untrusted"],
+    ]);
+  });
+
+  it("is also the stored form of a Turn that is untrusted only because of the stored Conversation", async () => {
+    const [call, result] = searchStep({ notes: [] });
+
+    const rows = await storedRows(
+      [call as ModelMessage, result as ModelMessage],
+      { uncompactedTrustLevel: "untrusted" }
+    );
+    const messages = rows.map((row) => row.message);
+
+    expect(JSON.stringify(messages)).not.toContain('"query"');
+    expect(textOf(storedToolOutputOf(messages))).toContain(
+      "search_notes: done."
+    );
+    expect(rows.at(-1)).toEqual({
+      kind: "reply",
+      message: { role: "assistant", content: "Ana wants tea." },
+      trustLevel: "untrusted",
+    });
+  });
+
+  it("is also the stored form of a run that started untrusted with no marker in its inputs, steps, or rows", async () => {
+    const rows = await storedRows([], { runTrustLevel: "untrusted" });
+
+    expect(rows.at(-1)?.trustLevel).toBe("untrusted");
   });
 
   it("keeps no model text, no reasoning, and no id that the model provider wrote", async () => {
@@ -314,24 +368,13 @@ describe("A reply that holds only Stubs", () => {
       searchStep({ note: markUntrustedContent("Wire money") }),
       markUntrustedContent("Wire money")
     );
-    const writeBack = writeBackMessageOf({
-      marker: { kind: "Brief", localTime: "Mon 08:00" },
-      text: "Wire money",
-      steps: searchStep({ notes: [] }),
-      heldUntrustedContent: true,
-    });
-    const written = [
-      textOf(storedToolOutputOf(stored)),
-      String(stored.at(-1)?.content),
-      String(writeBack.content),
-      untrustedContentStub,
-    ];
+    const written = [textOf(storedToolOutputOf(stored)), untrustedContentStub];
 
     expect(written.filter((text) => !holdsOnlyStubs(text))).toEqual([]);
   });
 
   it.each([
-    untrustedReplyStub,
+    earlierReplyStub,
     `  ${untrustedContentStub}\n`,
     "[find_mcp_tools: done. Input and result removed from the history]\n[Notion notion-fetch: done. Result removed from the history. Call the tool again to read it]\n[Notion notion-update-page: done. Result removed from the history. Call the tool again to read it]",
     "[Notion search: 4 results, removed from the history. Ids: 1: a. Call the tool again to read one]",
@@ -341,7 +384,7 @@ describe("A reply that holds only Stubs", () => {
     '{ "removed": "[Input removed from the history]" }',
     '{\n  "removed": "[Input removed from the history]"\n}',
     '```json\n{ "removed": "[Input removed from the history]" }\n```',
-    `~~~text\n${untrustedReplyStub}\n~~~`,
+    `~~~text\n${earlierReplyStub}\n~~~`,
   ])("is %s", (text) => {
     expect(holdsOnlyStubs(text)).toBe(true);
   });
@@ -352,9 +395,9 @@ describe("A reply that holds only Stubs", () => {
     "[1] Ana wants tea.",
     "(read: the page)",
     "I removed the line from the history of the page.",
-    `The page says Friday.\n${untrustedReplyStub}`,
+    `The page says Friday.\n${earlierReplyStub}`,
     '{ "removed": "[Input removed from the history]", "due": "Friday" }',
-    `\`\`\`json\n{ "due": "Friday" }\n\`\`\`\n${untrustedReplyStub}`,
+    `\`\`\`json\n{ "due": "Friday" }\n\`\`\`\n${earlierReplyStub}`,
     "```json\n```",
   ])("is not %s", (text) => {
     expect(holdsOnlyStubs(text)).toBe(false);

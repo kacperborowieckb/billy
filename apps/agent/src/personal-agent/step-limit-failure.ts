@@ -32,6 +32,7 @@ export const failAtStepLimit = Effect.fnUntraced(function* failAtStepLimit<
     inputs: kind.inputs,
     steps: earlier,
     ending: unanswered,
+    trustLevel: kind.trustLevel,
   });
   return {
     _tag: "Failed",

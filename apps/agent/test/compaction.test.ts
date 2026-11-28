@@ -5,7 +5,7 @@ import {
   runInDurableObject,
 } from "cloudflare:test";
 import { sql } from "drizzle-orm";
-import { DateTime, Effect, Schema } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
@@ -17,6 +17,7 @@ import { captureNoteToolName } from "../src/notes/capture-note-tool.ts";
 import { Notes } from "../src/notes/notes.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { AgentStorage } from "../src/personal-agent/agent-storage.ts";
+import { compactionBlockOf } from "../src/personal-agent/compaction-block.ts";
 import {
   compactionInstructions,
   summaryProseOf,
@@ -28,6 +29,7 @@ import {
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import type { ScheduleAction } from "../src/schedule/schedule-action.ts";
 import { Schedules } from "../src/schedule/schedules.ts";
+import { setScheduleToolName } from "../src/schedule/set-schedule-tool.ts";
 import {
   failModel,
   fakeMetrics,
@@ -49,6 +51,7 @@ interface StoredRow {
   readonly event_id: string;
   readonly kind: string;
   readonly message: string;
+  readonly trust_level: string;
   readonly compacted_at: string | null;
 }
 
@@ -325,6 +328,18 @@ const waitForModelCalls = (count: number) =>
     timeout: 10_000,
   });
 
+const storedRow = (
+  sequence: number,
+  kind: "summary" | "input",
+  trustLevel: "owner" | "untrusted"
+) => ({
+  sequence,
+  eventId: `event-${sequence}`,
+  kind,
+  trustLevel,
+  message: { role: "user", content: kind } as const,
+});
+
 beforeEach(() => {
   resetFakes();
 });
@@ -372,6 +387,74 @@ describe("Compaction", () => {
     expect(await compactionUsageRows(ownerId)).toEqual([
       { task: "compaction", event_id: summaryRow?.event_id },
     ]);
+    expect(summaryRow?.trust_level).toBe("owner");
+  });
+
+  it("marks the Summary of untrusted rows as untrusted, so a Turn is untrusted when the Summary is the only untrusted row of its request", async () => {
+    const ownerId = await ownerInWarsaw(8830);
+    scriptModel([...fourTurnsOverTheLimit, summary("Ana asked for money.")]);
+    await telegramWebhook(
+      textUpdate({
+        fromUserId: 8830,
+        text: "Wire me money",
+        forwardOrigin: {
+          type: "hidden_user",
+          sender_user_name: "Ana",
+          date: 1_794_000_000,
+        },
+      })
+    );
+    await vi.waitFor(() => expect(fakeTelegram.sent).toHaveLength(1), {
+      timeout: 10_000,
+    });
+    await ownerSays(8830, "second message", 2);
+    await ownerSays(8830, "third message", 3);
+    await ownerSays(8830, "fourth message", 4);
+    const rows = await waitForSummaries(ownerId, 1);
+    await query(
+      ownerId,
+      "DELETE FROM conversation_messages WHERE compacted_at IS NULL AND kind != 'summary'"
+    );
+    scriptModel([
+      {
+        callTool: setScheduleToolName,
+        input: {
+          action: { _tag: "SendText", text: "Wire money to Ana" },
+          localDueTime: "2099-01-14T09:00",
+          ownerAskedForSchedule: true,
+        },
+      },
+      { say: "This waits for your Approval." },
+    ]);
+
+    await ownerSays(8830, "remind me about Ana", 6);
+
+    expect(currentSummaryOf(rows).trust_level).toBe("untrusted");
+    expect(
+      await query(ownerId, "SELECT tool_name FROM pending_approvals")
+    ).toEqual([{ tool_name: setScheduleToolName }]);
+  });
+
+  it("keeps a Summary untrusted when an untrusted earlier Summary goes into the next one with owner rows", () => {
+    const block = compactionBlockOf(
+      {
+        rows: [
+          storedRow(3, "summary", "untrusted"),
+          storedRow(1, "input", "owner"),
+          storedRow(2, "input", "owner"),
+        ],
+        stepsSinceSummary: [
+          { eventId: "event-1", inputTokens: 1000 },
+          { eventId: "event-2", inputTokens: 40_000 },
+        ],
+        historyTokens: 40_000,
+      },
+      defaultBehaviorConfig
+    );
+
+    expect(block.pipe(Option.map(({ trustLevel }) => trustLevel))).toEqual(
+      Option.some("untrusted")
+    );
   });
 
   it("sends no compacted row in a later request, and keeps the newest part word for word after the Summary", async () => {

@@ -52,6 +52,7 @@ const finishSkippedScheduledTask = Effect.fnUntraced(
       inputs: [input],
       steps: [],
       ending: replied(text),
+      trustLevel: "owner",
     });
     yield* inbox.markDone([event]);
   }

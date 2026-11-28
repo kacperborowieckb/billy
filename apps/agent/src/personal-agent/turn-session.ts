@@ -3,14 +3,19 @@ import { Effect } from "effect";
 
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { McpConnections } from "../mcp/mcp-connections.ts";
-import { holdsUntrustedContent } from "../notes/note.ts";
+import {
+  leastTrusted,
+  trustLevelOfContent,
+  trustLevelOfParts,
+} from "../notes/note.ts";
+import type { TrustLevel } from "../notes/note.ts";
 import { Profile } from "../profile/profile.ts";
 import {
   ownerCurrentTimeText,
   ownerTimeZone,
 } from "../time/owner-current-time.ts";
-import type { SentRow } from "../tracing/traced-request.ts";
 import { Conversation } from "./conversation.ts";
+import type { StoredConversationRow } from "./conversation.ts";
 import { recentChatSection } from "./recent-chat-section.ts";
 import { storeFinishedTurn } from "./stored-turn.ts";
 import type { FinishedTurn } from "./stored-turn.ts";
@@ -33,16 +38,18 @@ interface SessionRequestParts {
   readonly system: string;
   readonly turnContext: string;
   readonly ownerContext: ModelMessage;
-  readonly rows: readonly SentRow[];
+  readonly rows: readonly StoredConversationRow[];
   readonly tail: readonly ModelMessage[];
 }
 
 export interface SessionRequest extends SessionRequestParts {
   readonly messages: readonly ModelMessage[];
+  readonly historyTrustLevel: TrustLevel;
 }
 
 const sessionRequestOf = (parts: SessionRequestParts): SessionRequest => ({
   ...parts,
+  historyTrustLevel: trustLevelOfParts(parts.rows),
   messages: [
     parts.ownerContext,
     ...parts.rows.map((row) => row.message),
@@ -150,6 +157,7 @@ interface SentRun {
   readonly inputs: readonly ModelMessage[];
   readonly steps: readonly ModelMessage[];
   readonly text: string;
+  readonly trustLevel: TrustLevel;
 }
 
 const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
@@ -160,26 +168,20 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
   inputs,
   steps,
   text,
+  trustLevel,
 }: SentRun) {
   const conversation = yield* Conversation;
-  const heldUntrustedContent = holdsUntrustedContent([
-    turnContext,
-    inputs,
-    steps,
-    text,
-  ]);
   yield* conversation.append({
     eventId,
     recordedAs,
     rows: [
       {
-        kind: heldUntrustedContent ? "write_back_stub" : "write_back",
-        message: writeBackMessageOf({
-          marker,
-          text,
-          steps,
-          heldUntrustedContent,
-        }),
+        kind: "write_back",
+        message: writeBackMessageOf({ marker, text, steps }),
+        trustLevel: leastTrusted([
+          trustLevel,
+          trustLevelOfContent([turnContext, inputs, steps, text]),
+        ]),
       },
     ],
   });
@@ -187,7 +189,7 @@ const appendWriteBack = Effect.fnUntraced(function* appendWriteBack({
 
 const writeBackOf = (
   marker: WriteBackMarker,
-  { eventId, turnContext, inputs, steps, ending }: FinishedTurn
+  { eventId, turnContext, inputs, steps, ending, trustLevel }: FinishedTurn
 ) =>
   ending._tag === "Replied"
     ? appendWriteBack({
@@ -197,6 +199,7 @@ const writeBackOf = (
         inputs,
         steps,
         text: ending.text,
+        trustLevel,
       })
     : Effect.void;
 
@@ -215,6 +218,7 @@ const failureNoticeWriteBackOf = Effect.fnUntraced(
       inputs: [],
       steps: yield* progress.completedFor(eventId),
       text,
+      trustLevel: "owner",
     });
   }
 );

@@ -153,9 +153,9 @@ const pendingApprovalCount = async (ownerId: string) => {
 };
 
 const writeBacksOf = (ownerId: string) =>
-  rowsOf<{ kind: string; message: string }>(
+  rowsOf<{ trust_level: string; message: string }>(
     ownerId,
-    "SELECT kind, message FROM conversation_messages WHERE kind LIKE 'write_back%'"
+    "SELECT trust_level, message FROM conversation_messages WHERE kind = 'write_back'"
   );
 
 beforeEach(() => {
@@ -165,7 +165,7 @@ beforeEach(() => {
 const multiTurnTimeout = { timeout: 30_000 };
 
 describe("a read MCP call in a Side Session", multiTurnTimeout, () => {
-  it("runs in a Scheduled Task Turn, reaches the model, and the Write-back is a Stub that names the Connection", async () => {
+  it("runs in a Scheduled Task Turn, reaches the model, and the untrusted Write-back keeps the sent text and names the Connection", async () => {
     const ownerId = await ownerWithConnection(9951);
     scriptModel([callOf("search", { query: "pages" }), { say: "Three pages" }]);
 
@@ -179,10 +179,9 @@ describe("a read MCP call in a Side Session", multiTurnTimeout, () => {
     );
     expect(fakeTelegram.sent[1]?.body.text).toBe("Three pages");
     const [writeBack] = await writeBacksOf(ownerId);
-    expect(writeBack?.kind).toBe("write_back_stub");
-    expect(writeBack?.message).toContain("Text removed from the history");
+    expect(writeBack?.trust_level).toBe("untrusted");
+    expect(writeBack?.message).toContain("Three pages");
     expect(writeBack?.message).toContain("(read: Test server)");
-    expect(writeBack?.message).not.toContain("Three pages");
     expect(writeBack?.message).not.toContain("Reading list");
   });
 
@@ -200,7 +199,7 @@ describe("a read MCP call in a Side Session", multiTurnTimeout, () => {
     );
     expect(fakeTelegram.sent[1]?.body.text).toBe("Your day");
     const writeBacks = await writeBacksOf(ownerId);
-    expect(writeBacks.map((row) => row.kind)).toEqual(["write_back_stub"]);
+    expect(writeBacks.map((row) => row.trust_level)).toEqual(["untrusted"]);
   });
 });
 
@@ -332,7 +331,7 @@ describe(
       await runBrief(ownerId);
 
       const [writeBack] = await writeBacksOf(ownerId);
-      expect(writeBack?.kind).toBe("write_back_stub");
+      expect(writeBack?.trust_level).toBe("untrusted");
       expect(writeBack?.message).toContain("(read: Test server)");
     });
 
@@ -356,7 +355,7 @@ describe(
       await runBrief(ownerId);
 
       const [writeBack] = await writeBacksOf(ownerId);
-      expect(writeBack?.kind).toBe("write_back_stub");
+      expect(writeBack?.trust_level).toBe("untrusted");
       expect(writeBack?.message).toContain("(read: Test server)");
       expect(writeBack?.message).not.toContain("find_mcp_tools");
     });
@@ -374,7 +373,7 @@ describe(
       await runBrief(ownerId);
 
       const [writeBack] = await writeBacksOf(ownerId);
-      expect(writeBack?.kind).toBe("write_back");
+      expect(writeBack?.trust_level).toBe("owner");
       expect(writeBack?.message).not.toContain("Test server");
     });
   }
@@ -410,7 +409,7 @@ describe(
       expect(fakeTelegram.sent[2]?.body.text).toBe("Reconnect Test server");
 
       const writeBacks = await writeBacksOf(ownerId);
-      expect(writeBacks.map((row) => row.kind)).toEqual(["write_back"]);
+      expect(writeBacks.map((row) => row.trust_level)).toEqual(["owner"]);
     });
   }
 );

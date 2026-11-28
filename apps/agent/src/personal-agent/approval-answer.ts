@@ -50,6 +50,7 @@ const appendApprovalStatus = Effect.fnUntraced(function* appendApprovalStatus(
             role: "assistant",
             content: conversationEntryOf(approval, status.value),
           },
+          trustLevel: "owner",
         },
       ],
     });

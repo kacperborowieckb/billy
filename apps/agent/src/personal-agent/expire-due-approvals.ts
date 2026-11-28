@@ -73,6 +73,7 @@ const expireWithConversationEntry = Effect.fnUntraced(
               role: "assistant",
               content: conversationEntryOf(approval, expiredStatus),
             },
+            trustLevel: "owner",
           },
         ],
       });
