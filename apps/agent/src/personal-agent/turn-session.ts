@@ -14,8 +14,8 @@ import {
   ownerCurrentTimeText,
   ownerTimeZone,
 } from "../time/owner-current-time.ts";
-import type { SentRow } from "../tracing/traced-request.ts";
 import { Conversation } from "./conversation.ts";
+import type { StoredConversationRow } from "./conversation.ts";
 import { recentChatSection } from "./recent-chat-section.ts";
 import { storeFinishedTurn } from "./stored-turn.ts";
 import type { FinishedTurn } from "./stored-turn.ts";
@@ -38,17 +38,18 @@ interface SessionRequestParts {
   readonly system: string;
   readonly turnContext: string;
   readonly ownerContext: ModelMessage;
-  readonly rows: readonly SentRow[];
-  readonly historyTrustLevel: TrustLevel;
+  readonly rows: readonly StoredConversationRow[];
   readonly tail: readonly ModelMessage[];
 }
 
 export interface SessionRequest extends SessionRequestParts {
   readonly messages: readonly ModelMessage[];
+  readonly historyTrustLevel: TrustLevel;
 }
 
 const sessionRequestOf = (parts: SessionRequestParts): SessionRequest => ({
   ...parts,
+  historyTrustLevel: trustLevelOfParts(parts.rows),
   messages: [
     parts.ownerContext,
     ...parts.rows.map((row) => row.message),
@@ -92,7 +93,6 @@ const conversationRequest = Effect.fnUntraced(function* conversationRequest({
     turnContext,
     ownerContext,
     rows,
-    historyTrustLevel: trustLevelOfParts(rows),
     tail: [...withTurnContext(turnContext, inputs), ...earlier],
   });
 });
@@ -144,7 +144,6 @@ const sideSessionRequest: typeof conversationRequest = Effect.fnUntraced(
       turnContext: block,
       ownerContext,
       rows: [],
-      historyTrustLevel: "owner",
       tail: [...withTurnContext(block, inputs), ...earlier],
     });
   }

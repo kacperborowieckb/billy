@@ -4,7 +4,9 @@ Status: accepted
 
 Date: 2026-11-28
 
-Ticket [#246](https://github.com/kacperborowieckb/billy/issues/246) of spec [#255](https://github.com/kacperborowieckb/billy/issues/255), after the investigation [#243](https://github.com/kacperborowieckb/billy/issues/243). This is one record for #246 and [#251](https://github.com/kacperborowieckb/billy/issues/251), because both change the stored form of a Turn. "Tool history" holds the rules of #246. "Replies and the Trust Level" holds the rules of #251, which the repository owner decided on 2026-11-28. #251 adds rules and changes no text of #246. Where the two differ, the rules of #251 apply.
+Ticket [#246](https://github.com/kacperborowieckb/billy/issues/246) of spec [#255](https://github.com/kacperborowieckb/billy/issues/255), after the investigation [#243](https://github.com/kacperborowieckb/billy/issues/243). This is one record for #246 and [#251](https://github.com/kacperborowieckb/billy/issues/251), because both change the stored form of a Turn. This version holds the rules of #246. #251 adds its rules here: the reply text of an `untrusted` Turn, and the Trust Level that code reads from the stored rows.
+
+#251 added the rules under "Replies and the Trust Level", which the repository owner decided on 2026-11-28. Where they differ from the rules under "Tool history", the rules of #251 apply.
 
 The spec calls the Stub that stands in place of a tool result a "placeholder". `CONTEXT.md` keeps one term: Stub.
 
@@ -60,7 +62,7 @@ The rule of [0032](0032-pending-approval-keeps-its-trust.md) and the `capture_no
 - **Side Sessions.** The Run block quotes an `untrusted` row inside the Untrusted Content marker. So the Side Session is `untrusted` by the rule of 0034, with the same gate rules.
 - **Write-back.** The row kind `write_back_stub` is gone. The Turn that is connected to a Proactive Message quotes the sent text inside the marker unless the Write-back of that run is `owner`.
 - **Gate.** No change. In an `untrusted` Turn a `change` call asks the Owner. [#140](https://github.com/kacperborowieckb/billy/issues/140) later sends that call to a reviewer first.
-- **At storage.** The Trust Level of the stored form is `untrusted` when the run says so, when its inputs or steps hold the marker, or when a row in the Conversation at that time is `untrusted`. After a reset, the run says only what its Event or its Pending Approval says, and code reads the other two again. When another run added an `untrusted` row in between, the Turn is stored as `untrusted`. That direction only asks for more Approval.
+- **At storage.** The Trust Level of the stored form is `untrusted` when the run says so, when its inputs or steps hold the marker, or when a row in the Conversation at that time is `untrusted`. After a reset, and at the step limit, no model call ran that could give the level of the run: the run says only what its Event or its Pending Approval says, and code reads the other two again. When another run added an `untrusted` row in between, the Turn is stored as `untrusted`. That direction only asks for more Approval.
 - **Migration of the mark.** A versioned migration adds the column. The rows from before hold no model text of an `untrusted` run, so they are `owner`. In the rows that Compaction did not replace, it deletes each reply Stub and each `write_back_stub` row. Their text was never stored, and it stays in the Journal and the Traces. A compacted `write_back_stub` row becomes an `untrusted` `write_back` row.
 
 ## What follows from the mark

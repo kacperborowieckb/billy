@@ -61,7 +61,7 @@ const searchStep = (
 
 interface StoredTurnSources {
   readonly input?: string | undefined;
-  readonly historyTrustLevel?: TrustLevel;
+  readonly uncompactedTrustLevel?: TrustLevel;
   readonly runTrustLevel?: TrustLevel;
 }
 
@@ -69,7 +69,7 @@ const storedRows = (
   steps: readonly ModelMessage[],
   {
     input = "What about Ana?",
-    historyTrustLevel = "owner",
+    uncompactedTrustLevel = "owner",
     runTrustLevel = "owner",
   }: StoredTurnSources = {}
 ) =>
@@ -81,7 +81,7 @@ const storedRows = (
         inputs: [{ role: "user", content: input }],
         steps,
         ending: replied("Ana wants tea."),
-        historyTrustLevel,
+        uncompactedTrustLevel,
         trustLevel: runTrustLevel,
       },
       {
@@ -219,7 +219,7 @@ describe("The stored form of an untrusted Turn", () => {
 
     const rows = await storedRows(
       [call as ModelMessage, result as ModelMessage],
-      { historyTrustLevel: "untrusted" }
+      { uncompactedTrustLevel: "untrusted" }
     );
     const messages = rows.map((row) => row.message);
 

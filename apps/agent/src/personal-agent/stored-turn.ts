@@ -134,7 +134,7 @@ export interface StoredFormRules {
 }
 
 export interface TurnInConversation extends FinishedTurn {
-  readonly historyTrustLevel: TrustLevel;
+  readonly uncompactedTrustLevel: TrustLevel;
 }
 
 const storedFormWithStubsOf = Effect.fnUntraced(function* storedFormWithStubsOf(
@@ -145,7 +145,7 @@ const storedFormWithStubsOf = Effect.fnUntraced(function* storedFormWithStubsOf(
     steps,
     ending,
     trustLevel: runTrustLevel,
-    historyTrustLevel,
+    uncompactedTrustLevel,
   }: TurnInConversation,
   { redactor, limits, mcpCatalog }: StoredFormRules
 ) {
@@ -157,7 +157,7 @@ const storedFormWithStubsOf = Effect.fnUntraced(function* storedFormWithStubsOf(
   );
   const trustLevel = leastTrusted([
     runTrustLevel,
-    historyTrustLevel,
+    uncompactedTrustLevel,
     trustLevelOfContent([sentInputs, steps]),
   ]);
   const source = { turnEventId: eventId, mcpCatalog };
@@ -189,7 +189,10 @@ export const storeFinishedTurn = Effect.fnUntraced(function* storeFinishedTurn(
 ) {
   const conversation = yield* Conversation;
   const { rows, withStub } = yield* storedFormWithStubsOf(
-    { ...turn, historyTrustLevel: yield* conversation.uncompactedTrustLevel },
+    {
+      ...turn,
+      uncompactedTrustLevel: yield* conversation.uncompactedTrustLevel,
+    },
     {
       redactor: yield* Redactor,
       limits: yield* StoredFormLimits,

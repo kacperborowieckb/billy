@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import { answeringTurnEventIdOf, Journal } from "../journal/journal.ts";
 import type { NoteSource, TrustLevel } from "../notes/note.ts";
-import { noteSourceOfEvent } from "../notes/note.ts";
+import { leastTrusted, noteSourceOfEvent } from "../notes/note.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import { deliveryStateOf } from "./delivery.ts";
 import { eventMessage, numberedEventMessage } from "./event-message.ts";
@@ -29,9 +29,7 @@ export const burstInputs = (burst: Burst) =>
       );
 
 export const trustLevelOfBurst = (burst: Burst): TrustLevel =>
-  burst.some((event) => trustLevelOfEvent(event) === "untrusted")
-    ? "untrusted"
-    : "owner";
+  leastTrusted(burst.map(trustLevelOfEvent));
 
 export type BurstNoteSource =
   | { readonly _tag: "Named"; readonly source: NoteSource }
