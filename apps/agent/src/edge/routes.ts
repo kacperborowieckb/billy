@@ -25,7 +25,7 @@ export const edgeRoutes = [
     path: "/operator/mcp-connections/refresh",
     access: "Operator token as Authorization: Bearer",
     purpose:
-      "Asks the Owner's MCP Hub to fetch the tool list of a connected MCP server again and to send the new tool catalog copy to the Personal Agent. The answer also holds the sanitized last error of the MCP Connection (phase, reason, HTTP status, time).",
+      "Asks the Owner's MCP Hub to fetch the tool list of a connected MCP server again and to send the new tool catalog copy to the Personal Agent. The answer also holds the sanitized last error of the MCP Connection (phase, reason, HTTP status, time) and, after a good fetch, each tool definition of the copy with its fingerprint, so the Operator can review the definitions and pin them in the MCP Catalog.",
   },
   {
     method: "GET",

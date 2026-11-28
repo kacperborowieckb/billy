@@ -1,3 +1,4 @@
+import { detectToolDrift } from "ai";
 import { Effect } from "effect";
 
 import type { KeyedQueue } from "./keyed-queue.ts";
@@ -6,6 +7,7 @@ import type { McpCatalog } from "./mcp-catalog.ts";
 import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
 import type { McpRefreshOutcome } from "./mcp-hub-contract.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
+import { mcpFingerprintsOf } from "./mcp-tool-fingerprint.ts";
 
 export interface McpToolCopySyncDependencies {
   readonly catalog: McpCatalog;
@@ -29,17 +31,38 @@ export interface McpToolCopySyncDependencies {
   ) => Promise<void>;
 }
 
+const copyDigestsOf = async (copies: readonly McpToolCopy[]) => {
+  const fingerprints = await mcpFingerprintsOf(copies);
+  return Object.fromEntries(
+    copies.map(({ name, annotations }) => [
+      name,
+      `${fingerprints[name]} ${JSON.stringify(annotations)}`,
+    ])
+  );
+};
+
+const sameCopies = async (
+  current: readonly McpToolCopy[],
+  sent: readonly McpToolCopy[]
+) => {
+  const { added, changed, removed } = detectToolDrift(
+    await copyDigestsOf(current),
+    await copyDigestsOf(sent)
+  );
+  return added.length + changed.length + removed.length === 0;
+};
+
 export class McpToolCopySync {
   private readonly dependencies: McpToolCopySyncDependencies;
 
-  private readonly sent = new Map<string, string>();
+  private readonly sent = new Map<string, readonly McpToolCopy[]>();
 
   constructor(dependencies: McpToolCopySyncDependencies) {
     this.dependencies = dependencies;
   }
 
   remember(catalogId: string, copies: readonly McpToolCopy[]) {
-    this.sent.set(catalogId, JSON.stringify(copies));
+    this.sent.set(catalogId, copies);
   }
 
   async sendWhenChanged(catalogId: string, epoch: number) {
@@ -48,12 +71,12 @@ export class McpToolCopySync {
       return;
     }
     const copies = copiesOf(catalogId, epoch);
-    const serialized = JSON.stringify(copies);
-    if (this.sent.get(catalogId) === serialized) {
+    const sent = this.sent.get(catalogId);
+    if (sent !== undefined && (await sameCopies(copies, sent))) {
       return;
     }
     await deliver(catalogId, copies);
-    this.sent.set(catalogId, serialized);
+    this.sent.set(catalogId, copies);
   }
 
   private async syncOne(catalogId: string) {

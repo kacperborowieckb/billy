@@ -11,6 +11,7 @@ import { mcpCatalogFor } from "../mcp/mcp-catalog-for-env.ts";
 import type { McpCatalog } from "../mcp/mcp-catalog.ts";
 import type { McpHubPort } from "../mcp/mcp-hub-contract.ts";
 import type { McpToolCopy } from "../mcp/mcp-tool-copy.ts";
+import { mcpToolDefinitionsOf } from "../mcp/mcp-tool-definitions.ts";
 import {
   receiveMcpConnected,
   receiveMcpConnectionState,
@@ -83,7 +84,7 @@ export class PersonalAgent extends Agent<Env> {
         retryNotBefore: this.traceRetentionRetryNotBefore,
       }),
       storedFormLimits: () => this.behavior,
-      mcpCatalog: this.mcpCatalog,
+      mcpCatalog: () => this.mcpCatalog,
     })
   );
 
@@ -123,6 +124,10 @@ export class PersonalAgent extends Agent<Env> {
     await this.runtime.runPromise(
       receiveMcpToolCatalog(this.mcpCatalog, catalogId, tools)
     );
+  }
+
+  async mcpToolDefinitions(catalogId: string) {
+    return await this.runtime.runPromise(mcpToolDefinitionsOf(catalogId));
   }
 
   async receiveMcpConnected(copy: McpConnectedCopy): Promise<void> {

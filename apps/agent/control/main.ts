@@ -24,6 +24,7 @@ import {
   writeFeatureMap,
 } from "./feature-map.ts";
 import { hitRateSourceOf, readHitRate } from "./hit-rate.ts";
+import { mcpFingerprints } from "./mcp-fingerprints-command.ts";
 import { runMcpFlow } from "./mcp-flow/run-mcp-flow.ts";
 import {
   addOwner,
@@ -230,6 +231,7 @@ const control = Command.make("control").pipe(
     owner,
     request,
     mcpFlow,
+    mcpFingerprints,
     evalCommand,
     reviewSetCommand,
     map,

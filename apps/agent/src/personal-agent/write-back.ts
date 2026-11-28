@@ -10,6 +10,7 @@ import {
 import { closeOpenLoopToolName } from "../notes/close-open-loop-tool.ts";
 import { listLinkedNotesToolName } from "../notes/list-linked-notes-tool.ts";
 import { listOpenLoopsToolName } from "../notes/list-open-loops-tool.ts";
+import { holdsUntrustedContent } from "../notes/note.ts";
 import { searchNotesToolName } from "../notes/search-notes-tool.ts";
 import { briefPrompt } from "../schedule/brief-prompt.ts";
 import { listSchedulesToolName } from "../schedule/list-schedules-tool.ts";
@@ -80,7 +81,6 @@ const decodeMcpCallOutput = Schema.decodeUnknownOption(McpCallOutputSchema);
 
 const FoundMcpToolsOutput = Schema.Struct({
   connection: Schema.String,
-  matchCount: Schema.Int,
 });
 
 const decodeFoundMcpToolsOutput =
@@ -92,7 +92,7 @@ const connectionsReadBy = ({ call, output }: SucceededCall): string[] => {
   }
   if (call.toolName === findMcpToolsToolName) {
     const found = decodeFoundMcpToolsOutput(output.value);
-    return found._tag === "Some" && found.value.matchCount > 0
+    return found._tag === "Some" && holdsUntrustedContent(output.value)
       ? [found.value.connection]
       : [];
   }

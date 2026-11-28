@@ -9,12 +9,46 @@ import {
   mcpCatalogProblems,
   mcpToolRiskClass,
 } from "../src/mcp/mcp-catalog.ts";
+import type { McpClassifiedTool } from "../src/mcp/mcp-catalog.ts";
+import { toolCopyOf } from "../src/mcp/mcp-hub-results.ts";
 import { mcpResultIdsOf } from "../src/mcp/mcp-result-ids.ts";
 import { testMcpCatalogEntry } from "../src/mcp/mcp-test-catalog.ts";
+import { fingerprintedMcpCopiesOf } from "../src/mcp/mcp-tool-fingerprint.ts";
 import { notionCatalogEntry } from "../src/mcp/notion/notion-catalog-entry.ts";
 import { fakeMcpServerUrl } from "./fakes.ts";
 
 const entry = testMcpCatalogEntry(fakeMcpServerUrl);
+
+const serverCopies = await fingerprintedMcpCopiesOf(
+  fakeMcpTools.map(toolCopyOf)
+);
+
+const serverTool = (
+  name: string,
+  annotations?: McpClassifiedTool["annotations"]
+): McpClassifiedTool => {
+  const copy = serverCopies.find((tool) => tool.name === name);
+  return {
+    name,
+    fingerprint: copy?.fingerprint ?? "",
+    annotations: annotations ?? copy?.annotations ?? {},
+  };
+};
+
+const reviewedFingerprint = "A".repeat(43);
+
+const pinnedNotionEntry = {
+  ...notionCatalogEntry,
+  tools: notionCatalogEntry.tools.map((tool) => ({
+    ...tool,
+    fingerprint: reviewedFingerprint,
+  })),
+};
+
+const reviewedNotionTool = (
+  name: string,
+  annotations: McpClassifiedTool["annotations"] = {}
+) => ({ name, fingerprint: reviewedFingerprint, annotations });
 
 describe("the MCP Catalog", () => {
   it("has no problems in production or in the test-only entry", () => {
@@ -110,23 +144,62 @@ describe("the Risk Class of an MCP tool", () => {
       Object.keys(expectedClasses).toSorted()
     );
     for (const name of names) {
-      const annotations =
-        fakeMcpTools.find((tool) => tool.name === name)?.annotations ?? {};
-      expect(mcpToolRiskClass(entry, name, annotations), name).toBe(
+      expect(mcpToolRiskClass(entry, serverTool(name)), name).toBe(
         expectedClasses[name]
       );
     }
   });
 
-  it("only raises a class for a server annotation and never lowers it", () => {
-    expect(mcpToolRiskClass(entry, "search", { destructiveHint: true })).toBe(
-      "approve"
-    );
+  it("pins every listed tool of the test server at the definition that the server gives", () => {
     expect(
-      mcpToolRiskClass(entry, "wipe_workspace", { destructiveHint: false })
+      entry.tools.map(({ name, fingerprint }) => [name, fingerprint])
+    ).toEqual(
+      entry.tools.map(({ name }) => [name, serverTool(name).fingerprint])
+    );
+  });
+
+  it("asks for Approval for a definition with no pin or another pin, and keeps a blocked tool blocked", () => {
+    const changed = { fingerprint: reviewedFingerprint, annotations: {} };
+    const withoutPins = {
+      ...entry,
+      tools: entry.tools.map(({ name, riskClass }) => ({ name, riskClass })),
+    };
+
+    for (const name of ["search", "rename_page"]) {
+      expect(mcpToolRiskClass(entry, { name, ...changed })).toBe("approve");
+      expect(mcpToolRiskClass(withoutPins, serverTool(name))).toBe("approve");
+    }
+    expect(
+      mcpToolRiskClass(entry, { name: "wipe_workspace", ...changed })
+    ).toBe("blocked");
+  });
+
+  it("refuses a fingerprint that is not a digest", () => {
+    expect(
+      mcpCatalogProblems([
+        {
+          ...entry,
+          tools: [{ name: "search", riskClass: "read", fingerprint: "short" }],
+        },
+      ])
+    ).toHaveLength(1);
+  });
+
+  it("only raises a class for a server annotation and never lowers it", () => {
+    expect(
+      mcpToolRiskClass(entry, serverTool("search", { destructiveHint: true }))
+    ).toBe("approve");
+    expect(
+      mcpToolRiskClass(
+        entry,
+        serverTool("wipe_workspace", { destructiveHint: false })
+      )
     ).toBe("blocked");
     expect(
-      mcpToolRiskClass(entry, "create_page", { readOnlyHint: true } as never)
+      mcpToolRiskClass(
+        entry,
+        serverTool("create_page", { readOnlyHint: true } as never)
+      )
     ).toBe("approve");
   });
 });
@@ -288,9 +361,10 @@ describe("the Notion entry of the MCP Catalog", () => {
       notionCatalogEntry.tools.map((tool) => tool.name).toSorted()
     ).toEqual([...documentedNotionTools].toSorted());
     for (const name of documentedNotionTools) {
-      expect(mcpToolRiskClass(notionCatalogEntry, name, {}), name).toBe(
-        readNotionTools.includes(name) ? "read" : "approve"
-      );
+      expect(
+        mcpToolRiskClass(pinnedNotionEntry, reviewedNotionTool(name)),
+        name
+      ).toBe(readNotionTools.includes(name) ? "read" : "approve");
     }
     expect(
       notionCatalogEntry.tools.filter((tool) => tool.riskClass === "read")
@@ -302,7 +376,10 @@ describe("the Notion entry of the MCP Catalog", () => {
 
     for (const name of readNotionTools) {
       expect(
-        mcpToolRiskClass(notionCatalogEntry, name, destructive),
+        mcpToolRiskClass(
+          pinnedNotionEntry,
+          reviewedNotionTool(name, destructive)
+        ),
         name
       ).toBe("approve");
     }

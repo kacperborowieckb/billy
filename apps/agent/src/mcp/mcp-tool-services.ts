@@ -12,13 +12,13 @@ import { mcpEntryOf, mcpToolRiskClass } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpConnections } from "./mcp-connections.ts";
 import type { McpHubPort, McpRevocation } from "./mcp-hub-contract.ts";
-import type { McpToolCopy } from "./mcp-tool-copy.ts";
+import type { FingerprintedMcpToolCopy } from "./mcp-tool-fingerprint.ts";
 import { findMcpToolsToolName } from "./mcp-tool-names.ts";
 
 export interface McpToolServices {
   readonly catalog: McpCatalog;
   readonly states: ReadonlyMap<string, McpConnectionState>;
-  readonly copies: ReadonlyMap<string, readonly McpToolCopy[]>;
+  readonly copies: ReadonlyMap<string, readonly FingerprintedMcpToolCopy[]>;
   readonly hub: McpHubPort["Service"];
   readonly requestConnect: McpConnections["Service"]["requestConnect"];
   readonly removeConnection: (
@@ -83,12 +83,6 @@ const copyOf = (
   toolName: string
 ) => copies.get(catalogId)?.find((tool) => tool.name === toolName);
 
-export const annotationsOf = (
-  copies: McpToolServices["copies"],
-  catalogId: string,
-  toolName: string
-) => copyOf(copies, catalogId, toolName)?.annotations;
-
 interface McpCallInput {
   readonly connection: string;
   readonly tool: string;
@@ -127,17 +121,13 @@ export const mcpCallRiskClass = (
   input: McpCallInput
 ): RiskClass => {
   const entry = mcpEntryOf(services.catalog, input.connection);
-  const annotations = annotationsOf(
-    services.copies,
-    input.connection,
-    input.tool
-  );
+  const copy = copyOf(services.copies, input.connection, input.tool);
   if (
     entry === undefined ||
-    annotations === undefined ||
+    copy === undefined ||
     callRefusalOf(services, input) !== undefined
   ) {
     return "read";
   }
-  return mcpToolRiskClass(entry, input.tool, annotations);
+  return mcpToolRiskClass(entry, copy);
 };

@@ -29,8 +29,9 @@ const decodeInputSchema = Schema.decodeUnknownEffect(InputSchemaJsonSchema);
 const encodeAnnotations = Schema.encodeSync(AnnotationsJsonSchema);
 const encodeInputSchema = Schema.encodeSync(InputSchemaJsonSchema);
 
-const makeMcpConnections = (catalog: McpCatalog) =>
+const makeMcpConnections = (catalogOf: () => McpCatalog) =>
   Effect.gen(function* makeMcpConnectionsEffect() {
+    const catalog = catalogOf();
     const { database } = yield* AgentStorage;
 
     const states = database
@@ -154,6 +155,6 @@ export class McpConnections extends Context.Service<
   McpConnections,
   Effect.Success<ReturnType<typeof makeMcpConnections>>
 >()("McpConnections") {
-  static readonly layer = (catalog: McpCatalog) =>
-    Layer.effect(McpConnections, makeMcpConnections(catalog));
+  static readonly layer = (catalogOf: () => McpCatalog) =>
+    Layer.effect(McpConnections, makeMcpConnections(catalogOf));
 }

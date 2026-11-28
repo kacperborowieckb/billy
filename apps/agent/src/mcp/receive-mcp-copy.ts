@@ -9,6 +9,10 @@ import { Schedules } from "../schedule/schedules.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import { McpConnections, McpConnectionStateSchema } from "./mcp-connections.ts";
+import {
+  mcpDefinitionDriftsOf,
+  recordMcpDefinitionDrifts,
+} from "./mcp-definition-drift.ts";
 import { makeApprovalsOfConnectionDue } from "./mcp-disconnect-approvals.ts";
 import {
   failureReasonOf,
@@ -25,20 +29,27 @@ export const receiveMcpToolCatalog = (
   catalog: McpCatalog,
   catalogId: string,
   tools: readonly McpToolCopy[]
-) =>
-  mcpEntryOf(catalog, catalogId) === undefined
+) => {
+  const entry = mcpEntryOf(catalog, catalogId);
+  return entry === undefined
     ? Effect.void
     : Effect.gen(function* receiveToolCatalogEffect() {
         const copy = yield* Schema.decodeUnknownEffect(
           McpToolCatalogCopySchema
         )(tools);
+        const drifts = yield* Effect.promise(() =>
+          mcpDefinitionDriftsOf(entry, copy)
+        );
+        const { database } = yield* AgentStorage;
         const connections = yield* McpConnections;
-        yield* connections.replaceTools(catalogId, copy);
-        const entry = mcpEntryOf(catalog, catalogId);
-        if (entry !== undefined) {
-          yield* mcpToolCatalogLog(entry, copy);
-        }
+        yield* database.transaction(() =>
+          connections
+            .replaceTools(catalogId, copy)
+            .pipe(Effect.andThen(recordMcpDefinitionDrifts(drifts)))
+        );
+        yield* mcpToolCatalogLog(entry, copy);
       }).pipe(Effect.orDie);
+};
 
 export const changeMcpConnectionState = Effect.fnUntraced(
   function* changeMcpConnectionState(
@@ -136,6 +147,9 @@ export const receiveMcpConnected = Effect.fnUntraced(
       });
       return;
     }
+    const drifts = yield* Effect.promise(() =>
+      mcpDefinitionDriftsOf(entry, tools)
+    );
     const { database } = yield* AgentStorage;
     const journal = yield* Journal;
     const connections = yield* McpConnections;
@@ -148,6 +162,7 @@ export const receiveMcpConnected = Effect.fnUntraced(
             return false;
           }
           yield* connections.replaceTools(catalogId, tools);
+          yield* recordMcpDefinitionDrifts(drifts);
           yield* changeMcpConnectionState(catalogId, "ready");
           yield* journal.append({
             _tag: "McpConnectionAdded",

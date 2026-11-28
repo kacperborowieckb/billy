@@ -50,7 +50,7 @@ describe("Capabilities in the system prompt", () => {
     expect(prompt).toContain("never from your earlier replies");
     expect(prompt).toContain("You cannot open links");
     expect(prompt).toContain(
-      "a tool that the catalog does not list, and a tool that the server marks destructive wait for the Owner to approve them"
+      "a tool that the catalog does not list, a tool whose definition is not pinned, and a tool that the server marks destructive wait for the Owner to approve them"
     );
     expect(prompt).not.toContain("Only reading tools run now");
   });

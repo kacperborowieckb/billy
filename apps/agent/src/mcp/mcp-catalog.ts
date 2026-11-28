@@ -54,10 +54,14 @@ const catalogIdPattern = /^[a-z][a-z0-9_]{0,31}$/u;
 const toolNamePattern = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const fieldNamePattern = /^[A-Za-z][A-Za-z0-9_]{0,31}$/u;
 const maxSummaryTemplateLength = 300;
+const fingerprintPattern = /^[A-Za-z0-9_-]{43}$/u;
 
 const McpCatalogToolSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.check(Schema.isPattern(toolNamePattern))),
   riskClass: Schema.Literals(riskClasses),
+  fingerprint: Schema.optionalKey(
+    Schema.String.pipe(Schema.check(Schema.isPattern(fingerprintPattern)))
+  ),
   summary: Schema.optionalKey(
     Schema.String.pipe(
       Schema.check(
@@ -153,20 +157,46 @@ export const mcpEntryOf = (catalog: McpCatalog, catalogId: string) =>
 export const mcpCatalogToolOf = (entry: McpCatalogEntry, toolName: string) =>
   entry.tools.find((tool) => tool.name === toolName);
 
-export interface McpToolAnnotations {
-  readonly destructiveHint?: boolean | undefined;
+export const mcpPinsOf = (entry: McpCatalogEntry) =>
+  Object.fromEntries(
+    entry.tools.flatMap(({ name, fingerprint }) =>
+      fingerprint === undefined ? [] : [[name, fingerprint]]
+    )
+  );
+
+export interface McpClassifiedTool {
+  readonly name: string;
+  readonly fingerprint: string;
+  readonly annotations: {
+    readonly destructiveHint?: boolean | undefined;
+  };
 }
 
-const raisedBy = (declared: RiskClass, annotations: McpToolAnnotations) =>
-  annotations.destructiveHint === true && declared !== "blocked"
+export const isPinnedMcpTool = (
+  entry: McpCatalogEntry,
+  { name, fingerprint }: Pick<McpClassifiedTool, "name" | "fingerprint">
+) => mcpCatalogToolOf(entry, name)?.fingerprint === fingerprint;
+
+const raisedBy = (
+  declared: RiskClass,
+  entry: McpCatalogEntry,
+  tool: McpClassifiedTool
+) => {
+  if (declared === "blocked") {
+    return declared;
+  }
+  return tool.annotations.destructiveHint === true ||
+    !isPinnedMcpTool(entry, tool)
     ? "approve"
     : declared;
+};
 
 export const mcpToolRiskClass = (
   entry: McpCatalogEntry,
-  toolName: string,
-  annotations: McpToolAnnotations
-): RiskClass => {
-  const listed = mcpCatalogToolOf(entry, toolName);
-  return raisedBy(listed?.riskClass ?? "approve", annotations);
-};
+  tool: McpClassifiedTool
+): RiskClass =>
+  raisedBy(
+    mcpCatalogToolOf(entry, tool.name)?.riskClass ?? "approve",
+    entry,
+    tool
+  );

@@ -2,7 +2,7 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { DateTime, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fakeMcpInjection } from "../control/fake-mcp-server.ts";
+import { fakeMcpInjection, fakeMcpTools } from "../control/fake-mcp-server.ts";
 import {
   blockedCallReason,
   untrustedChangeWithoutOwnerReason,
@@ -336,7 +336,14 @@ describe(
       expect(writeBack?.message).toContain("(read: Test server)");
     });
 
-    it("names the Connection for a tool search and not the tool", async () => {
+    it("names the Connection for a search that returned an unpinned definition, and not the tool", async () => {
+      fakeMcpServer.useTools(
+        fakeMcpTools.map((tool) =>
+          tool.name === "search"
+            ? { ...tool, description: "A changed search" }
+            : tool
+        )
+      );
       const ownerId = await ownerWithConnection(9961);
       scriptModel([
         {
@@ -352,6 +359,23 @@ describe(
       expect(writeBack?.kind).toBe("write_back_stub");
       expect(writeBack?.message).toContain("(read: Test server)");
       expect(writeBack?.message).not.toContain("find_mcp_tools");
+    });
+
+    it("names no Connection for a search that returned only pinned definitions", async () => {
+      const ownerId = await ownerWithConnection(9962);
+      scriptModel([
+        {
+          callTool: findMcpToolsToolName,
+          input: { connection: testMcpCatalogId, query: "search" },
+        },
+        { say: "Nothing to report" },
+      ]);
+
+      await runBrief(ownerId);
+
+      const [writeBack] = await writeBacksOf(ownerId);
+      expect(writeBack?.kind).toBe("write_back");
+      expect(writeBack?.message).not.toContain("Test server");
     });
   }
 );
