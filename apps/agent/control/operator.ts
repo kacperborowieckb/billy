@@ -4,6 +4,8 @@ import { AddOwnerResponseSchema } from "../src/edge/operator-contract.ts";
 import type { AddOwnerResponse } from "../src/edge/operator-contract.ts";
 import { localValue } from "./local-values.ts";
 import { McpConnectionNotAdded } from "./mcp-connection-not-added.ts";
+import { operatorPost } from "./operator-request.ts";
+import type { OperatorUrlRefused } from "./operator-request.ts";
 import { OperatorTokenMissing } from "./operator-token-missing.ts";
 
 export const localWorkerUrl = "http://localhost:8787";
@@ -16,6 +18,8 @@ export class OwnerNotAdded extends Data.TaggedError("OwnerNotAdded")<{
     return `The Worker did not add the Owner (${this.status}): ${this.detail}`;
   }
 }
+
+export type OwnerAddFailure = OwnerNotAdded | OperatorUrlRefused;
 
 export const operatorToken = Effect.suspend(() => {
   const token = localValue("OPERATOR_TOKEN");
@@ -38,16 +42,12 @@ export const addOwner = Effect.fnUntraced(function* addOwner({
   readonly token: string;
   readonly telegramUserId: number;
 }) {
-  const response = yield* Effect.promise(() =>
-    fetch(new URL("/operator/owners", workerUrl), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ telegramUserId }),
-    })
-  );
+  const response = yield* operatorPost({
+    workerUrl,
+    path: "/operator/owners",
+    token,
+    body: { telegramUserId },
+  });
   const body = yield* Effect.promise(() => response.text());
   if (response.status !== 201) {
     return yield* new OwnerNotAdded({ status: response.status, detail: body });
@@ -74,16 +74,12 @@ export const addMcpConnection = Effect.fnUntraced(function* addMcpConnection({
   readonly ownerId: string;
   readonly catalogId: string;
 }) {
-  const response = yield* Effect.promise(() =>
-    fetch(new URL("/operator/mcp-connections", workerUrl), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ownerId, catalogId }),
-    })
-  );
+  const response = yield* operatorPost({
+    workerUrl,
+    path: "/operator/mcp-connections",
+    token,
+    body: { ownerId, catalogId },
+  });
   const body = yield* Effect.promise(() => response.text());
   if (response.status !== 201) {
     return yield* new McpConnectionNotAdded({

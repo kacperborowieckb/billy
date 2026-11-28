@@ -266,6 +266,8 @@ Ticket #250, research [`2026-11-28-mcp-library-oauth-flow.md`](../research/2026-
 
 Run the commands from `apps/agent` with `pnpm control <command>`, or from the root with `pnpm --filter @repo/agent control <command>`.
 
+A command that sends the Operator token (`owner add`, `request --mcp`, `mcp-fingerprints`) refuses a Worker URL that is not `https`, except an `http` URL of a Worker on this machine (`localhost`, `127.0.0.1`, `[::1]`), and it follows no redirect (`control/operator-request.test.ts`).
+
 | Command | What it does | Network |
 | --- | --- | --- |
 | `doctor` | Checks `wrangler.jsonc`: Worker name, entry, compatibility date, the `PERSONAL_AGENT` binding with SQLite storage, and the `DIRECTORY` D1 binding. Names each required secret as set or missing for local dev. With `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (permission Account Analytics Read) in the environment, it reads the `model_step` data points of the last 24 hours through the Analytics Engine SQL API (`CLOUDFLARE_API_BASE_URL` changes the API address) and checks the Hit Rate (cached input tokens / input tokens) of the calls with no planned miss: step 2 and later must be at least 90%, and step 1 inside 60 minutes at least 80%. Without the two values it prints the check as skipped. It never prints a secret value. It exits with 1 when it finds a problem. | The Cloudflare API, only with the two values set |

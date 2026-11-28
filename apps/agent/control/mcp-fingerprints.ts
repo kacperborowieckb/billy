@@ -1,6 +1,7 @@
 import { Data, Effect, Schema } from "effect";
 
 import { RefreshMcpConnectionResponseSchema } from "../src/edge/operator-contract.ts";
+import { operatorPost } from "./operator-request.ts";
 
 export class McpFingerprintsNotRead extends Data.TaggedError(
   "McpFingerprintsNotRead"
@@ -40,16 +41,12 @@ export const readMcpFingerprints = Effect.fnUntraced(
     readonly ownerId: string;
     readonly catalogId: string;
   }) {
-    const response = yield* Effect.promise(() =>
-      fetch(new URL("/operator/mcp-connections/refresh", workerUrl), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ownerId, catalogId }),
-      })
-    );
+    const response = yield* operatorPost({
+      workerUrl,
+      path: "/operator/mcp-connections/refresh",
+      token,
+      body: { ownerId, catalogId },
+    });
     const body = yield* Effect.promise(() => response.text());
     const answer = decodeResponse(body);
     if (answer._tag === "None" || answer.value.tools === undefined) {
