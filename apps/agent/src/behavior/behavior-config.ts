@@ -4,6 +4,7 @@ import type { TraceRetentionDays } from "../tracing/trace-retention-days.ts";
 export interface BehaviorConfig {
   readonly textingStyle: string;
   readonly maxToolSteps: number;
+  readonly maxStubReplyRetries: number;
   readonly maxProfileCharacters: number;
   readonly maxStoredToolResultCharacters: number;
   readonly mcpConnectTimeoutMillis: number;
@@ -36,6 +37,7 @@ export const defaultBehaviorConfig: BehaviorConfig = {
   textingStyle:
     "Write like a person who texts: short messages in plain text. Do not use markdown, headings, or lists.",
   maxToolSteps: 8,
+  maxStubReplyRetries: 2,
   maxProfileCharacters: 2000,
   maxStoredToolResultCharacters: 4000,
   mcpConnectTimeoutMillis: 30_000,

@@ -94,6 +94,7 @@ export interface ModelTraceInput {
   readonly outcomeKind?: OutcomeKind | undefined;
   readonly reaction?: ReactionOutcome | undefined;
   readonly refusedOutcomeTools?: readonly string[];
+  readonly rejectedStubReplies?: readonly string[];
   readonly restart?: ReplyTurnTrace["restart"];
   readonly trustLevelChange?: ReplyTurnTrace["trustLevelChange"];
 }
@@ -126,6 +127,7 @@ const modelTraceOf = ({
   outcomeKind,
   reaction,
   refusedOutcomeTools = [],
+  rejectedStubReplies = [],
   restart,
   trustLevelChange,
 }: ModelTraceInput) => {
@@ -144,6 +146,13 @@ const modelTraceOf = ({
     modelLatencyMillis,
     outcome: traceOutcomeOf(outcomeKind, reaction, redactor),
     refusedOutcomeTools: [...refusedOutcomeTools],
+    ...(rejectedStubReplies.length === 0
+      ? {}
+      : {
+          rejectedStubReplies: rejectedStubReplies.map((text) =>
+            redactor.redact(text)
+          ),
+        }),
     ...(restart === undefined ? {} : { restart }),
     ...(trustLevelChange === undefined ? {} : { trustLevelChange }),
   } as const;
@@ -227,7 +236,7 @@ export const responseMessagesOf = (outcome: ModelOutcome) =>
 const isToolPart = (part: { readonly type: string }) =>
   part.type === "tool-call" || part.type === "tool-result";
 
-const toolPartsOf = (message: ModelMessage): readonly ModelMessage[] => {
+export const toolPartsOf = (message: ModelMessage): readonly ModelMessage[] => {
   if (message.role === "tool") {
     return [message];
   }

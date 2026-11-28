@@ -135,6 +135,13 @@ const storedOnBothPaths = async ({
   };
 };
 
+const withoutTurnIds = (rows: readonly string[]) =>
+  rows.map((row) =>
+    row
+      .replaceAll(/call_[0-9a-f]{24}/gu, "<call id>")
+      .replaceAll(/Trace of Turn [0-9a-f-]{36}/gu, "Trace of Turn <id>")
+  );
+
 const textAfterContextBlockOf = (row: string | undefined) =>
   textAfterContextBlock(JSON.parse(row ?? "{}").content);
 
@@ -176,6 +183,7 @@ describe("The stored form of a Turn", { timeout: 30_000 }, () => {
     expect(normal.map((message) => JSON.parse(message).role)).toEqual([
       "user",
       "assistant",
+      "tool",
       "assistant",
     ]);
     expect(normal.join("\n")).not.toContain(untrustedContentOpening);
@@ -184,6 +192,8 @@ describe("The stored form of a Turn", { timeout: 30_000 }, () => {
     expect(textAfterContextBlockOf(recovered[0])).toBe(
       textAfterContextBlockOf(normal[0])
     );
-    expect(recovered.slice(1)).toEqual(normal.slice(1));
+    expect(withoutTurnIds(recovered.slice(1))).toEqual(
+      withoutTurnIds(normal.slice(1))
+    );
   });
 });

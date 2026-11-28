@@ -25,25 +25,3 @@ export type McpCallOutput = typeof McpCallOutputSchema.Type;
 
 export const truncatedNotice = (limit: number) =>
   `[truncated: the result was cut at ${limit} characters]`;
-
-const plural = (count: number) => (count === 1 ? "result" : "results");
-
-export const mcpCallStubOf = (output: McpCallOutput) => {
-  const name = `${output.connection} ${output.tool}`;
-  if (output.status !== "done") {
-    return `[${name}: ${output.status === "timed_out" ? "timed out" : "failed"}. Result removed from the history]`;
-  }
-  if (output.resultCount === undefined) {
-    return `[${name}: done. Result removed from the history. Call the tool again to read it]`;
-  }
-  const ids = output.resultIds ?? [];
-  const idsText =
-    ids.length === 0
-      ? ""
-      : ` Ids: ${ids.map(({ position, id }) => `${position}: ${id}`).join(", ")}.`;
-  const omittedText =
-    output.omittedIds === undefined
-      ? ""
-      : ` ${output.omittedIds} more ids not kept.`;
-  return `[${name}: ${output.resultCount} ${plural(output.resultCount)}, removed from the history.${idsText}${omittedText} Call the tool again to read one]`;
-};

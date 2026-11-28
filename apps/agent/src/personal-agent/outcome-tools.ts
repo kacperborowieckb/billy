@@ -1,21 +1,24 @@
 import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
-import type { DraftApproval } from "../approval/pending-approvals.ts";
 import { Channel } from "../channels/channel.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import { ModelGateway } from "../model-gateway/model-gateway.ts";
-import type {
-  ModelReply,
-  ModelRequest,
-} from "../model-gateway/model-gateway.ts";
+import type { ModelRequest } from "../model-gateway/model-gateway.ts";
 import type { ModelStep } from "../model-gateway/model-step.ts";
-import { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
-import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
-import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import { answerApprovalRequests } from "./approval-step.ts";
 import type { ApprovalAsking } from "./approval-step.ts";
-import { missesNeededText, missingTextFailure } from "./needed-text-reply.ts";
+import {
+  failedModelCall,
+  reachedStepLimit,
+  repliedWith,
+  unusableReply,
+} from "./decided-outcome.ts";
+import type { OutcomeRecords } from "./decided-outcome.ts";
+import {
+  missesNeededText,
+  noTextForNeededReplyReason,
+} from "./needed-text-reply.ts";
 import {
   defaultReactionAllowed,
   outcomeWhileApprovalWaitsMessage,
@@ -29,37 +32,12 @@ import {
 import { silenceAcceptedOutput } from "./stay-silent-tool.ts";
 import { closeLastStep, sameOutputFor } from "./step-closing.ts";
 import type { OutcomeKind } from "./storage-values.ts";
-import type {
-  ModelFailure,
-  ModelOutcome,
-  ReactionOutcome,
-} from "./turn-record.ts";
-
-export interface DecidedOutcome {
-  readonly outcome: ModelOutcome;
-  readonly kind: OutcomeKind | undefined;
-  readonly reaction?: ReactionOutcome;
-  readonly refusedOutcomeTools: readonly string[];
-  readonly drafts: readonly DraftApproval[];
-}
-
-const withEarlierSteps = (
-  error: ModelFailure,
-  earlier: readonly ModelStep[]
-): ModelFailure =>
-  error._tag === "StepLimitReached"
-    ? new StepLimitReached({
-        modelId: error.modelId,
-        reasoningEffort: error.reasoningEffort,
-        stepLimit: error.stepLimit,
-        steps: [...earlier, ...error.steps],
-      })
-    : new ModelUnavailable({
-        modelId: error.modelId,
-        reasoningEffort: error.reasoningEffort,
-        cause: error.cause,
-        steps: [...earlier, ...error.steps],
-      });
+import {
+  holdsOnlyStubs,
+  stubOnlyReplyReason,
+  withoutReplyText,
+} from "./stub-reply.ts";
+import type { ReactionOutcome } from "./turn-record.ts";
 
 interface OutcomeGeneration {
   readonly eventId: string;
@@ -67,6 +45,7 @@ interface OutcomeGeneration {
   readonly request: Omit<ModelRequest, "asksOwnerForApproval">;
   readonly tools: AgentTools;
   readonly defaultReaction: string;
+  readonly stubReplyRetries: number;
   readonly approvalAsking: ApprovalAsking;
   readonly textReplyNeeded: boolean;
 }
@@ -78,31 +57,19 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     request,
     tools,
     defaultReaction,
+    stubReplyRetries,
     approvalAsking,
     textReplyNeeded,
   }: OutcomeGeneration) {
     const modelGateway = yield* ModelGateway;
     const channel = yield* Channel;
     let earlier: readonly ModelStep[] = [];
-    const refused: string[] = [];
-    const drafts: DraftApproval[] = [];
-    const stepLimitFailure = (
-      reply: ModelReply,
-      steps: readonly ModelStep[]
-    ): DecidedOutcome => ({
-      outcome: {
-        _tag: "ModelFailed",
-        error: new StepLimitReached({
-          modelId: reply.modelId,
-          reasoningEffort: reply.reasoningEffort,
-          stepLimit: request.stepLimit,
-          steps,
-        }),
-      },
-      kind: undefined,
-      refusedOutcomeTools: refused,
-      drafts,
-    });
+    const records: OutcomeRecords = {
+      refusedOutcomeTools: [],
+      rejectedStubReplies: [],
+      drafts: [],
+    };
+    const { refusedOutcomeTools, rejectedStubReplies, drafts } = records;
 
     for (;;) {
       const stepLimit = request.stepLimit - earlier.length;
@@ -127,15 +94,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           })
         );
       if (generated._tag === "ModelFailed") {
-        return {
-          outcome: {
-            _tag: "ModelFailed",
-            error: withEarlierSteps(generated.error, earlier),
-          },
-          kind: undefined,
-          refusedOutcomeTools: refused,
-          drafts,
-        } satisfies DecidedOutcome;
+        return failedModelCall(records, generated.error, earlier);
       }
       const { reply } = generated;
       const steps = [...earlier, ...reply.steps];
@@ -143,20 +102,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         finalSteps: readonly ModelStep[],
         kind: OutcomeKind,
         reaction?: ReactionOutcome
-      ): DecidedOutcome => ({
-        outcome: {
-          _tag: "Replied",
-          reply: {
-            ...reply,
-            steps: finalSteps,
-            usage: sumUsage(finalSteps.map((step) => step.usage)),
-          },
-        },
-        kind,
-        ...(reaction === undefined ? {} : { reaction }),
-        refusedOutcomeTools: refused,
-        drafts,
-      });
+      ) => repliedWith(records, { reply, steps: finalSteps, kind, reaction });
       const calls = reply.endedWith;
       if (reply.awaitingApproval.length > 0) {
         const answered = yield* answerApprovalRequests(
@@ -169,27 +115,46 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           reply.awaitingApproval
         );
         drafts.push(...answered.drafts);
-        refused.push(...calls.map((call) => call.name));
+        refusedOutcomeTools.push(...calls.map((call) => call.name));
         earlier = closeLastStep(steps, [
           ...answered.results,
           ...sameOutputFor(calls, outcomeWhileApprovalWaitsMessage, true),
         ]);
         if (earlier.length >= request.stepLimit) {
-          return stepLimitFailure(reply, earlier);
+          return reachedStepLimit(
+            records,
+            { reply, steps: earlier },
+            request.stepLimit
+          );
         }
         continue;
       }
       if (calls.length === 0) {
+        if (holdsOnlyStubs(reply.text)) {
+          rejectedStubReplies.push(reply.text);
+          earlier = withoutReplyText(steps);
+          if (rejectedStubReplies.length > stubReplyRetries) {
+            return unusableReply(
+              records,
+              { reply, steps: earlier },
+              stubOnlyReplyReason
+            );
+          }
+          if (earlier.length >= request.stepLimit) {
+            return reachedStepLimit(
+              records,
+              { reply, steps: earlier },
+              request.stepLimit
+            );
+          }
+          continue;
+        }
         if (missesNeededText({ textReplyNeeded, drafts, text: reply.text })) {
-          return {
-            outcome: {
-              _tag: "ModelFailed",
-              error: missingTextFailure(reply, steps),
-            },
-            kind: undefined,
-            refusedOutcomeTools: refused,
-            drafts,
-          } satisfies DecidedOutcome;
+          return unusableReply(
+            records,
+            { reply, steps },
+            noTextForNeededReplyReason
+          );
         }
         const reactionInstead =
           drafts.length === 0 &&
@@ -245,10 +210,14 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
           reaction
         );
       }
-      refused.push(...calls.map((call) => call.name));
+      refusedOutcomeTools.push(...calls.map((call) => call.name));
       earlier = closeLastStep(steps, sameOutputFor(calls, refusal, true));
       if (earlier.length >= request.stepLimit) {
-        return stepLimitFailure(reply, earlier);
+        return reachedStepLimit(
+          records,
+          { reply, steps: earlier },
+          request.stepLimit
+        );
       }
     }
   }

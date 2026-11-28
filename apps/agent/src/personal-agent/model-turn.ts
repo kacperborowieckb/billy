@@ -95,6 +95,7 @@ export const runModelTurn = <Failure, Requirements>({
       },
       tools: kind.tools,
       defaultReaction: behavior.defaultReaction,
+      stubReplyRetries: behavior.maxStubReplyRetries,
       approvalAsking: approvalAskingOf(behavior, kind.asksOwnerForApproval),
       textReplyNeeded: kind.needsTextReply === true,
     });
@@ -116,6 +117,7 @@ export const runModelTurn = <Failure, Requirements>({
       outcomeKind: decided.kind,
       reaction: decided.reaction,
       refusedOutcomeTools: decided.refusedOutcomeTools,
+      rejectedStubReplies: decided.rejectedStubReplies,
       trustLevelChange: Option.getOrUndefined(trust.change()),
     };
     const recordTrace = (delivered: boolean) =>

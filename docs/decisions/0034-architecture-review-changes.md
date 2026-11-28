@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0038](0038-conversation-tool-history.md) changes "The Stub of an MCP result keeps ordered ids": the Stub is the result of a tool pair, and the Connection and the tool come from the input of the call, checked against the MCP Catalog. The id rule stays.
+
 Date: 2026-11-24
 
 The repository owner decided these rules on 2026-11-24, in a review of the agent design, the open issues, and the roadmap ([#183](https://github.com/kacperborowieckb/billy/issues/183)). The review used the code at `80dfa8a`, the decision records, and the season 2 lessons of the MEGA course on agent design (agent loop, context and memory, tools, guardrails, observability, evals).

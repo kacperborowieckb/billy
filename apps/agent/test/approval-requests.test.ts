@@ -274,7 +274,7 @@ describe("Approval for a forwarded message", () => {
       "SELECT message FROM conversation_messages ORDER BY sequence"
     );
     expect(JSON.stringify(conversation)).toContain(
-      `[${setScheduleToolName}: waits for Approval ${id}. Input and result removed from the history]`
+      `[Result removed from the history. ${setScheduleToolName}: waits for Approval ${id}.`
     );
   });
 

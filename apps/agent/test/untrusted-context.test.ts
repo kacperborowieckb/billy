@@ -356,7 +356,7 @@ describe(
       expect(recallRows.join("\n")).not.toContain("wire her money");
       expect(recallRows).toContainEqual(
         expect.stringContaining(
-          `[search_notes: done. Note ids: ${untrustedNoteId ?? "missing"}.`
+          `search_notes: done. Note ids: ${untrustedNoteId ?? "missing"}.`
         )
       );
       expect(await reminderTexts(ownerId)).toEqual(["Pay the gas bill"]);
@@ -391,7 +391,7 @@ describe(
       expect(stored).not.toContain("100 zloty");
       expect(stored).not.toContain("Kept:");
       expect(stored).toContain(untrustedContentStub);
-      expect(stored).toContain("[capture_note: done. Note ids: ");
+      expect(stored).toContain("capture_note: done. Note ids: ");
       expect(stored).toContain(JSON.stringify(untrustedReplyStub));
       expect(await reminderTexts(ownerId)).toEqual(["Pay the gas bill"]);
       expect(await pendingApprovalsOf(ownerId)).toEqual([]);
