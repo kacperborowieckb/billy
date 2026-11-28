@@ -340,6 +340,8 @@ describe("A reply that holds only Stubs", () => {
     JSON.stringify(removedInputStub),
     '{ "removed": "[Input removed from the history]" }',
     '{\n  "removed": "[Input removed from the history]"\n}',
+    '```json\n{ "removed": "[Input removed from the history]" }\n```',
+    `~~~text\n${untrustedReplyStub}\n~~~`,
   ])("is %s", (text) => {
     expect(holdsOnlyStubs(text)).toBe(true);
   });
@@ -352,6 +354,8 @@ describe("A reply that holds only Stubs", () => {
     "I removed the line from the history of the page.",
     `The page says Friday.\n${untrustedReplyStub}`,
     '{ "removed": "[Input removed from the history]", "due": "Friday" }',
+    `\`\`\`json\n{ "due": "Friday" }\n\`\`\`\n${untrustedReplyStub}`,
+    "```json\n```",
   ])("is not %s", (text) => {
     expect(holdsOnlyStubs(text)).toBe(false);
   });

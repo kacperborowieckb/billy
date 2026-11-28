@@ -10,7 +10,10 @@ const stubPatterns = [
   /\[[^[\]]*removed from the history[^[\]]*\]/giu,
 ];
 
-const writeBackRunLine = /^\((?:done in this run|read): .*\)$/gmu;
+const linesAroundStubs = [
+  /^\((?:done in this run|read): .*\)$/gmu,
+  /^\s*(?:`{3,}|~{3,})[\w-]*\s*$/gmu,
+];
 
 const letterOrDigit = /[\p{L}\p{N}]/u;
 
@@ -19,9 +22,13 @@ export const holdsOnlyStubs = (text: string) => {
   for (const pattern of stubPatterns) {
     rest = rest.replaceAll(pattern, "");
   }
-  return (
-    rest !== text && !letterOrDigit.test(rest.replaceAll(writeBackRunLine, ""))
-  );
+  if (rest === text) {
+    return false;
+  }
+  for (const pattern of linesAroundStubs) {
+    rest = rest.replaceAll(pattern, "");
+  }
+  return !letterOrDigit.test(rest);
 };
 
 export const withoutReplyText = (
