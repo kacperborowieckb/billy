@@ -67,6 +67,7 @@ interface OutcomeGeneration {
   readonly tools: AgentTools;
   readonly defaultReaction: string;
   readonly approvalAsking: ApprovalAsking;
+  readonly textReplyNeeded: boolean;
 }
 
 export const generateWithOutcomeTools = Effect.fnUntraced(
@@ -77,6 +78,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
     tools,
     defaultReaction,
     approvalAsking,
+    textReplyNeeded,
   }: OutcomeGeneration) {
     const modelGateway = yield* ModelGateway;
     const channel = yield* Channel;
@@ -186,6 +188,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
             earlierMessages,
             tools,
             approvalWaits: false,
+            textReplyNeeded,
           }));
         return reactionInstead
           ? replied(steps, "reaction", { emoji: defaultReaction })
@@ -200,6 +203,7 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
             earlierMessages,
             tools,
             approvalWaits: drafts.length > 0,
+            textReplyNeeded,
           })
         )
       );

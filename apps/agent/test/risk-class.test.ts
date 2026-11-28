@@ -349,6 +349,7 @@ const silenceRefusalAfter = async (
           earlierMessages: calls.recorded ?? [],
           tools: refusalTools,
           approvalWaits: false,
+          textReplyNeeded: false,
         })
       )
   );

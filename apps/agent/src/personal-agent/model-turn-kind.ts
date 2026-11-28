@@ -22,6 +22,7 @@ export interface ModelTurnKind<Failure, Requirements> {
   readonly tools: AgentTools;
   readonly trustLevel: TrustLevel;
   readonly asksOwnerForApproval?: boolean;
+  readonly needsTextReply?: boolean;
   readonly traceOf: (model: ModelTraceInput) => ModelTurnTrace;
   readonly restartSection?: string;
   readonly restartBeforeDelivery?: (

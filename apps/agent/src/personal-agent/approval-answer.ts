@@ -12,11 +12,17 @@ import type { PendingApproval } from "../approval/pending-approvals.ts";
 import { Channel } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
 import { toolNamed } from "../model-gateway/agent-tool.ts";
+import type { OwnerId } from "../owner-id.ts";
 import { AgentStorage } from "./agent-storage.ts";
 import {
   channelAnswerTimeoutMillis,
   editApprovalMessage,
 } from "./approval-message-edit.ts";
+import {
+  answerWithApprovalResult,
+  approvalRunOf,
+  recordApprovedCallSteps,
+} from "./approval-result-turn.ts";
 import { runApprovedCall, turnToolsOf } from "./approved-call.ts";
 import type { ApprovalAnswerSettings } from "./approved-call.ts";
 import { Conversation } from "./conversation.ts";
@@ -36,6 +42,7 @@ const appendApprovalStatus = Effect.fnUntraced(function* appendApprovalStatus(
   if (Option.isSome(status)) {
     yield* conversation.append({
       eventId,
+      recordedAs: `${eventId}:approval-status`,
       rows: [
         {
           kind: "approval_status",
@@ -72,6 +79,7 @@ const recordRunAndStatus = Effect.fnUntraced(function* recordRunAndStatus(
     pendingApprovalId: approval.pendingApprovalId,
     outcome,
   });
+  yield* recordApprovedCallSteps(eventId, approval, outcome);
   yield* appendApprovalStatus(eventId, approval);
 });
 
@@ -222,6 +230,7 @@ const answerPress = Effect.fnUntraced(function* answerPress(
 
 export const handleApprovalAnswered = Effect.fnUntraced(
   function* handleApprovalAnswered(
+    ownerId: OwnerId,
     settings: ApprovalAnswerSettings,
     event: ApprovalAnsweredEvent
   ) {
@@ -230,12 +239,23 @@ export const handleApprovalAnswered = Effect.fnUntraced(
     if (alreadyAnswered) {
       yield* settleLostRun(event);
     }
-    if (alreadyAnswered || (yield* answerPress(settings, event))) {
+    const answered = alreadyAnswered || (yield* answerPress(settings, event));
+    if (answered) {
       yield* editApprovalMessage({
         conversationId: event.conversationId,
         pendingApprovalId: event.pendingApprovalId,
       });
     }
-    yield* inbox.markDone([event]);
+    const ran = yield* approvalRunOf(event, answered);
+    if (Option.isNone(ran)) {
+      yield* inbox.markDone([event]);
+      return;
+    }
+    yield* answerWithApprovalResult({
+      ownerId,
+      settings,
+      event,
+      approval: ran.value,
+    });
   }
 );

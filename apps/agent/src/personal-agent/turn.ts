@@ -199,7 +199,7 @@ export const takeTurn = (
     const events = yield* inbox.pending;
     for (const event of events) {
       if (event._tag === "ApprovalAnswered") {
-        yield* handleApprovalAnswered({ behavior, tools }, event);
+        yield* handleApprovalAnswered(ownerId, { behavior, tools }, event);
       }
     }
     const ownerMessages = events.filter(

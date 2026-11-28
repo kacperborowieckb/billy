@@ -178,6 +178,29 @@ const makeInbox = Effect.gen(function* makeInboxEffect() {
         )
       );
 
+  const answeredApprovalIdOf = (eventId: string) =>
+    database
+      .select()
+      .from(inboxEvents)
+      .where(
+        and(
+          eq(inboxEvents.kind, "ApprovalAnswered"),
+          eq(inboxEvents.eventId, eventId)
+        )
+      )
+      .pipe(
+        Effect.map((rows) =>
+          Option.fromNullishOr(rows[0]).pipe(
+            Option.map(toInboxEvent),
+            Option.flatMap((event) =>
+              event._tag === "ApprovalAnswered"
+                ? Option.some(event.pendingApprovalId)
+                : Option.none()
+            )
+          )
+        )
+      );
+
   const ownerMessagesWithIds = (eventIds: readonly string[]) =>
     Effect.all(eventIds.map((eventId) => ownerMessageRowsWithId(eventId))).pipe(
       Effect.map((rows) =>
@@ -216,6 +239,7 @@ const makeInbox = Effect.gen(function* makeInboxEffect() {
     storeEvent,
     pending,
     ownerMessagesWithIds,
+    answeredApprovalIdOf,
     burstIsDue,
     burstGrewSince,
     markDone: settle("done"),

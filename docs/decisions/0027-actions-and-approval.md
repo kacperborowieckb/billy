@@ -4,6 +4,8 @@ Status: accepted
 
 Partly superseded: [0031](0031-gated-tools-resolve-their-input.md) changes the list of `read` tools under "Risk Class": `quiet_hours` and `proactive_message_budget` are `read` for a call with no value to change.
 
+Changed on 2026-11-28 by [#242](https://github.com/kacperborowieckb/billy/issues/242): an approved call that settles now gets one Model Turn that answers the Owner from its outcome. See "Answer after an approved call". This meets the first "Revisit if" item.
+
 Date: 2026-11-21
 
 Spec [#139](https://github.com/kacperborowieckb/billy/issues/139) (Actions and Approval). The spec names this record 0026. That number belongs to the marketing site stack, so this record has the number 0027. It supersedes one rule of [0021](0021-outcome-tools.md): the `readsOnly` flag of a tool. This decision replaces that flag with the Risk Class `read`, and the outcome-refusal rules read the Risk Class of each failed call. For a call in the current model run, the class comes from its tool and its exact input. A call from Turn progress (after a Restart or a reset) has its recorded input. The `recordedInput` function of a tool and the Redactor can change that input, so code counts the call as a read call only when its tool is `read` for every input. All other rules of 0021 stay in force. It builds on [0019](0019-proactivity.md), [0022](0022-chat-replies.md), and [0025](0025-restart-mid-turn.md).
@@ -61,15 +63,25 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 - Button press: the Edge accepts a Telegram `callback_query` only from the Owner's Channel Identity in the Directory, with data that is a short Pending Approval id and an answer. It forwards an `ApprovalAnswered` Event. The Inbox gives it Owner priority and drops a duplicate by the callback query id. Code answers the press at once.
 - Buttons only: the Owner answers a Pending Approval only with its Approve or Reject button. A text message from the Owner never answers a Pending Approval.
-- Code handles an `ApprovalAnswered` Event with no model call. It does not join a Burst and does not cause a Restart.
+- Code answers the press and records the answer with no model call. The Event does not join a Burst and does not cause a Restart. Only the answer after an approved call runs a model call (see "Answer after an approved call").
 - An answer to a Pending Approval that is not `pending` changes nothing. A late press gets "This expired" or "This was already answered".
 
 ### Running an approved call
 
 - Code runs the exact frozen input through the tool's own execute once. The recorded tool call uses the Pending Approval id as its key. After a reset during the run, code recovers from that record and does not run the call again.
 - The result sets the state to `executed`, `failed` (with the tool's failure message), or `unconfirmed`.
-- Code edits the Approval message: code keeps the summary, removes the buttons, and adds one status line: "Approved, done", "Approved, but it failed: <reason>", "Rejected", or "Expired". No new message and no model call.
+- Code edits the Approval message: code keeps the summary, removes the buttons, and adds one status line: "Approved, done", "Approved, but it failed: <reason>", "Rejected", or "Expired".
 - Code adds a short Conversation entry, for example "Approval for <summary>: approved, done", and the Journal Entry records the same answer and result.
+- A Reject, an expiry, and a late press get no new message and no model call.
+
+### Answer after an approved call
+
+- When an approved call settles as `executed`, `failed`, or `unconfirmed`, one Model Turn answers the Owner in a new message, so Telegram notifies the Owner. The Approval message still gets its status line first. The Turn is keyed by the `ApprovalAnswered` Event, so its Delivery, Turn progress, Conversation rows, and Trace use that Event id.
+- In the transaction that records the run, code writes the call and its outcome into the Turn progress of that Event, as a completed step: a tool call with the Pending Approval id as the tool call id and the frozen input, and its tool result. For `executed`, the result is the output of the tool, so an MCP result is the same Untrusted Content as a `call_mcp_tool` result in a Turn, with the same size limit and the same Stub in the Conversation. For `failed`, the result is an error that gives the reason and says that the call failed. For `unconfirmed`, it is the error that says that code cannot confirm the call ran.
+- The input of the Turn is a code message that names the Pending Approval id, the tool, and the summary. The summary of an `untrusted` Pending Approval is marked as Untrusted Content. The Turn starts with the Trust Level of the Pending Approval, and a tool result with Untrusted Content makes it `untrusted`, so the gate applies: a `change` call needs Approval.
+- The Turn is a reply Turn of the main Conversation: it sends the same system text and tool definitions as an Owner message Turn, so it reuses the prompt cache. Its tools are the tools of the first Owner message Turn of the chain, and they record under the `ApprovalAnswered` Event. A Pending Approval that this Turn creates names that Event as its Turn, and code finds the tools of its run through the answered Pending Approval.
+- The Turn must answer with text: code refuses `stay_silent` and a reaction. A failed model call sends the honest failure text.
+- Approval Events are handled one by one in Inbox order, so two approved calls that settle close together give two ordered Turns. After a reset, the Delivery state of the Event decides: a Turn that sent is not sent again, and a Turn that did not send runs from the recorded step.
 
 ### Scope
 
@@ -82,11 +94,11 @@ This feature does not use the word "Action". In `CONTEXT.md`, an Action stays th
 
 ## Why
 
-Before this decision, the only protection was to remove tools by Trust Level. That protection had two problems. It was too strict: a forwarded invitation could not become a Reminder. It was incomplete: in an Owner message Turn, the model can read an untrusted Note. That Note can contain an instruction, and the model can follow it and call a tool that changes the Owner's data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
+Before this decision, the only protection was to remove tools by Trust Level. That protection had two problems. It was too strict: a forwarded invitation could not become a Reminder. It was incomplete: in an Owner message Turn, the model can read an untrusted Note. That Note can contain an instruction, and the model can follow it and call a tool that changes the Owner's data. A Risk Class on each tool and one gate in code give one place that decides every call, from facts that the model cannot change. The native `toolApproval` option stops a call before it runs, so no tool needs its own check. Approval as stored data, not as a continued model history, keeps the Conversation valid when other messages, a Restart, or a reset come before the answer. The first version sent no message after an approved call. The real Notion run of #158 showed that the Owner then got no answer and the model never saw the result, so an approved call now gets its own Turn, and that Turn gets the result as a completed step that code wrote. Later tools (Forget, MCP Connections) declare a Risk Class and a summary and get Approval with no new code.
 
 ## Revisit if
 
-- A result needs a model summary, for example MCP output.
+- An approved call needs a result that the model must not see in full, for example a result that is too large for one Turn.
 - Scheduled Turns get a tool that needs Approval.
 - The Channel is not Telegram.
 - The Owner needs to answer a Pending Approval in text, for example from a Channel with no buttons. Issue [#162](https://github.com/kacperborowieckb/billy/issues/162) tracks a typed yes.

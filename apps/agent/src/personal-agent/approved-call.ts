@@ -2,6 +2,7 @@ import { Cause, Effect, Option } from "effect";
 
 import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
 import { approvalPathLog } from "../approval/approval-log.ts";
+import { PendingApprovals } from "../approval/pending-approvals.ts";
 import type { PendingApproval } from "../approval/pending-approvals.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { Journal } from "../journal/journal.ts";
@@ -50,22 +51,53 @@ const failedRun = (reason: string): ApprovalRunOutcome => ({
   reason,
 });
 
-export const turnToolsOf = Effect.fnUntraced(function* turnToolsOf(
-  { behavior, tools }: ApprovalAnswerSettings,
-  approval: PendingApproval
+const originBurstOf = Effect.fnUntraced(function* originBurstOf(
+  turnEventId: string
 ) {
-  const burst = yield* burstOfTurn(approval.turnEventId);
+  const inbox = yield* Inbox;
+  const pendingApprovals = yield* PendingApprovals;
+  const visited = new Set<string>();
+  let eventId = turnEventId;
+  while (!visited.has(eventId)) {
+    visited.add(eventId);
+    const burst = yield* burstOfTurn(eventId);
+    if (Option.isSome(burst)) {
+      return burst;
+    }
+    const answeredApprovalId = yield* inbox.answeredApprovalIdOf(eventId);
+    const answered = Option.isSome(answeredApprovalId)
+      ? yield* pendingApprovals.byId(answeredApprovalId.value)
+      : Option.none<PendingApproval>();
+    if (Option.isNone(answered)) {
+      return Option.none<Burst>();
+    }
+    eventId = answered.value.turnEventId;
+  }
+  return Option.none<Burst>();
+});
+
+export const toolsOfTurn = Effect.fnUntraced(function* toolsOfTurn(
+  { behavior, tools }: ApprovalAnswerSettings,
+  turnEventId: string
+) {
+  const burst = yield* originBurstOf(turnEventId);
   if (Option.isNone(burst)) {
     return Option.none<AgentTools>();
   }
   return Option.some<AgentTools>({
     ...tools,
-    ...ownerMessageTools(burst.value, {
-      ...(yield* agentToolServices),
-      behavior,
-    }),
+    ...ownerMessageTools(
+      burst.value,
+      { ...(yield* agentToolServices), behavior },
+      turnEventId
+    ),
   });
 });
+
+export const turnToolsOf = (
+  settings: ApprovalAnswerSettings,
+  approval: PendingApproval
+) => toolsOfTurn(settings, approval.turnEventId);
 
 export const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
   settings: ApprovalAnswerSettings,

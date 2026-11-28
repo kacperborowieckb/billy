@@ -17,14 +17,15 @@ import type { NoteToolServices } from "./note-tool-services.ts";
 import { searchNotesTool, searchNotesToolName } from "./search-notes-tool.ts";
 import { updateNoteTool, updateNoteToolName } from "./update-note-tool.ts";
 
-export const noteToolsFor = (services: NoteToolServices, burst: Burst) => {
-  const { eventId } = turnEventOf(burst);
-  return {
-    [captureNoteToolName]: captureNoteTool(services, burst),
-    [updateNoteToolName]: updateNoteTool(services, eventId),
-    [closeOpenLoopToolName]: closeOpenLoopTool(services, eventId),
-    [searchNotesToolName]: searchNotesTool(services, eventId),
-    [listLinkedNotesToolName]: listLinkedNotesTool(services, eventId),
-    [listOpenLoopsToolName]: listOpenLoopsTool(services, eventId),
-  };
-};
+export const noteToolsFor = (
+  services: NoteToolServices,
+  burst: Burst,
+  eventId = turnEventOf(burst).eventId
+) => ({
+  [captureNoteToolName]: captureNoteTool(services, burst, eventId),
+  [updateNoteToolName]: updateNoteTool(services, eventId),
+  [closeOpenLoopToolName]: closeOpenLoopTool(services, eventId),
+  [searchNotesToolName]: searchNotesTool(services, eventId),
+  [listLinkedNotesToolName]: listLinkedNotesTool(services, eventId),
+  [listOpenLoopsToolName]: listOpenLoopsTool(services, eventId),
+});

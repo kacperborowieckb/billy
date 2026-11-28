@@ -19,7 +19,7 @@ Ticket [#147](https://github.com/kacperborowieckb/billy/issues/147) of spec [#13
 
 The decision 0027 gives one Delivery with one row for each draft, but does not say how the rows fit the Telegram limit. A cut summary would hide part of a call. Several Approval messages keep every summary whole. A link from a new untrusted Note changes an existing Note, so the exception of 0027 cannot cover it. Forwarded text is Untrusted Content, so it must not be able to change what a summary says.
 
-A summary does not repeat every check of its tool. When the Owner approves a call that the tool then refuses, the Approval message shows "Approved, but it failed" with the reason (#144). Issue [#164](https://github.com/kacperborowieckb/billy/issues/164) tracks summaries that do not match the execution in narrow cases.
+A summary does not repeat every check of its tool. When the Owner approves a call that the tool then refuses, the Approval message shows "Approved, but it failed" with the reason (#144), and the answer Turn of [#242](https://github.com/kacperborowieckb/billy/issues/242) gets the same reason and tells the Owner that it failed. Issue [#164](https://github.com/kacperborowieckb/billy/issues/164) tracks summaries that do not match the execution in narrow cases.
 
 ## Revisit if
 
