@@ -1,7 +1,7 @@
 // The site's main navigation, shared by the header and the mobile sheet.
 export const navLinks = [
-  { href: "/#how", label: "How it works" },
-  { href: "/#privacy", label: "Privacy" },
+  { href: "/#keeps", label: "What he keeps" },
+  { href: "/#app", label: "See it in the app" },
   { href: "/#self-host", label: "Self-host" },
   { href: "/#faq", label: "Questions" },
 ] as const;

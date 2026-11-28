@@ -12,6 +12,18 @@
       "on-bubble-you": "#ffffff",
       "plate": "#f2d8ae",
       "sky": "#e8f0eb",
+      "sky-low": "#d9e9df",
+      "dawn": "#f7e6cc",
+      "dawn-low": "#f4d4ae",
+      "dusk": "#e7dcea",
+      "dusk-low": "#f0c9a9",
+      "night": "#0f1a22",
+      "night-high": "#0c141c",
+      "night-low": "#152a2b",
+      "on-night": "#f4f1ea",
+      "on-night-muted": "#b3bcc0",
+      "phone-bezel": "#1d1d1f",
+      "phone-bezel-edge": "#3a3a3c",
       "ink": "#1c1917",
       "ink-muted": "#625c57",
       "line": "#ebe7e1",
@@ -38,6 +50,18 @@
       "on-bubble-you": "#142d22",
       "plate": "#343c3d",
       "sky": "#17211d",
+      "sky-low": "#1d2b24",
+      "dawn": "#2a2620",
+      "dawn-low": "#3a2f24",
+      "dusk": "#2a2530",
+      "dusk-low": "#3d2e25",
+      "night": "#0c141c",
+      "night-high": "#080e14",
+      "night-low": "#10201f",
+      "on-night": "#f4f1ea",
+      "on-night-muted": "#b3bcc0",
+      "phone-bezel": "#050709",
+      "phone-bezel-edge": "#2a2a2c",
       "ink": "#f2efea",
       "ink-muted": "#a8a39c",
       "line": "#353331",
@@ -75,7 +99,7 @@
       "size": 96,
       "lineHeight": 90.24,
       "weight": 500,
-      "tracking": -5.76,
+      "tracking": -3.36,
       "iosTextStyle": "largeTitle"
     },
     "display-section": {
@@ -83,7 +107,7 @@
       "size": 56,
       "lineHeight": 56,
       "weight": 500,
-      "tracking": -2.8,
+      "tracking": -1.68,
       "iosTextStyle": "largeTitle"
     },
     "title": {
@@ -138,7 +162,7 @@
       "family": "sans",
       "size": 16,
       "lineHeight": 20,
-      "weight": 650,
+      "weight": 600,
       "tracking": 0,
       "iosTextStyle": "callout"
     },
@@ -189,7 +213,9 @@
     "radius-pill": 999,
     "radius-round": {
       "percent": 50
-    }
+    },
+    "radius-scene": 24,
+    "radius-stage": 32
   },
   "size": {
     "size-touch": 44,
@@ -247,6 +273,61 @@
         "blur": 20,
         "spread": 0,
         "color": "#1c19170f"
+      }
+    ],
+    "shadow-float": [
+      {
+        "x": 0,
+        "y": 1,
+        "blur": 1,
+        "spread": 0,
+        "color": "#1c19170a"
+      },
+      {
+        "x": 0,
+        "y": 2,
+        "blur": 6,
+        "spread": 0,
+        "color": "#1c19170a"
+      },
+      {
+        "x": 0,
+        "y": 16,
+        "blur": 32,
+        "spread": -12,
+        "color": "#26473c33"
+      }
+    ],
+    "shadow-button": [
+      {
+        "x": 0,
+        "y": 1,
+        "blur": 2,
+        "spread": 0,
+        "color": "#21342d4d"
+      },
+      {
+        "x": 0,
+        "y": 6,
+        "blur": 16,
+        "spread": -6,
+        "color": "#21342d73"
+      }
+    ],
+    "shadow-phone": [
+      {
+        "x": 0,
+        "y": 2,
+        "blur": 4,
+        "spread": 0,
+        "color": "#1c191714"
+      },
+      {
+        "x": 0,
+        "y": 30,
+        "blur": 60,
+        "spread": -20,
+        "color": "#1c191759"
       }
     ]
   },
@@ -321,6 +402,43 @@
         0,
         1
       ]
+    },
+    "duration-send": {
+      "milliseconds": 365
+    },
+    "easing-send": {
+      "cubicBezier": [
+        0.34,
+        1.32,
+        0.64,
+        1
+      ]
+    },
+    "duration-receive": {
+      "milliseconds": 280
+    },
+    "easing-receive": {
+      "cubicBezier": [
+        0.34,
+        1.42,
+        0.64,
+        1
+      ]
+    },
+    "duration-sky": {
+      "milliseconds": 1400
+    },
+    "duration-sun": {
+      "milliseconds": 1600
+    },
+    "duration-word": {
+      "milliseconds": 700
+    },
+    "duration-word-step": {
+      "milliseconds": 60
+    },
+    "duration-word-beat": {
+      "milliseconds": 800
     }
   }
 }

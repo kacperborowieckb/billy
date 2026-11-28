@@ -1,0 +1,296 @@
+---
+// "What Billy keeps": three small valleys, each with a live window on top
+// (src/scripts/keeps.ts): a Note being filed, Reminders landing, the morning
+// Brief ticking off.
+import { billy, icons, world } from "../art";
+---
+
+<section id="keeps" class="wrap section keeps" aria-labelledby="keeps-title" data-keeps>
+  <div class="head">
+    <h2 id="keeps-title" class="display-section">Billy keeps your Notes, Reminders and Brief.</h2>
+    <p class="lede">You write to him once, in plain words. He files it, nudges you on time, and sends one message each morning with what is due.</p>
+  </div>
+  <div class="cards">
+    <article>
+      <div class="vis vis--day" style="--hx: 20%" aria-hidden="true">
+        <img class="px cloud" src={world.cloudSmall} alt="" width="176" height="88" />
+        <div class="win">
+          <p class="win-head"><img class="px" src={billy.portrait} alt="" width="20" height="20" />Billy<small>Fri 07:12</small></p>
+          <div class="chat-thread mini" data-notes></div>
+        </div>
+      </div>
+      <h3>Saves Notes in plain words</h3>
+      <p>Say it once, the way you would say it. Billy files the Note and finds it when you ask.</p>
+    </article>
+    <article>
+      <div class="vis vis--dawn" style="--hx: 65%" aria-hidden="true">
+        <img class="px sun" src={world.sun} alt="" width="48" height="48" />
+        <div class="win">
+          <p class="win-head"><img class="px" src={icons.reminder} alt="" width="16" height="16" />Reminders<small>this week</small></p>
+          <div class="rows" data-rows></div>
+        </div>
+      </div>
+      <h3>Sends Reminders on time</h3>
+      <p>Set it the way you would say it, like “before Lisbon”. The nudge comes in the same chat.</p>
+    </article>
+    <article>
+      <div class="vis vis--dusk" style="--hx: 85%" aria-hidden="true">
+        <div class="win">
+          <p class="win-head"><img class="px" src={icons.brief} alt="" width="16" height="16" />Brief<small>Today 08:00</small></p>
+          <span class="bar"><i data-bar></i></span>
+          <div class="chat-tasks brief" data-brief></div>
+          <p class="done" data-done><img class="px" src={billy.portrait} alt="" width="20" height="20" />That's all three. Enjoy your evening.</p>
+        </div>
+      </div>
+      <h3>Writes your Brief at 8:00</h3>
+      <p>What is due, what waits on someone and what you asked him to watch, in one message.</p>
+    </article>
+  </div>
+</section>
+
+<style>
+  .head {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: end;
+    gap: var(--space-6);
+    margin-block-end: var(--space-7);
+  }
+
+  .head .lede {
+    font-size: 17px;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  article {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+  }
+
+  h3 {
+    font: 600 17px / 1.3 var(--font-sans);
+  }
+
+  article > p {
+    color: var(--color-ink-muted);
+    font-size: 15px;
+  }
+
+  .vis {
+    position: relative;
+    block-size: 320px;
+    overflow: hidden;
+    border-radius: var(--radius-scene);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 6%, transparent);
+  }
+
+  .vis--day {
+    background: linear-gradient(var(--color-sky), var(--color-sky-low));
+  }
+
+  .vis--dawn {
+    background: linear-gradient(var(--color-dawn), var(--color-dawn-low));
+  }
+
+  .vis--dusk {
+    background: linear-gradient(var(--color-dusk), var(--color-dusk-low));
+  }
+
+  .vis::before,
+  .vis::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    image-rendering: pixelated;
+    filter: var(--scenery-light);
+  }
+
+  .vis::before {
+    inset-block-end: 24px;
+    block-size: 120px;
+    background: url("@repo/mascot/assets/world/hills.svg") var(--hx) bottom / auto 120px repeat-x;
+  }
+
+  .vis::after {
+    inset-block-end: 0;
+    block-size: 24px;
+    background: url("@repo/mascot/assets/world/water.svg") left top / auto 24px repeat-x;
+  }
+
+  .cloud {
+    position: absolute;
+    inset-block-start: 196px;
+    inset-inline-end: -16px;
+    inline-size: 120px;
+    block-size: auto;
+    filter: var(--cloud-light);
+  }
+
+  .sun {
+    position: absolute;
+    inset-block-start: 222px;
+    inset-inline-end: 28px;
+  }
+
+  .win {
+    position: absolute;
+    inset: 34px 22px auto;
+    z-index: 1;
+    padding: 14px;
+    border-radius: 18px;
+    background: var(--color-surface-raised);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      var(--shadow-float);
+    font-size: 14px;
+  }
+
+  .win-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block-end: 10px;
+    font: 600 13px / 1 var(--font-sans);
+  }
+
+  .win-head small {
+    margin-inline-start: auto;
+    color: var(--color-ink-muted);
+    font: 500 11px var(--font-mono);
+  }
+
+  .mini {
+    min-block-size: 150px;
+    padding: 0;
+  }
+
+  .mini :global(.chat-bubble) {
+    max-inline-size: 92%;
+    padding: 8px 11px;
+    font-size: 13.5px;
+  }
+
+  .rows {
+    position: relative;
+    block-size: 168px;
+  }
+
+  .rows :global(.keep-row) {
+    position: absolute;
+    inset: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    block-size: 50px;
+    padding-inline: 8px 10px;
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+    transform: translateY(calc(var(--slot, 0) * 56px));
+    transition:
+      transform 520ms var(--easing-move),
+      opacity 300ms var(--easing-standard),
+      filter 300ms var(--easing-standard),
+      background-color 600ms var(--easing-standard);
+  }
+
+  .rows :global(.keep-row b) {
+    display: block;
+    font: 600 13.5px / 1.2 var(--font-sans);
+  }
+
+  .rows :global(.keep-row small) {
+    color: var(--color-ink-muted);
+    font-size: 12px;
+  }
+
+  .rows :global(.keep-row time) {
+    margin-inline-start: auto;
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: var(--color-forest-soft);
+    color: var(--color-forest-ink);
+    font: 500 12px var(--font-mono);
+  }
+
+  .rows :global(.keep-row.is-new) {
+    opacity: 0;
+    filter: blur(3px);
+  }
+
+  .rows :global(.keep-row.is-leaving) {
+    opacity: 0;
+  }
+
+  .rows :global(.keep-row.is-fresh) {
+    background: var(--color-honey);
+  }
+
+  .bar {
+    display: block;
+    block-size: 4px;
+    margin-block-end: 6px;
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: var(--color-line);
+  }
+
+  .bar i {
+    display: block;
+    block-size: 100%;
+    background: var(--color-forest);
+    scale: var(--progress, 0) 1;
+    transform-origin: left;
+    transition: scale 500ms var(--easing-standard);
+  }
+
+  .brief {
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .done {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block-start: 10px;
+    color: var(--color-forest-ink);
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 300ms var(--easing-standard);
+  }
+
+  .done:global(.is-on) {
+    opacity: 1;
+  }
+
+  @media (max-width: 1023px) {
+    .head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    article:last-child {
+      grid-column: span 2;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .cards {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    article:last-child {
+      grid-column: auto;
+    }
+  }
+</style>

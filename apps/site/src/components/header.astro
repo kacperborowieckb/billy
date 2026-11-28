@@ -1,34 +1,56 @@
 ---
-// A slim, Linear-style bar: brand on the left, links in the middle, actions on
-// the right. Transparent over the sky; a material once the page scrolls.
-import { billy } from "../art";
+// The bar: Billy's name, a Product menu of three picture cards, two links,
+// then the day and night switch, GitHub and Get Billy. A material once the
+// page scrolls under it (src/scripts/site.ts).
+import { billy, icons } from "../art";
 import { MobileNav } from "./mobile-nav";
-import { navLinks, sourceUrl } from "./nav-links";
+import { sourceUrl } from "./nav-links";
 import { buttonVariants } from "./ui/button";
+
+const menu = [
+  { href: "/#keeps", icon: icons.note, tone: "day", title: "What he keeps", line: "Notes, Reminders and the morning Brief" },
+  { href: "/#app", icon: icons.brief, tone: "dawn", title: "See it in the app", line: "Every feature, played in the chat" },
+  { href: "/#self-host", icon: icons.connector, tone: "dusk", title: "Run it yourself", line: "Open source, on your own Cloudflare account" },
+] as const;
 ---
 
 <div class="masthead" data-masthead>
   <header class="wrap bar">
     <a class="brand" href="/">
-      <span class="mascot logo"><img class="px" src={billy.base} alt="" width="48" height="48" /></span>
+      <img class="px" src={billy.portrait} alt="" width="32" height="32" />
       <span>Billy</span>
     </a>
     <nav aria-label="Main" class="links">
-      {
-        navLinks.map((link) => (
-          <a
-            class={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground hover:text-foreground" })}
-            href={link.href}
-          >
-            {link.label}
-          </a>
-        ))
-      }
+      <div class="item" data-menu>
+        <button class="link" type="button" aria-expanded="false" aria-controls="product-menu">
+          Product
+          <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </button>
+        <div class="menu" id="product-menu" inert>
+          {
+            menu.map((entry) => (
+              <a href={entry.href}>
+                <span class:list={["pane", `pane--${entry.tone}`]}>
+                  <img class="px" src={entry.icon} alt="" width="48" height="48" />
+                </span>
+                <b>{entry.title}</b>
+                <span class="line">{entry.line}</span>
+              </a>
+            ))
+          }
+        </div>
+      </div>
+      <a class="link" href="/#self-host">Self-host</a>
+      <a class="link" href="/#faq">Questions</a>
     </nav>
     <div class="actions">
-      <a class={buttonVariants({ variant: "ghost", size: "sm", className: "source" })} href={sourceUrl}>Source</a>
-      <a class={buttonVariants({ size: "sm" })} href="/#self-host">Get Billy</a>
-      <div class="menu">
+      <button class="link theme" type="button" data-theme-toggle aria-label="Switch to night">
+        <svg class="sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2"></circle><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"></path></svg>
+        <svg class="moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 10.4A5.6 5.6 0 0 1 5.6 2.8a5.6 5.6 0 1 0 7.6 7.6Z"></path></svg>
+      </button>
+      <a class="link source" href={sourceUrl}>GitHub</a>
+      <a class={buttonVariants({ size: "sm", className: "go" })} href="/#self-host">Get Billy<svg class="chevron" data-icon="inline-end" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg></a>
+      <div class="mobile">
         <MobileNav client:media="(max-width: 860px)" />
       </div>
     </div>
@@ -37,52 +59,42 @@ import { buttonVariants } from "./ui/button";
 
 <style>
   .masthead {
-    position: fixed;
+    position: sticky;
     inset-block-start: 0;
-    inset-inline: 0;
     z-index: 20;
     border-block-end: 1px solid transparent;
-    transition:
-      background-color var(--duration-standard) var(--easing-standard),
-      border-color var(--duration-standard) var(--easing-standard),
-      backdrop-filter var(--duration-standard) var(--easing-standard);
+    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    backdrop-filter: blur(16px) saturate(1.5);
+    transition: border-color var(--duration-standard) var(--easing-standard);
   }
 
   .masthead:global(.is-scrolled) {
-    background: color-mix(in srgb, var(--color-surface) 75%, transparent);
     border-block-end-color: var(--color-line);
-    backdrop-filter: blur(16px) saturate(1.6);
   }
 
   @media (prefers-reduced-transparency: reduce) {
-    .masthead:global(.is-scrolled) {
+    .masthead {
       background: var(--color-surface);
       backdrop-filter: none;
     }
   }
 
   .bar {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-6);
     block-size: 64px;
   }
 
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-2);
-    justify-self: start;
+    gap: 10px;
     min-block-size: var(--size-touch);
     color: var(--color-ink);
-    font: var(--text-heading);
-    letter-spacing: var(--text-heading-tracking);
+    font: 400 24px / 1 var(--font-display);
+    letter-spacing: -0.02em;
     text-decoration: none;
-  }
-
-  .logo {
-    --mascot-size: 48px;
   }
 
   .links {
@@ -91,29 +103,192 @@ import { buttonVariants } from "./ui/button";
     gap: var(--space-1);
   }
 
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 36px;
+    padding-inline: var(--space-3);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: none;
+    color: var(--color-ink);
+    font: 500 15px / 1 var(--font-sans);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--duration-quick) var(--easing-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .link:hover {
+      background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+    }
+
+    .menu a:hover {
+      background: var(--color-surface-sunken);
+    }
+  }
+
+  .chev {
+    inline-size: 12px;
+    block-size: 12px;
+    transition: rotate var(--duration-standard) var(--easing-standard);
+  }
+
+  .item {
+    position: relative;
+  }
+
+  .item:global(.is-open) .chev {
+    rotate: 180deg;
+  }
+
+  /* Opens from its button: fade and a slight scale, no slide. */
+  .menu {
+    position: absolute;
+    inset-block-start: calc(100% + 10px);
+    inset-inline-start: -12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+    inline-size: min(760px, calc(100vw - 40px));
+    padding: var(--space-3);
+    border-radius: calc(var(--radius-lg) + 2px);
+    background: var(--color-surface-raised);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      var(--shadow-float);
+    opacity: 0;
+    scale: 0.98;
+    transform-origin: 20% top;
+    pointer-events: none;
+    transition:
+      opacity 120ms var(--easing-standard),
+      scale 120ms var(--easing-standard);
+  }
+
+  .item:global(.is-open) .menu {
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+    transition-duration: 200ms;
+  }
+
+  .menu a {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    color: var(--color-ink);
+    text-decoration: none;
+    transition: background-color var(--duration-quick) var(--easing-standard);
+  }
+
+  .menu b {
+    font: 600 14px / 1.3 var(--font-sans);
+  }
+
+  .menu .line {
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .pane {
+    position: relative;
+    display: grid;
+    place-items: center;
+    block-size: 92px;
+    margin-block-end: var(--space-2);
+    overflow: hidden;
+    border-radius: 10px;
+    background: linear-gradient(var(--color-sky), var(--color-sky-low));
+  }
+
+  .pane--dawn {
+    background: linear-gradient(var(--color-dawn), var(--color-dawn-low));
+  }
+
+  .pane--dusk {
+    background: linear-gradient(var(--color-dusk), var(--color-dusk-low));
+  }
+
+  .pane::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    block-size: 30px;
+    background: url("@repo/mascot/assets/world/hills.svg") center bottom / auto 30px repeat-x;
+    image-rendering: pixelated;
+    filter: var(--scenery-light);
+  }
+
+  .pane img {
+    position: relative;
+    z-index: 1;
+  }
+
   .actions {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: var(--space-2);
+    margin-inline-start: auto;
   }
 
-  .menu {
+  .theme {
+    position: relative;
+    justify-content: center;
+    inline-size: 36px;
+    padding: 0;
+  }
+
+  .theme svg {
+    inline-size: 16px;
+    block-size: 16px;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .theme .moon {
+    position: absolute;
+    display: var(--night-only);
+  }
+
+  .theme .sun {
+    display: var(--day-only);
+  }
+
+  .go .chevron,
+  :global(.chevron) {
+    inline-size: 12px;
+    block-size: 12px;
+    margin-inline-end: -2px;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .mobile {
     display: none;
   }
 
   @media (max-width: 860px) {
-    .bar {
-      grid-template-columns: 1fr auto;
-    }
-
     .links,
-    .actions :global(.source) {
+    .source {
       display: none;
     }
 
-    .menu {
+    .mobile {
       display: block;
+    }
+
+    .actions {
+      gap: var(--space-1);
     }
   }
 </style>

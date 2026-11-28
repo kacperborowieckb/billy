@@ -1,35 +1,224 @@
-<footer class="wrap footer">
-  <p>Billy is a personal agent you text like a colleague.</p>
-  <nav aria-label="Footer">
-    <a href="#privacy">Privacy</a>
-    <a href="#self-host">Self-host</a>
-    <a href="#faq">Questions</a>
-    <a href="https://github.com/kacperborowieckb/billy">Source</a>
-  </nav>
+---
+// The footer is Billy's world at night: a last call to set him up, "Tell
+// Billy." set large, and the links, above the night hills.
+import { buttonVariants } from "@/components/ui/button";
+
+import { billy, world } from "../art";
+import { sourceUrl } from "./nav-links";
+
+const stars = [
+  { left: "58%", top: "9%", size: 16, delay: 0 },
+  { left: "71%", top: "21%", size: 8, delay: 0.3 },
+  { left: "84%", top: "44%", size: 16, delay: 0.55 },
+  { left: "64%", top: "47%", size: 8, delay: 0.1 },
+  { left: "52%", top: "33%", size: 8, delay: 0.8 },
+  { left: "90%", top: "8%", size: 8, delay: 0.4 },
+];
+
+const columns = [
+  { title: "Product", links: [{ href: "/#keeps", label: "Notes" }, { href: "/#app", label: "Recall" }, { href: "/#keeps", label: "Brief" }] },
+  { title: "Actions", links: [{ href: "/#app", label: "Approvals" }, { href: "/#app", label: "Undo" }] },
+  { title: "Run it", links: [{ href: "/#self-host", label: "Self-host" }, { href: sourceUrl, label: "GitHub" }] },
+  { title: "Help", links: [{ href: "/#faq", label: "Questions" }, { href: sourceUrl, label: "Read the source" }] },
+];
+---
+
+<footer class="night" aria-labelledby="close-title" data-night>
+  <img class="px moon" src={world.moon} alt="" width="112" height="112" />
+  {
+    stars.map((star) => (
+      <img
+        class="px star"
+        src={world.star}
+        alt=""
+        width={star.size}
+        height={star.size}
+        style={`left: ${star.left}; top: ${star.top}; --twinkle-delay: ${star.delay}`}
+      />
+    ))
+  }
+  <div class="wrap">
+    <div class="cta">
+      <div>
+        <h2 id="close-title">Set Billy up on your own account</h2>
+        <p>Clone it, add your model key, and send him the first thing to remember.</p>
+      </div>
+      <a class={buttonVariants({ className: "go light" })} href="/#self-host">Get Billy<svg class="chevron" data-icon="inline-end" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg></a>
+    </div>
+    <p class="word" aria-hidden="true">Tell Billy.</p>
+    <div class="columns">
+      <div>
+        <a class="brand" href="/"><img class="px" src={billy.portrait} alt="" width="32" height="32" />Billy</a>
+        <p class="lede-night">A personal agent you text like a colleague.</p>
+      </div>
+      {
+        columns.map((column) => (
+          <nav aria-label={column.title}>
+            <h3>{column.title}</h3>
+            <ul>
+              {column.links.map((link) => (
+                <li>
+                  <a href={link.href}>{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))
+      }
+    </div>
+    <p class="legal">© 2026 Billy, open source</p>
+  </div>
 </footer>
 
 <style>
-  .footer {
+  .night {
+    position: relative;
+    overflow: hidden;
+    padding-block: 110px 190px;
+    background:
+      radial-gradient(60% 50% at 82% 8%, color-mix(in srgb, var(--color-on-night) 8%, transparent), transparent 70%),
+      linear-gradient(var(--color-night-high), var(--color-night) 55%, var(--color-night-low));
+    color: var(--color-on-night);
+  }
+
+  /* The night hills: the same artwork, dimmed the way the valley is at
+     night. */
+  .night::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    block-size: 120px;
+    background: url("@repo/mascot/assets/world/hills.svg") 40% bottom / auto 120px repeat-x;
+    image-rendering: pixelated;
+    filter: brightness(0.42) saturate(0.8);
+    pointer-events: none;
+  }
+
+  .moon {
+    position: absolute;
+    inset-block-start: 92px;
+    inset-inline-end: max(var(--space-6), calc((100% - var(--size-page)) / 2));
+  }
+
+  .star {
+    position: absolute;
+    opacity: 0.85;
+  }
+
+  .cta {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: var(--space-4);
-    padding-block: var(--space-6);
-    color: var(--color-ink-muted);
+    gap: var(--space-5);
   }
 
-  nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+  h2 {
+    max-inline-size: 16ch;
+    font: 400 clamp(32px, 3.6vw, 44px) / 1.08 var(--font-display);
+    letter-spacing: -0.02em;
   }
 
-  a {
+  .cta p {
+    margin-block-start: 14px;
+    color: var(--color-on-night-muted);
+    font-size: 18px;
+  }
+
+  .cta :global(.light) {
+    margin-block-start: 120px;
+    background: var(--color-on-night);
+    color: var(--color-night);
+  }
+
+  .word {
+    margin-block: 56px 72px;
+    font: 400 clamp(72px, 13vw, 180px) / 1.02 var(--font-display);
+    letter-spacing: -0.035em;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 4fr repeat(4, 2fr);
+    gap: var(--space-6);
+    padding-block-end: 28px;
+  }
+
+  .brand {
     display: inline-flex;
     align-items: center;
-    min-block-size: var(--size-touch);
-    padding-inline: var(--space-2);
-    color: var(--color-ink-muted);
+    gap: 10px;
+    color: var(--color-on-night);
+    font: 400 24px / 1 var(--font-display);
+    text-decoration: none;
+  }
+
+  .lede-night {
+    max-inline-size: 20ch;
+    margin-block-start: var(--space-4);
+    font: 400 20px / 1.35 var(--font-display);
+  }
+
+  h3 {
+    margin-block-end: var(--space-4);
+    color: var(--color-on-night-muted);
+    font: 500 14px / 1 var(--font-sans);
+  }
+
+  ul {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  ul a {
+    color: var(--color-on-night);
+    font-size: 15px;
+    text-decoration: none;
+    transition: color var(--duration-quick) var(--easing-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    ul a:hover {
+      color: var(--color-on-night-muted);
+    }
+  }
+
+  .legal {
+    padding-block-start: 20px;
+    border-block-start: 1px solid color-mix(in srgb, var(--color-on-night) 16%, transparent);
+    color: var(--color-on-night-muted);
+    font-size: 13px;
+  }
+
+  @keyframes star-twinkle {
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .star {
+      animation: star-twinkle var(--duration-twinkle) var(--easing-float) infinite;
+      animation-delay: calc(var(--duration-twinkle) * var(--twinkle-delay) * -1);
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .columns {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .columns > div:first-child {
+      grid-column: span 2;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .cta :global(.light) {
+      margin-block-start: 0;
+    }
   }
 </style>
