@@ -368,6 +368,9 @@ describe("the requests of the library", () => {
           ])
         );
         expect(oauthRequests.some(({ hasSignal }) => hasSignal)).toBe(false);
+        expect(
+          host.sent.some(({ path, hasSignal }) => path === "/mcp" && hasSignal)
+        ).toBe(true);
         expect(host.sent).toHaveLength(fakeMcpServer.requests);
       }),
     slowTest

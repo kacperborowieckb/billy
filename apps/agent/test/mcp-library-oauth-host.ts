@@ -29,15 +29,17 @@ export interface HostOptions {
   readonly onInsufficientScope?: "reauthorize" | "throw";
 }
 
-const fetchRecordedBy =
-  (sent: SentRequest[]): FetchFunction =>
+const sendToFakeServer: FetchFunction = (input, init) =>
+  fakeMcpServer.fetch(new Request(input, init));
+
+const recordingInto =
+  (sent: SentRequest[], send: FetchFunction): FetchFunction =>
   (input, init) => {
-    const request = new Request(input, init);
     sent.push({
-      path: new URL(request.url).pathname,
+      path: new URL(input instanceof Request ? input.url : input).pathname,
       hasSignal: init?.signal !== undefined && init.signal !== null,
     });
-    return fakeMcpServer.fetch(request);
+    return send(input, init);
   };
 
 const withOAuthDeadline =
@@ -65,11 +67,13 @@ const libraryHostOf = async ({
 }: LibraryHostInput) => {
   const keyring = await parseSealKeyring(env.MCP_SEALING_KEYS);
   const sent: SentRequest[] = [];
-  const guarded = guardedFetch(fetchRecordedBy(sent), []);
-  const send =
+  const guarded = guardedFetch(sendToFakeServer, []);
+  const send = recordingInto(
+    sent,
     oauthDeadlineMillis === undefined
       ? guarded
-      : withOAuthDeadline(guarded, oauthDeadlineMillis);
+      : withOAuthDeadline(guarded, oauthDeadlineMillis)
+  );
   const sealed = sealedOAuthStorage({ storage, keyring, ownerId });
 
   const libraryProvider = () =>
