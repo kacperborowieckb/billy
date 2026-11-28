@@ -228,7 +228,7 @@ Known limit: no Owner removal flow exists yet (#138), so the storage deletion is
 
 ### MCP Connections: the Notion entry
 
-Decision [0036](../decisions/0036-mcp-connections.md), ticket #158. `test/mcp-catalog.test.ts` checks the entry against the documented tool list: `notion-search` and `notion-fetch` are `read`, every other tool is `approve` and has a summary template, and the lines of the create, update, move, and comment tools come from the arguments, also with a list, another argument name, an absent optional argument, an unreadable one, and an option that deletes or replaces something.
+Decision [0036](../decisions/0036-mcp-connections.md), ticket #158. `test/mcp-catalog.test.ts` checks the entry against the documented tool list: `notion-search`, `notion-fetch`, and the 16 workspace reads of decision 0036 are `read`, every other tool is `approve`, every `approve` tool has a summary template, a read that the server marks destructive needs Approval, and the lines of the create, update, move, and comment tools come from the arguments, also with a list, another argument name, an absent optional argument, an unreadable one, and an option that deletes or replaces something.
 
 `test/mcp-notion-connect.test.ts` connects the Notion entry through the Edge with a fake server that lists all 74 tools with long descriptions (about 300,000 characters) and input schemas that follow the documented parameters, and checks the stored copy, the state, the Journal Entry, and the "Connected Notion" message. `test/mcp-failure.test.ts` and `test/mcp-oauth-callback.test.ts` check that a failure log names the phase and the reason and holds no secret. The real descriptions and input schemas of Notion are not published, so the fake ones are modeled.
 

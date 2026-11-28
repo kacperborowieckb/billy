@@ -260,18 +260,55 @@ const documentedNotionTools = [
   "notion-wait-session",
 ] as const;
 
+const readNotionTools: readonly string[] = [
+  "notion-search",
+  "notion-fetch",
+  "notion-list-private-pages",
+  "notion-list-shared-pages",
+  "notion-list-favorite-pages",
+  "notion-list-recent-pages",
+  "notion-list-page-backlinks",
+  "notion-get-self",
+  "notion-get-teams",
+  "notion-get-users",
+  "notion-get-groups",
+  "notion-get-comments",
+  "notion-get-suggested-edit",
+  "notion-view-version",
+  "notion-get-version-changes",
+  "notion-query-meeting-notes",
+  "notion-query-data-sources",
+  "notion-query-multiple-data-sources",
+];
+
 describe("the Notion entry of the MCP Catalog", () => {
-  it("lists every documented Notion tool, with read only for search and fetch", () => {
+  it("lists every documented Notion tool, with read only for search, fetch, and the workspace reads", () => {
     expect(notionCatalogEntry.serverUrl).toBe("https://mcp.notion.com/mcp");
     expect(
       notionCatalogEntry.tools.map((tool) => tool.name).toSorted()
     ).toEqual([...documentedNotionTools].toSorted());
     for (const name of documentedNotionTools) {
-      const isRead = name === "notion-search" || name === "notion-fetch";
       expect(mcpToolRiskClass(notionCatalogEntry, name, {}), name).toBe(
-        isRead ? "read" : "approve"
+        readNotionTools.includes(name) ? "read" : "approve"
       );
     }
+    expect(
+      notionCatalogEntry.tools.filter((tool) => tool.riskClass === "read")
+    ).toHaveLength(readNotionTools.length);
+  });
+
+  it("asks for Approval, with its line, when the server marks a read destructive", () => {
+    const destructive = { destructiveHint: true };
+
+    for (const name of readNotionTools) {
+      expect(
+        mcpToolRiskClass(notionCatalogEntry, name, destructive),
+        name
+      ).toBe("approve");
+    }
+    expect(
+      mcpApprovalSummaryOf(notionCatalogEntry, "notion-list-recent-pages", {})
+    ).toBe("Notion: list recent pages");
   });
 
   it("has a summary template for every tool that needs Approval", () => {

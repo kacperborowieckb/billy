@@ -6,7 +6,26 @@ import { notionDatabaseSummaries } from "./notion-database-summaries.ts";
 import { notionPageSummaries } from "./notion-page-summaries.ts";
 import { notionWorkspaceSummaries } from "./notion-workspace-summaries.ts";
 
-const readTools: readonly McpCatalogTool[] = [
+const workspaceReadToolNames: ReadonlySet<string> = new Set([
+  "notion-list-private-pages",
+  "notion-list-shared-pages",
+  "notion-list-favorite-pages",
+  "notion-list-recent-pages",
+  "notion-list-page-backlinks",
+  "notion-get-self",
+  "notion-get-teams",
+  "notion-get-users",
+  "notion-get-groups",
+  "notion-get-comments",
+  "notion-get-suggested-edit",
+  "notion-view-version",
+  "notion-get-version-changes",
+  "notion-query-meeting-notes",
+  "notion-query-data-sources",
+  "notion-query-multiple-data-sources",
+]);
+
+const searchAndFetchTools: readonly McpCatalogTool[] = [
   {
     name: "notion-search",
     riskClass: "read",
@@ -15,14 +34,18 @@ const readTools: readonly McpCatalogTool[] = [
   { name: "notion-fetch", riskClass: "read" },
 ];
 
-const approvalTools: readonly McpCatalogTool[] = Object.entries({
+const summarizedTools: readonly McpCatalogTool[] = Object.entries({
   ...notionPageSummaries,
   ...notionDatabaseSummaries,
   ...notionCommentSummaries,
   ...notionWorkspaceSummaries,
   ...notionAgentSummaries,
   ...notionCalendarSummaries,
-}).map(([name, summary]) => ({ name, riskClass: "approve", summary }));
+}).map(([name, summary]) => ({
+  name,
+  riskClass: workspaceReadToolNames.has(name) ? "read" : "approve",
+  summary,
+}));
 
 export const notionCatalogEntry: McpCatalogEntry = {
   catalogId: "notion",
@@ -30,5 +53,5 @@ export const notionCatalogEntry: McpCatalogEntry = {
   description:
     "The Owner's Notion workspace: pages, databases, comments, and calendar.",
   serverUrl: "https://mcp.notion.com/mcp",
-  tools: [...readTools, ...approvalTools],
+  tools: [...searchAndFetchTools, ...summarizedTools],
 };
