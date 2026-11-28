@@ -23,7 +23,7 @@ import { generateWithOutcomeTools } from "./outcome-tools.ts";
 import { failAtStepLimit } from "./step-limit-failure.ts";
 import type { OutcomeKind } from "./storage-values.ts";
 import { reacted, replied, silent, unanswered } from "./stored-turn.ts";
-import type { TurnEnding } from "./stored-turn.ts";
+import { turnCommitOf } from "./turn-commit.ts";
 import { approvalAskingOf, deliverTurnOutcome } from "./turn-delivery.ts";
 import { recordTurnMetric } from "./turn-metric.ts";
 import { unpreparedTurn } from "./turn-preparation.ts";
@@ -85,13 +85,7 @@ export const runModelTurn = <Failure, Requirements>({
       { ...kind, ...preparation, ...turn, historyTrustLevel },
       earlier
     );
-    const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
-      session.commit({
-        ...turn,
-        steps,
-        ending,
-        trustLevel: trust.current(),
-      });
+    const finished = turnCommitOf(session, turn, trust);
     const callReview = yield* turnReviewOf(eventId, behavior);
     const decided = yield* generateWithOutcomeTools({
       eventId,

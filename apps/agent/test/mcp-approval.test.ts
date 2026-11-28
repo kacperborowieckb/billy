@@ -21,10 +21,12 @@ import {
   fakeMcpLimits,
   fakeMcpServer,
   fakeModel,
+  fakeReviewerModel,
   fakeTelegram,
   holdModel,
   resetFakes,
   scriptModel,
+  scriptReviewer,
 } from "./fakes.ts";
 import {
   addOwner,
@@ -409,7 +411,7 @@ const waitForSentAfter = (sentBefore: number, count = 1) =>
   });
 
 describe("A Turn after an MCP Turn", { timeout: 40_000 }, () => {
-  it("sends the offer of that Turn again, so a Yes drafts one Pending Approval for a change that an owner Turn would run at once", async () => {
+  it("sends the offer of that Turn again, so a Yes drafts one Pending Approval for a change that an owner Turn would run at once, after a review that never reads the offer", async () => {
     const offer = "Page 1 is the Reading list. Should I rename it to Books?";
     const ownerId = await ownerWithConnection(9980);
     scriptModel([callOf("search", { query: "pages" }), { say: offer }]);
@@ -418,6 +420,7 @@ describe("A Turn after an MCP Turn", { timeout: 40_000 }, () => {
       callOf("rename_page", { id: "1", title: "Books" }),
       { say: "The rename waits for your Approval." },
     ]);
+    scriptReviewer([{ answer: "ask", reason: "Your messages name no page." }]);
     const callsBefore = fakeModel.doGenerateCalls.length;
 
     await say(9980, "Yes", fakeTelegram.sent.length);
@@ -435,6 +438,10 @@ describe("A Turn after an MCP Turn", { timeout: 40_000 }, () => {
     expect(fakeMcpServer.calls.map((call) => call.tool)).toEqual(["search"]);
     const [rename] = await approvalsOf(ownerId);
     expect(rename?.tool_name).toBe(callMcpToolToolName);
+    expect(fakeReviewerModel.doGenerateCalls).toHaveLength(1);
+    expect(
+      JSON.stringify(fakeReviewerModel.doGenerateCalls[0]?.prompt)
+    ).not.toContain(offer);
   });
 });
 

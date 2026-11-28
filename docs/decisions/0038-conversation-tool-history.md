@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Partly superseded: [0039](0039-auto-review.md) adds an exception to the "Reply guard" rule: a Turn that stops at the refusal limit of Auto-review sends only a fixed line of code.
+
 Date: 2026-11-28
 
 Ticket [#246](https://github.com/kacperborowieckb/billy/issues/246) of spec [#255](https://github.com/kacperborowieckb/billy/issues/255), after the investigation [#243](https://github.com/kacperborowieckb/billy/issues/243). This is one record for #246 and [#251](https://github.com/kacperborowieckb/billy/issues/251), because both change the stored form of a Turn. This version holds the rules of #246. #251 adds its rules here: the reply text of an `untrusted` Turn, and the Trust Level that code reads from the stored rows.
@@ -59,18 +61,19 @@ The rule of [0032](0032-pending-approval-keeps-its-trust.md) and the `capture_no
 - **The stored form of that Turn.** A Turn that is `untrusted` for any reason, also only because of a row, has the `untrusted` stored form: marked parts of the inputs become Stubs, each tool call becomes a pair with a removed input, and no step text is kept. So its reply is `untrusted` too.
 - **A Turn with no reply.** A Turn that ends with a reaction, with silence, or with no answer writes no `untrusted` row. A forward that ends this way leaves the next Turn `owner`.
 - **Prefix.** A Turn whose stored inputs and steps are the bytes that it sent is not a planned miss, also when it is `untrusted`.
-- **Side Sessions.** The Run block quotes an `untrusted` row inside the Untrusted Content marker. So the Side Session is `untrusted` by the rule of 0034, with the same gate rules. These rules stay until [#140](https://github.com/kacperborowieckb/billy/issues/140) ships and sets the rule for a Side Session in its own record.
+- **Side Sessions.** The Run block quotes an `untrusted` row inside the Untrusted Content marker. So the Side Session is `untrusted` by the rule of 0034, and the gate rules of [0039](0039-auto-review.md) for an `untrusted` Side Session apply.
 - **Write-back.** The row kind `write_back_stub` is gone. The Turn that is connected to a Proactive Message quotes the sent text inside the marker unless the Write-back of that run is `owner`.
-- **Gate.** No change. In an `untrusted` Turn a `change` call asks the Owner. [#140](https://github.com/kacperborowieckb/billy/issues/140) later sends that call to a reviewer first.
+- **Gate.** #251 does not change it. By [0039](0039-auto-review.md), a `change` call of an `untrusted` Turn goes to Auto-review. The reviewer reads the messages of the Owner and the planned call, and never a stored reply.
 - **At storage.** The Trust Level of the stored form is `untrusted` when the run says so, when its inputs or steps hold the marker, or when a row in the Conversation at that time is `untrusted`. After a reset, and at the step limit, no model call ran that could give the level of the run: the run says only what its Event or its Pending Approval says, and code reads the other two again. When another run added an `untrusted` row in between, the Turn is stored as `untrusted`. That direction only asks for more Approval.
 - **Migration of the mark.** A versioned migration adds the column. The rows from before hold no model text of an `untrusted` run, so they are `owner`. In the rows that Compaction did not replace, it deletes each reply Stub and each `write_back_stub` row. Their text was never stored, and it stays in the Journal and the Traces. A compacted `write_back_stub` row becomes an `untrusted` `write_back` row. The migration keeps the row counter of the table, so a new row never takes the position of an earlier row that a Trace can point to.
 
 ## What follows from the mark
 
 - The main Conversation does not go back to `owner`. After the first `untrusted` reply, each later Turn is `untrusted`, so its reply is too, and each Compaction passes the mark to the Summary. No rule ends this today.
-- Until #140 ships, each `change` call of an Owner message Turn after that point waits for a tap. `capture_note` of a new Note with no link still runs, and code marks the Note `untrusted`.
+- Each `change` call of an Owner message Turn after that point goes to Auto-review (0039). It runs with no tap only when the reviewer allows it, and each `approve` call waits for a tap. `capture_note` of a new Note with no link still runs with no review, and code marks the Note `untrusted`.
 - Each later tool call is stored with a removed input and a Stub as its result, also a call that read only data of the Owner. The agent reads the data again when it needs it.
-- Until #140 ships, a Side Session whose Run block quotes an `untrusted` reply or Write-back cannot close an Open Loop, and code writes the prompt of its follow-up. Its own Write-back is `untrusted`.
+- In a Side Session whose Run block quotes an `untrusted` reply or Write-back, code writes the prompt of a follow-up, and every other change, for example a close of an Open Loop, runs only when Auto-review allows it. Its own Write-back is `untrusted`.
+- The fixed line of a Turn that stops at the refusal limit of Auto-review (0039) is stored as the reply of that Turn, so its row is `untrusted`. No text of the model of that step is stored.
 
 ## The generic Stub of `call_mcp_tool`
 
@@ -107,7 +110,7 @@ Billy keeps its replies because a short answer such as "Yes" refers to the last 
 
 ## Revisit if
 
-- The Owner gets so many Approval requests that they stop reading them, also with #140.
+- The Owner gets so many Approval requests that they stop reading them, also with Auto-review.
 - Side Sessions often fail to close Open Loops because the Run block quotes an `untrusted` row. Then give the Run block a rule of its own.
 
 - The model still writes Stubs as a reply, so `rejectedStubReplies` is often in the Traces or Turns fail at the retry limit.
