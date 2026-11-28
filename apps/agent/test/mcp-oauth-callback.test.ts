@@ -22,6 +22,7 @@ import {
   nowSeconds,
   pendingOAuthCountOf,
   postConsent,
+  startedAuthorizationOf,
 } from "./mcp-connect-requests.ts";
 import {
   addOwner,
@@ -52,8 +53,7 @@ const ownerWhoWroteToTheAgent = async (telegramUserId: number) => {
 
 const startedConsent = async (telegramUserId: number, ownerId: string) => {
   const response = await postConsent(await loginOf(telegramUserId, ownerId));
-  expect(response.status).toBe(303);
-  const location = new URL(response.headers.get("Location") ?? "");
+  const location = await startedAuthorizationOf(response);
   const state = location.searchParams.get("state") ?? "";
   return { location, state, nonce: state.split(".")[1] ?? "" };
 };
@@ -266,8 +266,7 @@ const secondConsent = async (telegramUserId: number, ownerId: string) => {
   const response = await postConsent(
     await loginOf(telegramUserId, ownerId, { authDate: nowSeconds() - 5 })
   );
-  expect(response.status).toBe(303);
-  const location = new URL(response.headers.get("Location") ?? "");
+  const location = await startedAuthorizationOf(response);
   return location.searchParams.get("state") ?? "";
 };
 
@@ -467,6 +466,31 @@ describe("a callback that fails after the nonce is used", () => {
       { catalogId: testMcpCatalogId, state: "failed" },
     ]);
     expect(await statusOfGoodCallback(state)).toBe(403);
+  });
+
+  it("logs the phase and the HTTP status of a refused code, with no secret", async () => {
+    const lines: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts) => {
+      lines.push(parts.map(String).join(" "));
+    });
+    fakeMcpServer.oauth.refuseCodes(true);
+    const telegramUserId = newTelegramUserId();
+    const ownerId = await ownerWhoWroteToTheAgent(telegramUserId);
+    const { state } = await startedConsent(telegramUserId, ownerId);
+
+    await goodCallback(state);
+    log.mockRestore();
+
+    const failures = lines.filter((line) => line.includes("MCP failure"));
+    expect(failures.join("\n")).toContain(
+      '"phase":"token_exchange","catalogId":"test_server","reason":"refused","httpStatus":400'
+    );
+    expect(failures.join("\n")).toContain(
+      '"phase":"callback","reason":"outcome_failed"'
+    );
+    for (const secret of Object.values(fakeOAuthSecrets)) {
+      expect(lines.join("\n")).not.toContain(secret);
+    }
   });
 
   it("marks the Connection failed when the token endpoint refuses the code", async () => {

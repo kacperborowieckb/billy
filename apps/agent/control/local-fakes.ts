@@ -4,13 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { Effect, Queue, Schema } from "effect";
 
-import { proactiveMarker } from "../src/personal-agent/proactive-marker.ts";
-import { scheduledTaskMarker } from "../src/personal-agent/scheduled-task-section.ts";
-import {
-  fakeBriefMessage,
-  fakeBriefMoveMessage,
-  isFakeBriefMove,
-} from "./fake-brief.ts";
+import { fakeAssistantMessage } from "./fake-assistant-message.ts";
 import { fakeChatActions, isSendChatAction } from "./fake-chat-actions.ts";
 import {
   ChatCompletionBodySchema,
@@ -21,42 +15,22 @@ import {
 import { readBody, sendJson } from "./fake-http.ts";
 import { fakeJudgeMessage, fakeJudgeModel } from "./fake-judge.ts";
 import type { FakeJudgeVerdict } from "./fake-judge.ts";
-import { fakeKeepMessage, fakeKeepPrefix } from "./fake-keep.ts";
-import { fakeMcpMessage, isFakeMcpMessage } from "./fake-mcp.ts";
 import { toolCallNamesOf } from "./fake-model-call.ts";
 import type { FakeModelCall } from "./fake-model-call.ts";
-import { fakeNoteEditMessage, isFakeNoteEdit } from "./fake-note-edits.ts";
+import { fakeReactions, isSetMessageReaction } from "./fake-reaction.ts";
 import {
-  fakeOpenLoopMessage,
-  isFakeOpenLoopMessage,
-} from "./fake-open-loops.ts";
-import {
-  fakeReactionMessage,
-  fakeReactions,
-  isFakeReaction,
-  isSetMessageReaction,
-} from "./fake-reaction.ts";
-import { fakeRecallMessage, fakeRecallPrefix } from "./fake-recall.ts";
-import {
-  fakeCancelReminderMessage,
-  fakeCancelReminderPrefix,
-} from "./fake-schedule-cancel.ts";
-import {
-  fakeScheduleMessage,
-  fakeScheduledTaskMessage,
-  isFakeScheduleRequest,
-} from "./fake-schedule.ts";
-import { fakeSmallTalkMessage, isFakeSmallTalk } from "./fake-small-talk.ts";
-import {
-  fakeTimeZoneMessage,
-  isFakeTimeZoneMessage,
-} from "./fake-time-zone.ts";
+  fakeTelegramButtons,
+  ReplyMarkupSchema,
+} from "./fake-telegram-buttons.ts";
+import type { FakeTelegramButton } from "./fake-telegram-buttons.ts";
 
 export type { FakeModelCall } from "./fake-model-call.ts";
 
-export const fakeReplyPrefix = "You said: ";
+export { fakeReplyPrefix } from "./fake-assistant-message.ts";
 
 export interface FakeTelegramMessage {
+  readonly messageId?: number;
+  readonly buttons?: readonly FakeTelegramButton[];
   readonly chatId: number;
   readonly text: string;
   readonly replyToMessageId: number | undefined;
@@ -69,53 +43,8 @@ const SendMessageBodySchema = Schema.Struct({
   reply_parameters: Schema.optionalKey(
     Schema.Struct({ message_id: Schema.Number })
   ),
+  reply_markup: Schema.optionalKey(ReplyMarkupSchema),
 });
-
-const fakeAssistantMessage = (
-  ownerText: string,
-  toolResult: string | undefined,
-  systemText: string
-) => {
-  if (systemText.includes(proactiveMarker)) {
-    return fakeBriefMessage(systemText);
-  }
-  if (systemText.includes(scheduledTaskMarker)) {
-    return fakeScheduledTaskMessage(ownerText);
-  }
-  if (isFakeMcpMessage(ownerText)) {
-    return fakeMcpMessage(ownerText, toolResult);
-  }
-  if (isFakeSmallTalk(ownerText)) {
-    return fakeSmallTalkMessage(toolResult);
-  }
-  if (isFakeReaction(ownerText)) {
-    return fakeReactionMessage(ownerText, toolResult);
-  }
-  if (isFakeBriefMove(ownerText)) {
-    return fakeBriefMoveMessage(toolResult, systemText);
-  }
-  if (isFakeTimeZoneMessage(ownerText)) {
-    return fakeTimeZoneMessage(ownerText, toolResult, systemText);
-  }
-  if (isFakeScheduleRequest(ownerText)) {
-    return fakeScheduleMessage(ownerText, toolResult, systemText);
-  }
-  if (ownerText.startsWith(fakeCancelReminderPrefix)) {
-    return fakeCancelReminderMessage(ownerText, toolResult);
-  }
-  if (ownerText.startsWith(fakeRecallPrefix)) {
-    return fakeRecallMessage(ownerText, toolResult);
-  }
-  if (isFakeNoteEdit(ownerText)) {
-    return fakeNoteEditMessage(ownerText, toolResult);
-  }
-  if (isFakeOpenLoopMessage(ownerText)) {
-    return fakeOpenLoopMessage(ownerText, toolResult);
-  }
-  return ownerText.startsWith(fakeKeepPrefix)
-    ? fakeKeepMessage(ownerText, toolResult)
-    : { role: "assistant", content: `${fakeReplyPrefix}${ownerText}` };
-};
 
 const headerValue = (request: IncomingMessage, name: string) => {
   const value = request.headers[name];
@@ -138,11 +67,15 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
   const reactions = fakeReactions();
   const modelCalls: FakeModelCall[] = [];
   const pendingJudgeVerdicts = [...judgeVerdicts];
+  const buttons = yield* fakeTelegramButtons();
   let nextMessageId = 1;
 
   const answerSendMessage = (body: unknown, response: ServerResponse) => {
     const message = Schema.decodeUnknownSync(SendMessageBodySchema)(body);
+    nextMessageId += 1;
     const sent = {
+      messageId: nextMessageId,
+      buttons: message.reply_markup?.inline_keyboard.flat() ?? [],
       chatId: message.chat_id,
       text: message.text,
       replyToMessageId: message.reply_parameters?.message_id,
@@ -150,7 +83,6 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
     };
     sentTelegramMessages.push(sent);
     Queue.offerUnsafe(telegramMessages, sent);
-    nextMessageId += 1;
     sendJson(response, 200, {
       ok: true,
       result: { message_id: nextMessageId },
@@ -199,6 +131,9 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
 
   const server = createServer(async (request, response) => {
     try {
+      if (await buttons.answer(request, response)) {
+        return;
+      }
       const body = await readBody(request);
       if (sendMessagePath.test(request.url ?? "")) {
         answerSendMessage(body, response);
@@ -244,6 +179,8 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
     telegramApiUrl: `${origin}/telegram`,
     aiGatewayUrl: `${origin}/ai-gateway`,
     nextTelegramMessage: Queue.take(telegramMessages),
+    nextEdit: buttons.nextEdit,
+    nextDocument: buttons.nextDocument,
     sentTelegramMessages: () => [...sentTelegramMessages],
     chatActions: chatActions.list,
     reactions: reactions.list,

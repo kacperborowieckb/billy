@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 
 import { Channel } from "../channels/channel.ts";
 import { Journal } from "../journal/journal.ts";
@@ -10,7 +10,14 @@ import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import { McpConnections, McpConnectionStateSchema } from "./mcp-connections.ts";
 import { makeApprovalsOfConnectionDue } from "./mcp-disconnect-approvals.ts";
+import {
+  failureReasonOf,
+  mcpFailureLog,
+  toolCopySizeOf,
+} from "./mcp-failure.ts";
+import type { McpFailure } from "./mcp-failure.ts";
 import type { McpRevocation } from "./mcp-hub-contract.ts";
+import { mcpToolCatalogLog } from "./mcp-tool-catalog-log.ts";
 import { McpToolCatalogCopySchema } from "./mcp-tool-copy.ts";
 import type { McpToolCopy } from "./mcp-tool-copy.ts";
 
@@ -27,6 +34,10 @@ export const receiveMcpToolCatalog = (
         )(tools);
         const connections = yield* McpConnections;
         yield* connections.replaceTools(catalogId, copy);
+        const entry = mcpEntryOf(catalog, catalogId);
+        if (entry !== undefined) {
+          yield* mcpToolCatalogLog(entry, copy);
+        }
       }).pipe(Effect.orDie);
 
 export const changeMcpConnectionState = Effect.fnUntraced(
@@ -100,37 +111,61 @@ export const McpConnectedCopySchema = Schema.Struct({
 
 export type McpConnectedCopy = typeof McpConnectedCopySchema.Type;
 
+const completionFailureLog = (
+  cause: Cause.Cause<unknown>,
+  details: Omit<McpFailure, "phase" | "reason"> = {}
+) =>
+  mcpFailureLog({
+    phase: "completion",
+    reason: failureReasonOf(Cause.squash(cause)),
+    ...details,
+  });
+
 export const receiveMcpConnected = Effect.fnUntraced(
   function* receiveMcpConnected(catalog: McpCatalog, received: unknown) {
     const { catalogId, tools, accountLabel, completionId } =
-      yield* Schema.decodeUnknownEffect(McpConnectedCopySchema)(received);
+      yield* Schema.decodeUnknownEffect(McpConnectedCopySchema)(received).pipe(
+        Effect.tapCause((cause) => completionFailureLog(cause))
+      );
     const entry = mcpEntryOf(catalog, catalogId);
     if (entry === undefined) {
+      yield* mcpFailureLog({
+        phase: "completion",
+        reason: "unknown_catalog_entry",
+        catalogId,
+      });
       return;
     }
     const { database } = yield* AgentStorage;
     const journal = yield* Journal;
     const connections = yield* McpConnections;
     const eventId = `mcp-connection-added:${completionId}`;
-    const isFirstTime = yield* database.transaction(() =>
-      Effect.gen(function* recordCompletion() {
-        if ((yield* journal.readForEvent(eventId)).length > 0) {
+    const isFirstTime = yield* database
+      .transaction(() =>
+        Effect.gen(function* recordCompletion() {
+          if ((yield* journal.readForEvent(eventId)).length > 0) {
+            yield* changeMcpConnectionState(catalogId, "ready");
+            return false;
+          }
+          yield* connections.replaceTools(catalogId, tools);
           yield* changeMcpConnectionState(catalogId, "ready");
-          return false;
-        }
-        yield* connections.replaceTools(catalogId, tools);
-        yield* changeMcpConnectionState(catalogId, "ready");
-        yield* journal.append({
-          _tag: "McpConnectionAdded",
-          eventId,
-          catalogId,
-        });
-        return true;
-      })
-    );
+          yield* journal.append({
+            _tag: "McpConnectionAdded",
+            eventId,
+            catalogId,
+          });
+          return true;
+        })
+      )
+      .pipe(
+        Effect.tapCause((cause) =>
+          completionFailureLog(cause, { catalogId, ...toolCopySizeOf(tools) })
+        )
+      );
     if (!isFirstTime) {
       return;
     }
+    yield* mcpToolCatalogLog(entry, tools);
     yield* announceConnected(entry.displayName, accountLabel).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("The Connected message was not sent", cause)

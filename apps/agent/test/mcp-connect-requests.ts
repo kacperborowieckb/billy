@@ -1,5 +1,6 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { DateTime } from "effect";
+import { expect } from "vitest";
 
 import { testMcpCatalogId } from "../src/mcp/mcp-test-catalog.ts";
 import { sendToEdge } from "./telegram-requests.ts";
@@ -67,6 +68,25 @@ export const postConsent = (params: URLSearchParams) =>
       body: params,
     })
   );
+
+const continueLinkPattern = /<a href="(?<url>[^"]+)">Continue to /u;
+
+export const authorizationUrlOf = async (response: Response) => {
+  const html = await response.text();
+  const link = continueLinkPattern.exec(html)?.groups?.["url"];
+  return link === undefined
+    ? undefined
+    : new URL(link.replaceAll("&amp;", "&"));
+};
+
+export const startedAuthorizationOf = async (response: Response) => {
+  expect(response.status).toBe(200);
+  const url = await authorizationUrlOf(response);
+  if (url === undefined) {
+    throw new Error("The page has no link to the authorization server");
+  }
+  return url;
+};
 
 export const pendingOAuthOf = (ownerId: string) =>
   runInDurableObject(env.MCP_HUB.getByName(ownerId), (_hub, state) =>

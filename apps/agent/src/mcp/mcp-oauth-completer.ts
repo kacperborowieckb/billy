@@ -4,6 +4,7 @@ import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
 import { exchangeAndStore } from "./mcp-code-exchange.ts";
+import { logMcpFailure } from "./mcp-failure.ts";
 import type {
   McpCallbackOutcome,
   McpOAuthCallback,
@@ -179,6 +180,11 @@ export class McpOAuthCompleter {
       return { outcome: "already_connected", serverName };
     }
     if (hasText(error) || !hasText(code)) {
+      await logMcpFailure({
+        phase: "callback",
+        reason: "provider_returned_an_error",
+        catalogId: entry.catalogId,
+      });
       await this.dependencies.markFailed(pending.ownerId, entry.catalogId);
       return { outcome: "denied", serverName };
     }

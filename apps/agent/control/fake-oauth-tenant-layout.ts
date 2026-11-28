@@ -31,3 +31,18 @@ export const answerTenantLayout = (
   }
   return new Response(null, { status: 404 });
 };
+
+export const answerInvalidChallengeLayout = (request: Request) => {
+  const url = new URL(request.url);
+  if (request.method === "POST" && url.pathname === "/mcp") {
+    return new Response(null, {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": `Bearer resource_metadata="${url.origin}/custom/prm"`,
+      },
+    });
+  }
+  return url.pathname === "/custom/prm"
+    ? Response.json({ authorization_servers: "not a list" })
+    : null;
+};

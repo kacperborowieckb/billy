@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 
 import { createFakeNotificationStream } from "./fake-mcp-notifications.ts";
+import { textResult } from "./fake-mcp-options.ts";
+import type { FakeMcpServerOptions } from "./fake-mcp-options.ts";
 import { fakeMcpTools } from "./fake-mcp-tools.ts";
+import type { FakeMcpTool } from "./fake-mcp-tools.ts";
 import { createFakeOAuthServer } from "./fake-oauth-server.ts";
 
 export const fakeMcpPages = [
@@ -47,12 +50,10 @@ interface JsonRpcMessage {
 const result = (id: number | string | undefined, value: unknown) =>
   Response.json({ jsonrpc: "2.0", id, result: value });
 
-const textResult = (text: string, isError = false) => ({
-  content: [{ type: "text", text }],
-  ...(isError ? { isError: true } : {}),
-});
-
-export const createFakeMcpServer = () => {
+export const createFakeMcpServer = ({
+  tools = fakeMcpTools,
+  answerTool,
+}: FakeMcpServerOptions = {}) => {
   const oauth = createFakeOAuthServer();
   const notifications = createFakeNotificationStream();
   const calls: FakeMcpCall[] = [];
@@ -61,6 +62,7 @@ export const createFakeMcpServer = () => {
     requests: 0,
     slowMillis: 60_000,
     hiddenTools: false,
+    listedTools: tools,
     unavailable: false,
     demandsMoreScope: false,
     refusesTokens: false,
@@ -73,6 +75,10 @@ export const createFakeMcpServer = () => {
     const name = message.params?.name ?? "";
     const args = message.params?.arguments ?? {};
     calls.push({ tool: name, arguments: args });
+    const answered = answerTool?.(name, args);
+    if (answered !== undefined) {
+      return answered;
+    }
     switch (name) {
       case "search": {
         return textResult(
@@ -166,8 +172,10 @@ export const createFakeMcpServer = () => {
       case "tools/list": {
         return result(message.id, {
           tools: state.hiddenTools
-            ? fakeMcpTools
-            : fakeMcpTools.filter((tool) => tool.name !== "hidden_new_tool"),
+            ? state.listedTools
+            : state.listedTools.filter(
+                (tool) => tool.name !== "hidden_new_tool"
+              ),
         });
       }
       case "tools/call": {
@@ -220,6 +228,9 @@ export const createFakeMcpServer = () => {
     beUnavailable: (unavailable: boolean) => {
       state.unavailable = unavailable;
     },
+    useTools: (listed: readonly FakeMcpTool[]) => {
+      state.listedTools = listed;
+    },
     listHiddenTools: () => {
       state.hiddenTools = true;
     },
@@ -232,6 +243,7 @@ export const createFakeMcpServer = () => {
       state.requests = 0;
       state.slowMillis = 60_000;
       state.hiddenTools = false;
+      state.listedTools = tools;
       state.unavailable = false;
       state.demandsMoreScope = false;
       state.refusesTokens = false;

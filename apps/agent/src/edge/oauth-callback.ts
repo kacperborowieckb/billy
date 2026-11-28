@@ -1,5 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
+import { failureReasonOf, mcpFailureLog } from "../mcp/mcp-failure.ts";
 import type { McpCallbackOutcome } from "../mcp/mcp-hub-contract.ts";
 import {
   alreadyConnectedPage,
@@ -82,7 +83,20 @@ export const handleOAuthCallback = Effect.fnUntraced(
           iss,
           error,
         })
-    ).pipe(Effect.option);
+    ).pipe(
+      Effect.tapError((rejection) =>
+        mcpFailureLog({
+          phase: "callback",
+          reason: `rejected: ${failureReasonOf(rejection)}`,
+        })
+      ),
+      Effect.tap((returned) =>
+        returned.outcome === "failed"
+          ? mcpFailureLog({ phase: "callback", reason: "outcome_failed" })
+          : Effect.void
+      ),
+      Effect.option
+    );
     return Option.isNone(outcome) ? notAvailablePage() : pageFor(outcome.value);
   }
 );

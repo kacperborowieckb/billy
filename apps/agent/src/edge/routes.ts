@@ -18,7 +18,7 @@ export const edgeRoutes = [
     path: "/operator/mcp-connections",
     access: "Operator token as Authorization: Bearer",
     purpose:
-      "Adds an MCP Connection for an Owner from the MCP Catalog through the Owner's MCP Hub. Only the test-only catalog entry exists now.",
+      "Adds an MCP Connection with no sign-in for an Owner from the MCP Catalog through the Owner's MCP Hub. It serves the test-only catalog entry; a server that needs OAuth is connected from the chat.",
   },
   {
     method: "POST",
@@ -41,7 +41,7 @@ export const edgeRoutes = [
     access:
       "The same Telegram login data, in the form that the consent page sends",
     purpose:
-      "Asks the Owner's MCP Hub to start OAuth with PKCE and redirects to the authorization server.",
+      "Asks the Owner's MCP Hub to start OAuth with PKCE and answers with a page that goes on to the authorization server.",
   },
   {
     method: "GET",

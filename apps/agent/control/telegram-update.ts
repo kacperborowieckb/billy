@@ -33,6 +33,28 @@ const telegramUpdateBody = (
   },
 });
 
+const postWebhook = Effect.fnUntraced(function* postWebhook({
+  workerUrl,
+  webhookSecret,
+  body,
+}: {
+  readonly workerUrl: URL;
+  readonly webhookSecret: string;
+  readonly body: unknown;
+}) {
+  const client = yield* HttpClient.HttpClient;
+  const response = yield* client.execute(
+    HttpClientRequest.post(new URL("/telegram/webhook", workerUrl)).pipe(
+      HttpClientRequest.setHeader(
+        "X-Telegram-Bot-Api-Secret-Token",
+        webhookSecret
+      ),
+      HttpClientRequest.bodyJsonUnsafe(body)
+    )
+  );
+  return { status: response.status, text: yield* response.text };
+}, Effect.provide(FetchHttpClient.layer));
+
 export const sendTelegramUpdate = Effect.fnUntraced(
   function* sendTelegramUpdate({
     workerUrl,
@@ -43,18 +65,53 @@ export const sendTelegramUpdate = Effect.fnUntraced(
     readonly webhookSecret: string;
     readonly update: TelegramTextUpdate;
   }) {
-    const client = yield* HttpClient.HttpClient;
     const sentAt = yield* DateTime.now;
-    const response = yield* client.execute(
-      HttpClientRequest.post(new URL("/telegram/webhook", workerUrl)).pipe(
-        HttpClientRequest.setHeader(
-          "X-Telegram-Bot-Api-Secret-Token",
-          webhookSecret
-        ),
-        HttpClientRequest.bodyJsonUnsafe(telegramUpdateBody(update, sentAt))
-      )
-    );
-    return { status: response.status, text: yield* response.text };
-  },
-  Effect.provide(FetchHttpClient.layer)
+    return yield* postWebhook({
+      workerUrl,
+      webhookSecret,
+      body: telegramUpdateBody(update, sentAt),
+    });
+  }
+);
+
+export interface TelegramButtonPress {
+  readonly updateId: number;
+  readonly userId: number;
+  readonly messageId: number;
+  readonly data: string;
+}
+
+export const pressTelegramButton = Effect.fnUntraced(
+  function* pressTelegramButton({
+    workerUrl,
+    webhookSecret,
+    press,
+  }: {
+    readonly workerUrl: URL;
+    readonly webhookSecret: string;
+    readonly press: TelegramButtonPress;
+  }) {
+    const sentAt = yield* DateTime.now;
+    return yield* postWebhook({
+      workerUrl,
+      webhookSecret,
+      body: {
+        update_id: press.updateId,
+        callback_query: {
+          id: `press-${press.updateId}`,
+          from: { id: press.userId, is_bot: false, first_name: "Owner" },
+          message: {
+            message_id: press.messageId,
+            date: Math.floor(
+              DateTime.toEpochMillis(sentAt) / millisecondsPerSecond
+            ),
+            chat: { id: press.userId, type: "private" },
+            text: "Approval",
+          },
+          chat_instance: "chat-instance-1",
+          data: press.data,
+        },
+      },
+    });
+  }
 );

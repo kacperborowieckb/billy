@@ -5,6 +5,11 @@ import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog } from "./mcp-catalog.ts";
 import type { McpConnectionHealth } from "./mcp-connection-health.ts";
 import type { McpConnectionLedger } from "./mcp-connection-ledger.ts";
+import {
+  failureReasonOf,
+  logMcpFailure,
+  toolCopySizeOf,
+} from "./mcp-failure.ts";
 import type { McpAddConnectionOutcome } from "./mcp-hub-contract.ts";
 import type { McpCompletion } from "./mcp-oauth-completer.ts";
 import type { McpServerConnector } from "./mcp-server-connector.ts";
@@ -25,6 +30,12 @@ export interface McpConnectionSetupDependencies {
 }
 
 const connectTimedOut = "The MCP server did not connect in time";
+
+const logConnectFailure = (
+  catalogId: string,
+  reason: string,
+  size?: ReturnType<typeof toolCopySizeOf>
+) => logMcpFailure({ phase: "connect", reason, catalogId, ...size });
 
 export class McpConnectionSetup {
   private readonly dependencies: McpConnectionSetupDependencies;
@@ -59,6 +70,7 @@ export class McpConnectionSetup {
     const { connector, ledger, toolCopies, agentOf, closeConnection } =
       this.dependencies;
     const epoch = connector.epochOf(entry.catalogId);
+    let size: ReturnType<typeof toolCopySizeOf> | undefined;
     try {
       if (
         (await connector.ensureConnected(entry, ownerId, {
@@ -70,6 +82,7 @@ export class McpConnectionSetup {
         throw new Error(connectTimedOut);
       }
       const tools = connector.toolCopiesOf(entry.catalogId, epoch);
+      size = toolCopySizeOf(tools);
       const agent = await agentOf(ownerId);
       await ledger.markReady(entry.catalogId);
       toolCopies.remember(entry.catalogId, tools);
@@ -80,7 +93,8 @@ export class McpConnectionSetup {
         completionId,
       });
       return "connected";
-    } catch {
+    } catch (error) {
+      await logConnectFailure(entry.catalogId, failureReasonOf(error), size);
       await this.recordFailure(entry.catalogId);
       await closeConnection(entry.catalogId, epoch);
       const agent = await agentOf(ownerId);
@@ -112,10 +126,12 @@ export class McpConnectionSetup {
       (await ledger.stateOf(catalogId)) === "needs_sign_in" ||
       (await ledger.isBeingRemoved(catalogId))
     ) {
+      await logConnectFailure(catalogId, "not_open_to_a_connection");
       return { outcome: "failed" };
     }
     const fresh = await health.refreshWhileQueueHeld(entry, ownerId());
     if (fresh._tag === "SignInRequired") {
+      await logConnectFailure(catalogId, "sign_in_required");
       return { outcome: "failed" };
     }
     const agent = await agentOf(ownerId());
@@ -137,7 +153,8 @@ export class McpConnectionSetup {
       await agent.receiveMcpConnectionState(catalogId, "ready");
       await ledger.markReady(catalogId);
       return { outcome: "added" };
-    } catch {
+    } catch (error) {
+      await logConnectFailure(catalogId, failureReasonOf(error));
       await this.recordFailure(catalogId);
       await agent.receiveMcpConnectionState(catalogId, "failed");
       return { outcome: "failed" };

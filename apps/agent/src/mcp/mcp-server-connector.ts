@@ -2,6 +2,7 @@ import { Option } from "effect";
 
 import type { LazyMcpClientManager } from "./lazy-mcp-client-manager.ts";
 import type { AdmittedCall } from "./mcp-admitted-call.ts";
+import { logMcpCallError } from "./mcp-call-log.ts";
 import type { McpCatalogEntry } from "./mcp-catalog.ts";
 import type { McpConnectionHealth } from "./mcp-connection-health.ts";
 import { isDeadlineError } from "./mcp-deadline-error.ts";
@@ -231,7 +232,8 @@ export class McpServerConnector {
       ) {
         return { _tag: "Failed", reason: "timed_out" };
       }
-    } catch {
+    } catch (error) {
+      await logMcpCallError(request, error);
       return { _tag: "Failed", reason: "failed" };
     }
     if (this.epochOf(request.catalogId) !== epoch) {
@@ -263,6 +265,7 @@ export class McpServerConnector {
       return resultOutcomeOf(result.value);
     } catch (error) {
       this.retireAtDeadline(request.catalogId, calledSdkId, error);
+      await logMcpCallError(request, error);
       return { _tag: "Failed", reason: "failed" };
     }
   }

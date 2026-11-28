@@ -311,6 +311,36 @@ describe("Approval for an MCP call that changes a service", () => {
     );
   });
 
+  it("logs the approved call with its result and duration, and no argument", async () => {
+    fakeMcpLimits.callTimeoutMillis = 100;
+    const { ownerId, approval } = await askFor(9965, "slow_write", {
+      title: "Private title",
+    });
+    const lines: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts) => {
+      lines.push(parts.map(String).join(" "));
+    });
+
+    await press(
+      9965,
+      `approve:${approval.pending_approval_id}`,
+      Number(approval.channel_message_id)
+    );
+    await vi.waitFor(async () =>
+      expect(await statesOf(ownerId)).toEqual(["unconfirmed"])
+    );
+    log.mockRestore();
+
+    const output = lines.join("\n");
+    expect(output).toMatch(
+      /"tool":"slow_write","outcome":"timed_out","durationMillis":\d+/u
+    );
+    expect(output).toMatch(
+      /"step":"run_finished","toolName":"call_mcp_tool","result":"unconfirmed","durationMillis":\d+/u
+    );
+    expect(output).not.toContain("Private title");
+  });
+
   it("runs the approved call once and shows unconfirmed after the Durable Object aborts during it", async () => {
     const { ownerId, approval } = await askFor(9958, "slow_write", {
       title: "Slow",

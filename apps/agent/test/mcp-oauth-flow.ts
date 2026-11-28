@@ -12,7 +12,11 @@ import { parseSealKeyring } from "../src/mcp/token-seal.ts";
 import { OwnerIdSchema } from "../src/owner-id.ts";
 import { personalAgentFor } from "../src/personal-agent/personal-agent.ts";
 import { fakeTelegram, scriptModel } from "./fakes.ts";
-import { loginOf, postConsent } from "./mcp-connect-requests.ts";
+import {
+  loginOf,
+  postConsent,
+  startedAuthorizationOf,
+} from "./mcp-connect-requests.ts";
 import {
   addOwner,
   sendToEdge,
@@ -52,8 +56,7 @@ export const startedConsent = async (
       authDate === undefined ? {} : { authDate }
     )
   );
-  expect(response.status).toBe(303);
-  const location = new URL(response.headers.get("Location") ?? "");
+  const location = await startedAuthorizationOf(response);
   const state = location.searchParams.get("state") ?? "";
   return { location, state, nonce: state.split(".")[1] ?? "" };
 };

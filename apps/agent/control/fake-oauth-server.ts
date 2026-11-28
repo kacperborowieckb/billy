@@ -1,6 +1,10 @@
+import { identityFieldsOf } from "./fake-oauth-identity.ts";
 import { createFakeRefreshGrant } from "./fake-oauth-refresh.ts";
 import { createFakeRevocationEndpoint } from "./fake-oauth-revocation.ts";
-import { answerTenantLayout } from "./fake-oauth-tenant-layout.ts";
+import {
+  answerInvalidChallengeLayout,
+  answerTenantLayout,
+} from "./fake-oauth-tenant-layout.ts";
 
 export const fakeOAuthSecrets = {
   authorizationCode: "fake-authorization-code-7c1e",
@@ -8,8 +12,6 @@ export const fakeOAuthSecrets = {
   refreshToken: "fake-refresh-token-a82f",
   clientSecret: "fake-dcr-client-secret-3e65",
 } as const;
-
-export const fakeOAuthAccountName = "Pat Reader";
 
 export const createFakeOAuthServer = () => {
   const refresh = createFakeRefreshGrant(fakeOAuthSecrets.refreshToken);
@@ -30,6 +32,7 @@ export const createFakeOAuthServer = () => {
     heldMetadata: 0,
     withRefreshToken: true,
     withAccountName: true,
+    workspaceName: undefined as string | undefined,
     requiresToken: false,
     tokenEndpoint: undefined as string | undefined,
     layout: "root" as
@@ -45,9 +48,7 @@ export const createFakeOAuthServer = () => {
     authorization_endpoint: `${issuer}/authorize`,
     registration_endpoint: `${issuer}/register`,
     token_endpoint: state.tokenEndpoint ?? `${issuer}/token`,
-    ...(revocation.isAdvertised()
-      ? { revocation_endpoint: `${issuer}/revoke` }
-      : {}),
+    ...revocation.metadataOf(issuer),
     authorization_response_iss_parameter_supported: state.sendsIssuer,
     code_challenge_methods_supported: state.supportsPkce ? ["S256"] : [],
     client_id_metadata_document_supported: state.supportsClientIdMetadata,
@@ -94,7 +95,7 @@ export const createFakeOAuthServer = () => {
       ...(state.withRefreshToken
         ? { refresh_token: fakeOAuthSecrets.refreshToken }
         : {}),
-      ...(state.withAccountName ? { account_name: fakeOAuthAccountName } : {}),
+      ...identityFieldsOf(state),
     });
   };
 
@@ -103,14 +104,14 @@ export const createFakeOAuthServer = () => {
       state.heldMetadata += 1;
       await state.metadataHold;
     }
+    if (await revocation.takes(request)) {
+      return revocation.answer(request);
+    }
     if (
       request.method === "POST" &&
       new URL(request.url).pathname.endsWith("/token")
     ) {
       return answerToken(request);
-    }
-    if (revocation.isRevocation(request)) {
-      return revocation.answer(request);
     }
     if (
       state.layout === "hanging_metadata" &&
@@ -119,17 +120,9 @@ export const createFakeOAuthServer = () => {
       return new Response(new ReadableStream(), { status: 200 });
     }
     if (state.layout === "invalid_challenge") {
-      const url = new URL(request.url);
-      if (request.method === "POST" && url.pathname === "/mcp") {
-        return new Response(null, {
-          status: 401,
-          headers: {
-            "WWW-Authenticate": `Bearer resource_metadata="${url.origin}/custom/prm"`,
-          },
-        });
-      }
-      if (url.pathname === "/custom/prm") {
-        return Response.json({ authorization_servers: "not a list" });
+      const broken = answerInvalidChallengeLayout(request);
+      if (broken !== null) {
+        return broken;
       }
     }
     if (
@@ -155,7 +148,9 @@ export const createFakeOAuthServer = () => {
       return Response.json(
         {
           client_id: "fake-dcr-client",
-          client_secret: fakeOAuthSecrets.clientSecret,
+          ...(state.registeredMethod === "none"
+            ? {}
+            : { client_secret: fakeOAuthSecrets.clientSecret }),
           token_endpoint_auth_method: state.registeredMethod,
         },
         { status: 201 }
@@ -223,6 +218,9 @@ export const createFakeOAuthServer = () => {
     sendAccountName: (sent: boolean) => {
       state.withAccountName = sent;
     },
+    sendWorkspaceName: (name: string | undefined) => {
+      state.workspaceName = name;
+    },
     supportClientIdMetadata: (supported: boolean) => {
       state.supportsClientIdMetadata = supported;
     },
@@ -248,6 +246,7 @@ export const createFakeOAuthServer = () => {
       refresh.reset();
       revocation.reset();
       state.withAccountName = true;
+      state.workspaceName = undefined;
       state.requiresToken = false;
       state.tokenEndpoint = undefined;
       registrations.length = 0;

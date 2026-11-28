@@ -3,6 +3,7 @@ import { DateTime } from "effect";
 import type { KeyedQueue } from "./keyed-queue.ts";
 import { mcpEntryOf } from "./mcp-catalog.ts";
 import type { McpCatalog, McpCatalogEntry } from "./mcp-catalog.ts";
+import { failureReasonOf, logMcpFailure } from "./mcp-failure.ts";
 import type {
   McpConsentOutcome,
   McpOAuthRequest,
@@ -52,6 +53,11 @@ type Checked =
     }
   | { readonly _tag: "Allowed"; readonly entry: McpCatalogEntry };
 
+const unavailableStart = async (catalogId: string, reason: string) => {
+  await logMcpFailure({ phase: "start", reason, catalogId });
+  return { outcome: "unavailable" } as const;
+};
+
 export class McpOAuthStarter {
   private readonly dependencies: McpOAuthStarterDependencies;
 
@@ -68,6 +74,7 @@ export class McpOAuthStarter {
       return { _tag: "Refused", outcome: "already_connected" };
     }
     if (await this.dependencies.isBeingRemoved(request.catalogId)) {
+      await unavailableStart(request.catalogId, "being_removed");
       return { _tag: "Refused", outcome: "unavailable" };
     }
     return { _tag: "Allowed", entry };
@@ -99,8 +106,8 @@ export class McpOAuthStarter {
         authorizationServer: new URL(server.authorization_endpoint).origin,
         clientMode,
       };
-    } catch {
-      return { outcome: "unavailable" };
+    } catch (error) {
+      return unavailableStart(request.catalogId, failureReasonOf(error));
     }
   }
 
@@ -116,6 +123,9 @@ export class McpOAuthStarter {
       const ownerId = this.dependencies.ownerId();
       const credentials = await this.dependencies.credentials(ownerId);
       const proof = await this.useUpProof(entry.catalogId, request.proofId);
+      if (proof === "unavailable") {
+        return unavailableStart(entry.catalogId, "being_removed");
+      }
       if (proof !== "fresh") {
         return { outcome: proof };
       }
@@ -146,7 +156,7 @@ export class McpOAuthStarter {
             (await this.dependencies.isBeingRemoved(entry.catalogId)) ||
             this.dependencies.entryEpochOf(entry.catalogId) !== epoch
           ) {
-            return { outcome: "unavailable" } as const;
+            return unavailableStart(entry.catalogId, "removed_during_start");
           }
           await this.dependencies.storage.put<PendingOAuth>(
             `${pendingOAuthKeyPrefix}${started.nonce}`,
@@ -155,13 +165,14 @@ export class McpOAuthStarter {
           await this.forgetExpired();
           await this.dependencies.markAuthenticating(entry.catalogId);
           return {
-            outcome: "redirect",
+            outcome: "started",
+            serverName: entry.displayName,
             authorizationUrl: started.authorizationUrl,
           } as const;
         }
       );
-    } catch {
-      return { outcome: "unavailable" };
+    } catch (error) {
+      return unavailableStart(entry.catalogId, failureReasonOf(error));
     }
   }
 

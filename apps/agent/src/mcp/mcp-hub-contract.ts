@@ -69,7 +69,11 @@ export type McpConsentOutcome =
     };
 
 export type McpOAuthStartOutcome =
-  | { readonly outcome: "redirect"; readonly authorizationUrl: string }
+  | {
+      readonly outcome: "started";
+      readonly serverName: string;
+      readonly authorizationUrl: string;
+    }
   | {
       readonly outcome:
         | "unknown_catalog_entry"

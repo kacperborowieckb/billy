@@ -15,12 +15,14 @@ import {
   scriptModel,
 } from "./fakes.ts";
 import {
+  authorizationUrlOf,
   getConsent,
   loginOf,
   nowSeconds,
   pendingOAuthCountOf,
   pendingOAuthOf,
   postConsent,
+  startedAuthorizationOf,
 } from "./mcp-connect-requests.ts";
 import {
   addOwner,
@@ -131,7 +133,7 @@ describe("the consent page", () => {
 
     expect(getAnswer.status).toBe(403);
     expect(postAnswer.status).toBe(403);
-    expect(postAnswer.headers.get("Location")).toBeNull();
+    expect(await authorizationUrlOf(postAnswer)).toBeUndefined();
     expect(mcpHubWakes.count).toBe(wakes);
     expect(await pendingOAuthCountOf(ownerId)).toBe(0);
     expect(fakeMcpServer.oauth.registrations).toEqual([]);
@@ -178,10 +180,10 @@ describe("a forwarded button or link", () => {
     shouted.set("hash", (params.get("hash") ?? "").toUpperCase());
     const third = await postConsent(shouted);
 
-    expect(first.status).toBe(303);
+    await startedAuthorizationOf(first);
     expect(second.status).toBe(403);
     expect(third.status).toBe(403);
-    expect(second.headers.get("Location")).toBeNull();
+    expect(await authorizationUrlOf(second)).toBeUndefined();
     expect(await pendingOAuthCountOf(ownerId)).toBe(1);
   });
 });
@@ -193,8 +195,7 @@ describe("discovering the authorization server", () => {
 
     const response = await postConsent(await loginOf(9961, ownerId));
 
-    expect(response.status).toBe(303);
-    const location = new URL(response.headers.get("Location") ?? "");
+    const location = await startedAuthorizationOf(response);
     expect(location.pathname).toBe("/tenant1/authorize");
   });
 
@@ -204,8 +205,7 @@ describe("discovering the authorization server", () => {
 
     const response = await postConsent(await loginOf(9965, ownerId));
 
-    expect(response.status).toBe(303);
-    const location = new URL(response.headers.get("Location") ?? "");
+    const location = await startedAuthorizationOf(response);
     expect(location.pathname).toBe("/authorize");
   });
 
@@ -215,8 +215,7 @@ describe("discovering the authorization server", () => {
 
     const response = await postConsent(await loginOf(9966, ownerId));
 
-    expect(response.status).toBe(303);
-    const location = new URL(response.headers.get("Location") ?? "");
+    const location = await startedAuthorizationOf(response);
     expect(location.pathname).toBe("/authorize");
   }, 15_000);
 
@@ -227,7 +226,7 @@ describe("discovering the authorization server", () => {
 
     const response = await postConsent(await loginOf(9964, ownerId));
 
-    expect(response.status).toBe(303);
+    await startedAuthorizationOf(response);
     expect(fakeMcpServer.oauth.registrations).toHaveLength(1);
   });
 
@@ -243,13 +242,34 @@ describe("discovering the authorization server", () => {
 });
 
 describe("starting OAuth from the consent page", () => {
-  it("redirects to the authorization server with PKCE S256 and a state without the Owner", async () => {
+  it("answers the POST with a page that goes to the authorization endpoint, with no redirect of the form", async () => {
+    const ownerId = await addOwner(9967);
+
+    const response = await postConsent(await loginOf(9967, ownerId));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Location")).toBeNull();
+    expect(response.headers.get("Content-Security-Policy")).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'"
+    );
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+    const link = /<a href="(?<url>[^"]+)">Continue to Test server<\/a>/u.exec(
+      html
+    )?.groups?.["url"];
+    expect(link).toMatch(/^https:\/\/mcp\.test\.example\/authorize\?/u);
+    expect(html).toContain(
+      `<meta http-equiv="refresh" content="0; url=${link}">`
+    );
+  });
+
+  it("sends the Owner to the authorization server with PKCE S256 and a state without the Owner", async () => {
     const ownerId = await addOwner(9954);
 
     const response = await postConsent(await loginOf(9954, ownerId));
 
-    expect(response.status).toBe(303);
-    const location = new URL(response.headers.get("Location") ?? "");
+    const location = await startedAuthorizationOf(response);
     expect(location.origin + location.pathname).toBe(
       "https://mcp.test.example/authorize"
     );
@@ -285,7 +305,7 @@ describe("starting OAuth from the consent page", () => {
 
     const response = await postConsent(await loginOf(9955, ownerId));
 
-    const location = new URL(response.headers.get("Location") ?? "");
+    const location = await startedAuthorizationOf(response);
     expect(location.searchParams.get("client_id")).toBe("fake-dcr-client");
     expect(fakeMcpServer.oauth.registrations).toEqual([
       expect.objectContaining({

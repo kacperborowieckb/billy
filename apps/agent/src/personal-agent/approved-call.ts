@@ -1,9 +1,11 @@
-import { Effect, Option } from "effect";
+import { Cause, Effect, Option } from "effect";
 
 import type { ApprovalRunOutcome } from "../approval/approval-answering.ts";
+import { approvalPathLog } from "../approval/approval-log.ts";
 import type { PendingApproval } from "../approval/pending-approvals.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import { Journal } from "../journal/journal.ts";
+import { failureReasonOf } from "../mcp/mcp-failure.ts";
 import {
   toolNamed,
   unexpectedToolFailureMessage,
@@ -71,11 +73,20 @@ export const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
 ) {
   const redactor = yield* Redactor;
   const turnTools = yield* turnToolsOf(settings, approval);
+  const couldNotStart = (reason: string) =>
+    approvalPathLog({
+      pendingApprovalId: approval.pendingApprovalId,
+      step: "run_could_not_start",
+      toolName: approval.toolName,
+      reason,
+    });
   if (Option.isNone(turnTools)) {
+    yield* couldNotStart("turn_gone");
     return failedRun(turnGoneReason);
   }
   const tool = toolNamed(turnTools.value, approval.toolName);
   if (tool === undefined) {
+    yield* couldNotStart("tool_gone");
     return failedRun(toolGoneReason);
   }
   return yield* tool
@@ -95,8 +106,14 @@ export const runApprovedCall = Effect.fnUntraced(function* runApprovedCall(
             : failedRun(redactor.redact(failure.message))
         )
       ),
-      Effect.catchCause(() =>
-        Effect.succeed(failedRun(unexpectedToolFailureMessage))
+      Effect.catchCause((cause) =>
+        approvalPathLog({
+          pendingApprovalId: approval.pendingApprovalId,
+          step: "run_failed_unexpectedly",
+          toolName: approval.toolName,
+          result: "failed",
+          reason: failureReasonOf(Cause.squash(cause)),
+        }).pipe(Effect.as(failedRun(unexpectedToolFailureMessage)))
       )
     );
 });

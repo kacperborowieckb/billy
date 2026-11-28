@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 
+import { failureReasonOf } from "./mcp-failure.ts";
 import type { FetchFunction } from "./mcp-outbound-guard.ts";
 import { withinDeadline } from "./oauth-deadline.ts";
 import type { StoredTokens } from "./sealed-credentials.ts";
@@ -19,6 +20,16 @@ export const decodeTokenResponse =
 
 export class TokenExchangeFailedError extends Error {
   override readonly name = "TokenExchangeFailedError";
+
+  readonly reason: string;
+
+  readonly httpStatus: number | undefined;
+
+  constructor(reason: string, httpStatus?: number) {
+    super("The token exchange failed");
+    this.reason = reason;
+    this.httpStatus = httpStatus;
+  }
 }
 
 export interface TokenExchangeInput {
@@ -61,7 +72,7 @@ export const exchangeCode = async ({
   codeVerifier,
 }: TokenExchangeInput): Promise<TokenExchangeResult> => {
   try {
-    const response = await withinDeadline(async (signal) => {
+    const answered = await withinDeadline(async (signal) => {
       const answer = await send(tokenEndpoint, {
         method: "POST",
         headers: {
@@ -86,15 +97,18 @@ export const exchangeCode = async ({
         }),
         signal,
       });
-      if (!answer.ok) {
-        throw new TokenExchangeFailedError(
-          "The token endpoint refused the code"
-        );
-      }
-      return decodeTokenResponse(await answer.json<unknown>());
+      return {
+        ok: answer.ok,
+        status: answer.status,
+        body: answer.ok ? await answer.json<unknown>() : undefined,
+      };
     });
+    if (!answered.ok) {
+      throw new TokenExchangeFailedError("refused", answered.status);
+    }
+    const response = decodeTokenResponse(answered.body);
     if (response.token_type.toLowerCase() !== "bearer") {
-      throw new TokenExchangeFailedError("The token type is not Bearer");
+      throw new TokenExchangeFailedError("token_type_not_bearer");
     }
     const {
       account_name: accountName,
@@ -106,7 +120,9 @@ export const exchangeCode = async ({
       tokens: { ...granted, token_type: "Bearer" },
       accountLabel: accountLabelOf(accountName, workspaceName),
     };
-  } catch {
-    throw new TokenExchangeFailedError("The token exchange failed");
+  } catch (error) {
+    throw error instanceof TokenExchangeFailedError
+      ? error
+      : new TokenExchangeFailedError(failureReasonOf(error));
   }
 };
