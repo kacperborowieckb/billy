@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { Effect, Queue, Schema } from "effect";
 
+import type { ReviewAnswer } from "../src/auto-review/reviewer.ts";
 import { fakeAssistantMessage } from "./fake-assistant-message.ts";
 import { fakeChatActions, isSendChatAction } from "./fake-chat-actions.ts";
 import {
@@ -18,6 +19,8 @@ import type { FakeJudgeVerdict } from "./fake-judge.ts";
 import { toolCallNamesOf } from "./fake-model-call.ts";
 import type { FakeModelCall } from "./fake-model-call.ts";
 import { fakeReactions, isSetMessageReaction } from "./fake-reaction.ts";
+import { fakeReviewOf, isFakeReviewRequest } from "./fake-reviewer.ts";
+import type { FakeReview } from "./fake-reviewer.ts";
 import {
   fakeTelegramButtons,
   ReplyMarkupSchema,
@@ -36,6 +39,8 @@ export interface FakeTelegramMessage {
   readonly replyToMessageId: number | undefined;
   readonly chatActionsBefore?: number;
 }
+
+type Completion = typeof ChatCompletionBodySchema.Type;
 
 const SendMessageBodySchema = Schema.Struct({
   chat_id: Schema.Number,
@@ -56,10 +61,12 @@ const chatCompletionsPath = "/ai-gateway/chat/completions";
 
 export interface LocalFakesOptions {
   readonly judgeVerdicts?: readonly FakeJudgeVerdict[];
+  readonly reviewAnswers?: readonly ReviewAnswer[];
 }
 
 export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
   judgeVerdicts = [],
+  reviewAnswers = [],
 }: LocalFakesOptions = {}) {
   const telegramMessages = yield* Queue.unbounded<FakeTelegramMessage>();
   const sentTelegramMessages: FakeTelegramMessage[] = [];
@@ -67,6 +74,8 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
   const reactions = fakeReactions();
   const modelCalls: FakeModelCall[] = [];
   const pendingJudgeVerdicts = [...judgeVerdicts];
+  const pendingReviewAnswers = [...reviewAnswers];
+  const reviews: FakeReview[] = [];
   const buttons = yield* fakeTelegramButtons();
   let nextMessageId = 1;
 
@@ -89,20 +98,35 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
     });
   };
 
+  const answerReview = (messages: Completion["messages"]) => {
+    const { review, message } = fakeReviewOf(
+      messages,
+      pendingReviewAnswers.shift()
+    );
+    reviews.push(review);
+    return message;
+  };
+
+  const answerOf = ({ model, messages }: Completion) => {
+    if (isFakeReviewRequest(messages)) {
+      return answerReview(messages);
+    }
+    return model === fakeJudgeModel
+      ? fakeJudgeMessage(pendingJudgeVerdicts.shift() ?? "pass")
+      : fakeAssistantMessage(
+          lastOwnerText(messages),
+          toolResultOf(messages),
+          instructionsAndContextOf(messages)
+        );
+  };
+
   const answerChatCompletion = (
     request: IncomingMessage,
     body: unknown,
     response: ServerResponse
   ) => {
     const completion = Schema.decodeUnknownSync(ChatCompletionBodySchema)(body);
-    const message =
-      completion.model === fakeJudgeModel
-        ? fakeJudgeMessage(pendingJudgeVerdicts.shift() ?? "pass")
-        : fakeAssistantMessage(
-            lastOwnerText(completion.messages),
-            toolResultOf(completion.messages),
-            instructionsAndContextOf(completion.messages)
-          );
+    const message = answerOf(completion);
     modelCalls.push({
       model: completion.model,
       gatewayId: headerValue(request, "cf-aig-gateway-id"),
@@ -185,5 +209,6 @@ export const startLocalFakes = Effect.fnUntraced(function* startLocalFakes({
     chatActions: chatActions.list,
     reactions: reactions.list,
     modelCalls: () => [...modelCalls],
+    reviews: () => [...reviews],
   };
 });

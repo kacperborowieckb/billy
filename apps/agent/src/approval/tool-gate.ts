@@ -13,28 +13,44 @@ export interface GatedCall {
   readonly asksOwnerForApproval: boolean;
 }
 
-export type GateDecision =
+export type SettledGateDecision =
   | { readonly _tag: "Run" }
   | { readonly _tag: "RunCodeWrittenInput" }
   | { readonly _tag: "RunMarkedUntrusted" }
-  | { readonly _tag: "AskOwner" }
+  | { readonly _tag: "AskOwner"; readonly reviewerReason?: string }
   | { readonly _tag: "Deny"; readonly reason: string };
+
+export type GateDecision =
+  | SettledGateDecision
+  | { readonly _tag: "AskReviewer" };
+
+export type ReviewVerdict =
+  | { readonly _tag: "Allow" }
+  | { readonly _tag: "Ask"; readonly reason?: string }
+  | { readonly _tag: "Refuse"; readonly reason: string };
 
 export const blockedCallReason =
   "This tool is blocked, so it did not run. Tell the Owner that you cannot do this.";
 
+export const reviewStoppedReason =
+  "A safety check refused several calls in this reply, so code runs no more changes. Do not call a tool again.";
+
 export const untrustedChangeWithoutOwnerReason =
   "This run read text from outside, and it cannot ask the Owner for Approval, so this change did not run. Do not try it again. Tell the Owner in your message what you would change.";
 
-const run: GateDecision = { _tag: "Run" };
+const run: SettledGateDecision = { _tag: "Run" };
 
-const runCodeWrittenInput: GateDecision = { _tag: "RunCodeWrittenInput" };
+const runCodeWrittenInput: SettledGateDecision = {
+  _tag: "RunCodeWrittenInput",
+};
 
-const runMarkedUntrusted: GateDecision = { _tag: "RunMarkedUntrusted" };
+const runMarkedUntrusted: SettledGateDecision = { _tag: "RunMarkedUntrusted" };
 
-const askOwner: GateDecision = { _tag: "AskOwner" };
+const askReviewer: GateDecision = { _tag: "AskReviewer" };
 
-const untrustedChangeWithoutOwner: GateDecision = {
+const askOwner: SettledGateDecision = { _tag: "AskOwner" };
+
+const untrustedChangeWithoutOwner: SettledGateDecision = {
   _tag: "Deny",
   reason: untrustedChangeWithoutOwnerReason,
 };
@@ -42,14 +58,10 @@ const untrustedChangeWithoutOwner: GateDecision = {
 const untrustedChangeDecision = ({
   tool,
   asksOwnerForApproval,
-}: GatedCall): GateDecision => {
-  if (asksOwnerForApproval) {
-    return askOwner;
-  }
-  return tool.hasCodeWrittenInput
+}: GatedCall): GateDecision =>
+  !asksOwnerForApproval && tool.hasCodeWrittenInput
     ? runCodeWrittenInput
-    : untrustedChangeWithoutOwner;
-};
+    : askReviewer;
 
 const changeDecision = (call: GatedCall): GateDecision => {
   if (call.trustLevel === "owner") {
@@ -71,3 +83,23 @@ const decisionOfClass: Readonly<
 
 export const gateDecisionOf = (call: GatedCall): GateDecision =>
   decisionOfClass[call.tool.riskClassOf(call.input)](call);
+
+export const decisionAfterReview = (
+  verdict: ReviewVerdict,
+  asksOwnerForApproval: boolean
+): SettledGateDecision => {
+  if (verdict._tag === "Allow") {
+    return run;
+  }
+  if (!asksOwnerForApproval) {
+    return untrustedChangeWithoutOwner;
+  }
+  return verdict._tag === "Ask"
+    ? {
+        _tag: "AskOwner",
+        ...(verdict.reason === undefined
+          ? {}
+          : { reviewerReason: verdict.reason }),
+      }
+    : { _tag: "Deny", reason: verdict.reason };
+};

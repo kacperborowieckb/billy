@@ -38,12 +38,17 @@
         "model": "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
         "reasoningEffort": "low",
       },
+      "reviewer": {
+        "model": "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
+        "reasoningEffort": "none",
+      },
       "tasks": {
         "reply": "primary",
         "scheduled_task": "primary",
         "proactive": "primary",
         "eval_judge": "secondary",
         "compaction": "primary",
+        "auto_review": "reviewer",
       },
     },
     "MODEL_BILLING": "unified-billing",

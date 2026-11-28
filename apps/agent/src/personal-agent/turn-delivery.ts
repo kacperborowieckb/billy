@@ -22,10 +22,13 @@ export const approvalAskingOf = (
 const approvalRequestsOf = (
   drafts: readonly DraftApproval[]
 ): readonly [ApprovalRequest, ...ApprovalRequest[]] | undefined => {
-  const [first, ...rest] = drafts.map(({ pendingApprovalId, summary }) => ({
-    pendingApprovalId,
-    summary,
-  }));
+  const [first, ...rest] = drafts.map(
+    ({ pendingApprovalId, summary, reviewerReason }) => ({
+      pendingApprovalId,
+      summary,
+      ...(reviewerReason === undefined ? {} : { reviewerReason }),
+    })
+  );
   return first === undefined ? undefined : [first, ...rest];
 };
 

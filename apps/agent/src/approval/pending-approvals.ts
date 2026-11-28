@@ -30,6 +30,7 @@ export const PendingApprovalSchema = Schema.Struct({
   expiresAt: Schema.String,
   channelMessageId: Schema.NullOr(Schema.String),
   result: Schema.NullOr(Schema.String),
+  reviewerReason: Schema.NullOr(Schema.String),
 });
 
 export type PendingApproval = typeof PendingApprovalSchema.Type;
@@ -53,6 +54,7 @@ export interface SentDrafts {
 export interface DraftApproval {
   readonly pendingApprovalId: string;
   readonly summary: string;
+  readonly reviewerReason?: string | undefined;
 }
 
 const draftsOfTurn = (turnEventId: string) =>
@@ -85,6 +87,7 @@ const makePendingApprovals = Effect.gen(function* makePendingApprovalsEffect() {
     return {
       pendingApprovalId,
       summary: request.summary,
+      reviewerReason: request.reviewerReason,
     } satisfies DraftApproval;
   });
 

@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 
+import { ReviewRecordSchema } from "../auto-review/review-record.ts";
 import { RestartRecordSchema } from "../journal/journal.ts";
 import { ReasoningEffortSchema } from "../model-gateway/model-provider.ts";
 import { outcomeKinds } from "../personal-agent/storage-values.ts";
@@ -51,6 +52,7 @@ export const modelTraceFields = {
     Schema.withDecodingDefaultKey(Effect.succeed([]))
   ),
   rejectedStubReplies: Schema.optionalKey(Schema.Array(Schema.String)),
+  reviews: Schema.optionalKey(Schema.Array(ReviewRecordSchema)),
   restart: Schema.optionalKey(RestartRecordSchema),
   trustLevelChange: Schema.optionalKey(
     Schema.Struct({

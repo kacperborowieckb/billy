@@ -40,6 +40,7 @@ import m0038 from "./20261125152925_refused_compaction_blocks/migration.sql";
 import m0039 from "./20261126131445_mcp_connections/migration.sql";
 import m0040 from "./20261127001448_mcp_connect_requests/migration.sql";
 import m0041 from "./20261128093446_conversation_stub_steps/migration.sql";
+import m0042 from "./20261128110537_auto_review/migration.sql";
 
 export default {
   migrations: {
@@ -85,5 +86,6 @@ export default {
     "20261126131445_mcp_connections": m0039,
     "20261127001448_mcp_connect_requests": m0040,
     "20261128093446_conversation_stub_steps": m0041,
+    "20261128110537_auto_review": m0042,
   },
 };

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { z } from "zod";
 
+import { modelReviewerLayer } from "../src/auto-review/model-reviewer.ts";
 import { defaultBehaviorConfig } from "../src/behavior/behavior-config.ts";
 import { telegramChannel } from "../src/channels/telegram/telegram-channel.ts";
 import { mcpHubClient } from "../src/mcp/mcp-hub-client.ts";
@@ -20,6 +21,8 @@ import {
   fakeMcpLimits,
   fakeMetrics,
   fakeModel,
+  fakeReviewerModel,
+  fakeReviewLimits,
   fakeTelegram,
   fakeTelegramApiUrl,
   fakeTool,
@@ -46,10 +49,14 @@ const fakeTurnServicesOf = (ownerId: OwnerId): TurnServices =>
       edgeUrl: env.EDGE_PUBLIC_URL,
       fetch: fakeTelegram.fetch,
     }),
-    ModelGateway.layer.pipe(
+    modelReviewerLayer.pipe(
+      Layer.provideMerge(ModelGateway.layer),
       Layer.provide(
         Layer.succeed(ModelProvider, {
-          route: () => ({ model: fakeModel, reasoningEffort: "none" }),
+          route: (task) => ({
+            model: task === "auto_review" ? fakeReviewerModel : fakeModel,
+            reasoningEffort: "none",
+          }),
         })
       )
     ),
@@ -114,6 +121,12 @@ export class PersonalAgent extends LivePersonalAgent {
     },
     get burstMaxRestarts() {
       return fakeBurstWait.maxRestarts;
+    },
+    get autoReviewTimeoutMillis() {
+      return fakeReviewLimits.timeoutMillis;
+    },
+    get autoReviewDailyTokenBudget() {
+      return fakeReviewLimits.dailyTokenBudget;
     },
     get mcpCallTimeoutMillis() {
       return fakeMcpLimits.callTimeoutMillis;

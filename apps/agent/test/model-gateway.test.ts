@@ -61,12 +61,17 @@ describe("Model Gateway transport", () => {
             model: "anthropic/claude-opus-5-5",
             reasoningEffort: "low",
           },
+          reviewer: {
+            model: "anthropic/claude-opus-5-5",
+            reasoningEffort: "medium",
+          },
           tasks: {
             reply: "primary",
             scheduled_task: "primary",
             proactive: "primary",
             eval_judge: "secondary",
             compaction: "primary",
+            auto_review: "reviewer",
           },
         },
         fetch: recordingFetch,
@@ -171,7 +176,7 @@ describe("Model Gateway transport", () => {
     }
   });
 
-  it("gives each Model Task the route it had before the route table", () => {
+  it("gives each Model Task its configured route", () => {
     const configuredRoutes: ModelRouteTable = env.MODEL_ROUTES;
     const decoded = Schema.decodeUnknownSync(ModelRouteTableSchema)(
       configuredRoutes
@@ -188,6 +193,7 @@ describe("Model Gateway transport", () => {
       proactive: { model: flash, reasoningEffort: "none" },
       eval_judge: { model: flash, reasoningEffort: "low" },
       compaction: { model: flash, reasoningEffort: "none" },
+      auto_review: { model: flash, reasoningEffort: "none" },
     });
   });
 

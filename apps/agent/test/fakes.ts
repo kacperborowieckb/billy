@@ -337,7 +337,10 @@ export interface ScriptedUsage {
 export type ScriptedModelStep =
   | ({ readonly say: string } & ScriptedUsage)
   | { readonly error: string }
-  | { readonly callTools: readonly ScriptedToolCall[] }
+  | {
+      readonly callTools: readonly ScriptedToolCall[];
+      readonly say?: string;
+    }
   | ({
       readonly callTool: string;
       readonly times?: number;
@@ -424,11 +427,14 @@ const scriptedContent = (
   step: Exclude<ScriptedModelStep, { readonly error: string }>,
   prompt: ModelPrompt
 ) => {
+  if ("callTools" in step) {
+    const calls = scriptedToolCalls(step.callTools);
+    return step.say === undefined
+      ? calls
+      : [{ type: "text" as const, text: step.say }, ...calls];
+  }
   if ("say" in step) {
     return [{ type: "text", text: step.say }] as const;
-  }
-  if ("callTools" in step) {
-    return scriptedToolCalls(step.callTools);
   }
   return Array.from({ length: step.times ?? 1 }, (_, index) => ({
     type: "tool-call" as const,
@@ -469,7 +475,7 @@ const usageOf = ({ inputTokens = 42, outputTokens = 7 }: ScriptedUsage) => ({
 const scriptedUsageOf = (
   scripted: ScriptedModelStep | undefined
 ): ScriptedUsage =>
-  scripted !== undefined && ("say" in scripted || "callTool" in scripted)
+  scripted !== undefined && !("error" in scripted) && !("callTools" in scripted)
     ? scripted
     : {};
 
@@ -547,6 +553,52 @@ export const fakeModel = new MockLanguageModelV4({
   },
 });
 
+export type ScriptedReview =
+  | { readonly answer: "allow" }
+  | { readonly answer: "ask" | "refuse"; readonly reason: string }
+  | { readonly text: string }
+  | { readonly error: string }
+  | { readonly hang: true };
+
+const reviewScript: ScriptedReview[] = [];
+
+export const scriptReviewer = (reviews: readonly ScriptedReview[]) => {
+  reviewScript.splice(0, reviewScript.length, ...reviews);
+};
+
+const unscriptedReview = "No review is scripted";
+
+const reviewTextOf = (review: ScriptedReview | undefined) => {
+  if (review === undefined) {
+    return unscriptedReview;
+  }
+  return "text" in review ? review.text : JSON.stringify(review);
+};
+
+export const fakeReviewerModel = new MockLanguageModelV4({
+  provider: "fake",
+  modelId: "fake-reviewer-model",
+  doGenerate: async (options) => {
+    const scripted = reviewScript.shift();
+    if (scripted !== undefined && "error" in scripted) {
+      throw new Error(scripted.error);
+    }
+    if (scripted !== undefined && "hang" in scripted) {
+      const stopped = Promise.withResolvers<undefined>();
+      options.abortSignal?.addEventListener("abort", () =>
+        stopped.reject(new Error("The review was stopped"))
+      );
+      await stopped.promise;
+    }
+    return {
+      content: [{ type: "text", text: reviewTextOf(scripted) }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: usageOf({}),
+      warnings: [],
+    };
+  },
+});
+
 export const holdModel = (answeredCalls = 0) => {
   const { promise, resolve } = Promise.withResolvers<undefined>();
   releaseModel = promise;
@@ -588,6 +640,13 @@ export const fakeBurstWait = {
   maxRestarts: defaultTestMaxRestarts,
 };
 
+const defaultReviewLimits = {
+  timeoutMillis: 45_000,
+  dailyTokenBudget: 200_000,
+};
+
+export const fakeReviewLimits = { ...defaultReviewLimits };
+
 export const resetFakes = () => {
   fakeMcpServer.reset();
   Object.assign(fakeMcpLimits, defaultFakeMcpLimits);
@@ -623,6 +682,9 @@ export const resetFakes = () => {
   fakeCompletion.failures = 0;
   fakeCompletion.failuresAfterCommit = 0;
   fakeModel.doGenerateCalls.length = 0;
+  reviewScript.length = 0;
+  fakeReviewerModel.doGenerateCalls.length = 0;
+  Object.assign(fakeReviewLimits, defaultReviewLimits);
   releaseModel = Promise.resolve();
   callsBeforeHold = 0;
 };

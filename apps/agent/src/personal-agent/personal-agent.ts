@@ -2,6 +2,7 @@ import { Agent, getAgentByName } from "agents";
 import type { Layer } from "effect";
 import { DateTime, Effect, ManagedRuntime, Option } from "effect";
 
+import type { Reviewer } from "../auto-review/reviewer.ts";
 import { defaultBehaviorConfig } from "../behavior/behavior-config.ts";
 import type { BehaviorConfig } from "../behavior/behavior-config.ts";
 import type { Channel } from "../channels/channel.ts";
@@ -45,7 +46,7 @@ import { liveTurnServices } from "./turn-services.ts";
 import { takeTurn } from "./turn.ts";
 
 export type TurnServices = Layer.Layer<
-  Channel | McpHubPort | ModelGateway | OperatorMetrics | Redactor,
+  Channel | McpHubPort | ModelGateway | OperatorMetrics | Redactor | Reviewer,
   unknown,
   UsageLedger
 >;

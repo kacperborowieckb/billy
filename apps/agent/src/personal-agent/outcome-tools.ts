@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { Effect } from "effect";
 
+import { reviewStoppedReason } from "../approval/tool-gate.ts";
 import { Channel } from "../channels/channel.ts";
 import type { AgentTools } from "../model-gateway/agent-tool.ts";
 import { ModelGateway } from "../model-gateway/model-gateway.ts";
@@ -12,6 +13,7 @@ import {
   failedModelCall,
   reachedStepLimit,
   repliedWith,
+  stoppedReply,
   unusableReply,
 } from "./decided-outcome.ts";
 import type { OutcomeRecords } from "./decided-outcome.ts";
@@ -104,7 +106,8 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         reaction?: ReactionOutcome
       ) => repliedWith(records, { reply, steps: finalSteps, kind, reaction });
       const calls = reply.endedWith;
-      if (reply.awaitingApproval.length > 0) {
+      const stopped = request.callReview?.stopsTurn() === true;
+      if (stopped || reply.awaitingApproval.length > 0) {
         const answered = yield* answerApprovalRequests(
           {
             asking: approvalAsking,
@@ -118,8 +121,15 @@ export const generateWithOutcomeTools = Effect.fnUntraced(
         refusedOutcomeTools.push(...calls.map((call) => call.name));
         earlier = closeLastStep(steps, [
           ...answered.results,
-          ...sameOutputFor(calls, outcomeWhileApprovalWaitsMessage, true),
+          ...sameOutputFor(
+            calls,
+            stopped ? reviewStoppedReason : outcomeWhileApprovalWaitsMessage,
+            true
+          ),
         ]);
+        if (stopped) {
+          return stoppedReply(records, { reply, steps: earlier });
+        }
         if (earlier.length >= request.stepLimit) {
           return reachedStepLimit(
             records,

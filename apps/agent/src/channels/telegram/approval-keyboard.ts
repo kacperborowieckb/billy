@@ -20,16 +20,23 @@ export const approvalCallbackData = (
 export const detailsCallbackData = (pendingApprovalId: string) =>
   `details:${pendingApprovalId}`;
 
+export const reviewerReasonLabel = "Why this asks: ";
+
 const headerOf = (approvals: readonly ApprovalRequest[]) =>
   approvals.length > 1
     ? "These wait for your Approval:"
     : "This waits for your Approval:";
 
 const lineOf = (
-  { summary }: ApprovalRequest,
+  { summary, reviewerReason }: ApprovalRequest,
   index: number,
   approvals: readonly ApprovalRequest[]
-) => (approvals.length > 1 ? `${index + 1}. ${summary}` : summary);
+) => {
+  const line = approvals.length > 1 ? `${index + 1}. ${summary}` : summary;
+  return reviewerReason === undefined
+    ? line
+    : `${line}\n${reviewerReasonLabel}${reviewerReason}`;
+};
 
 const rowOf = (
   { pendingApprovalId }: ApprovalRequest,
@@ -152,10 +159,13 @@ const shownLineOf = (
   approval: ShownApproval,
   index: number,
   turnApprovals: readonly ShownApproval[]
-) =>
-  approval.status === undefined
-    ? lineOf(approval, index, turnApprovals)
-    : `${lineOf(approval, index, turnApprovals)}\n${approval.status}`;
+) => {
+  if (approval.status === undefined) {
+    return lineOf(approval, index, turnApprovals);
+  }
+  const { reviewerReason: _answered, ...answered } = approval;
+  return `${lineOf(answered, index, turnApprovals)}\n${approval.status}`;
+};
 
 type AnsweredShape = (approval: ShownApproval) => ShownApproval;
 

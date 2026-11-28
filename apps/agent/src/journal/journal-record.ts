@@ -14,6 +14,8 @@ import {
   ownerPreferenceKeys,
   proactiveOutcomes,
   profileEntryKinds,
+  reviewAnswers,
+  reviewFallbacks,
 } from "../personal-agent/storage-values.ts";
 
 export const RestartRecordSchema = Schema.Struct({
@@ -136,6 +138,12 @@ export const JournalRecordSchema = Schema.TaggedUnion({
     eventId: Schema.String,
     scheduleId: Schema.String,
     nextDueAt: Schema.String,
+  },
+  AutoReviewed: {
+    eventId: Schema.String,
+    toolName: Schema.String,
+    answer: Schema.Literals(reviewAnswers),
+    fallback: Schema.optionalKey(Schema.Literals(reviewFallbacks)),
   },
   ApprovalPending: {
     eventId: Schema.String,

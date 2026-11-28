@@ -5,6 +5,7 @@ import { ModelUnavailable } from "../model-gateway/model-unavailable.ts";
 import { StepLimitReached } from "../model-gateway/step-limit-reached.ts";
 import { sumUsage } from "../model-gateway/usage-ledger.ts";
 import type { OutcomeKind } from "./storage-values.ts";
+import { holdsOnlyStubs, withoutReplyText } from "./stub-reply.ts";
 import type {
   ModelFailure,
   ModelOutcome,
@@ -112,3 +113,18 @@ export const repliedWith = (
   ...(reaction === undefined ? {} : { reaction }),
   ...records,
 });
+
+export const stoppedReply = (
+  records: OutcomeRecords,
+  { reply, steps }: EndedGeneration
+) => {
+  if (!holdsOnlyStubs(reply.text)) {
+    return repliedWith(records, { reply, steps, kind: "reply" });
+  }
+  records.rejectedStubReplies.push(reply.text);
+  return repliedWith(records, {
+    reply: { ...reply, text: "" },
+    steps: withoutReplyText(steps),
+    kind: "reply",
+  });
+};

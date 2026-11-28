@@ -47,12 +47,14 @@ const runFakeEval = (
           modelRoutes: {
             primary: { model: "fake-agent-model", reasoningEffort: "none" },
             secondary: { model: fakeJudgeModel, reasoningEffort: "low" },
+            reviewer: { model: "fake-agent-model", reasoningEffort: "low" },
             tasks: {
               reply: "primary",
               scheduled_task: "primary",
               proactive: "primary",
               eval_judge: "secondary",
               compaction: "primary",
+              auto_review: "reviewer",
             },
           },
         },

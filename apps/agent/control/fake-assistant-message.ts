@@ -5,6 +5,7 @@ import {
   fakeBriefMoveMessage,
   isFakeBriefMove,
 } from "./fake-brief.ts";
+import { withoutBurstLabel } from "./fake-completion.ts";
 import { fakeKeepMessage, fakeKeepPrefix } from "./fake-keep.ts";
 import { fakeMcpMessage, isFakeMcpMessage } from "./fake-mcp.ts";
 import { fakeNoteEditMessage, isFakeNoteEdit } from "./fake-note-edits.ts";
@@ -64,8 +65,9 @@ export const fakeAssistantMessage = (
   if (isFakeTimeZoneMessage(ownerText)) {
     return fakeTimeZoneMessage(ownerText, toolResult, systemText);
   }
-  if (isFakeScheduleRequest(ownerText)) {
-    return fakeScheduleMessage(ownerText, toolResult, systemText);
+  const request = withoutBurstLabel(ownerText);
+  if (isFakeScheduleRequest(request)) {
+    return fakeScheduleMessage(request, toolResult, systemText);
   }
   if (ownerText.startsWith(fakeCancelReminderPrefix)) {
     return fakeCancelReminderMessage(ownerText, toolResult);

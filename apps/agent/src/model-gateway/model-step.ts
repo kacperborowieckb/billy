@@ -20,6 +20,7 @@ export interface ApprovalRequestedCall {
   readonly callId: string;
   readonly name: string;
   readonly input: unknown;
+  readonly reviewerReason?: string;
 }
 
 export interface ModelStep {

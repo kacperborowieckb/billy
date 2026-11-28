@@ -94,21 +94,24 @@ const answeredCallIdOf = (part: StepContentPart) =>
 
 const ownerApprovalRequestOf = (part: StepContentPart) =>
   part.type === "tool-approval-request" && part.isAutomatic !== true
-    ? part.toolCall
+    ? part
     : undefined;
 
 export const approvalRequestedCallsOf = (
   step: StepResult<ToolSet>
 ): readonly ApprovalRequestedCall[] =>
   step.content.flatMap((part) => {
-    const toolCall = ownerApprovalRequestOf(part);
-    return toolCall === undefined
+    const request = ownerApprovalRequestOf(part);
+    return request === undefined
       ? []
       : [
           {
-            callId: toolCall.toolCallId,
-            name: toolCall.toolName,
-            input: toolCall.input,
+            callId: request.toolCall.toolCallId,
+            name: request.toolCall.toolName,
+            input: request.toolCall.input,
+            ...(request.reason === undefined
+              ? {}
+              : { reviewerReason: request.reason }),
           },
         ];
   });
@@ -118,7 +121,9 @@ export const pendingToolCallsOf = (
 ): readonly PendingToolCall[] => {
   const answered = new Set([
     ...step.content.map(answeredCallIdOf),
-    ...step.content.map((part) => ownerApprovalRequestOf(part)?.toolCallId),
+    ...step.content.map(
+      (part) => ownerApprovalRequestOf(part)?.toolCall.toolCallId
+    ),
   ]);
   return step.content.flatMap((part) =>
     part.type === "tool-call" && !answered.has(part.toolCallId)

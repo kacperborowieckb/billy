@@ -1,7 +1,8 @@
 import { Option, Schema } from "effect";
 
-import { effectInputSchema, outcomeTool } from "../model-gateway/agent-tool.ts";
+import { effectInputSchema } from "../model-gateway/agent-tool.ts";
 import type { PendingToolCall } from "../model-gateway/model-step.ts";
+import { outcomeTool } from "../model-gateway/outcome-tool.ts";
 import type { ReactionOutcome } from "./turn-record.ts";
 
 export const reactToolName = "react";

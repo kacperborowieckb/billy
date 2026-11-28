@@ -56,7 +56,7 @@ export const disconnectMcpConnectionTool = (
     {
       name: disconnectMcpConnectionToolName,
       description:
-        "Disconnect a connected service (an MCP Connection): the token is revoked at the service where possible, and the tokens and the tool copy are deleted. It needs the Owner's Approval when this Turn read Untrusted Content.",
+        "Disconnect a connected service (an MCP Connection): the token is revoked at the service where possible, and the tokens and the tool copy are deleted. When this Turn read Untrusted Content, it can wait for the Owner's Approval or be refused.",
       inputSchema: DisconnectMcpConnectionInput,
       riskClass: "change",
       resolve: Effect.fnUntraced(function* resolveDisconnect({ connection }) {

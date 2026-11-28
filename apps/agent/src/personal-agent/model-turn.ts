@@ -3,6 +3,7 @@ import { Clock, Effect, Option } from "effect";
 
 import { dropDraftsOf } from "../approval/pending-approvals.ts";
 import { turnTrustGiven } from "../approval/turn-trust.ts";
+import { turnReviewOf } from "../auto-review/turn-review.ts";
 import type { TurnMetricResult } from "../tracing/operator-metrics.ts";
 import { Redactor } from "../tracing/redactor.ts";
 import { tracedRequestOf } from "../tracing/traced-request.ts";
@@ -82,6 +83,7 @@ export const runModelTurn = <Failure, Requirements>({
     const finished = (steps: readonly ModelMessage[], ending: TurnEnding) =>
       session.commit({ ...turn, steps, ending });
     const trust = turnTrustGiven({ ...kind, ...preparation, ...turn }, earlier);
+    const callReview = yield* turnReviewOf(eventId, behavior);
     const decided = yield* generateWithOutcomeTools({
       eventId,
       earlierMessages: earlier,
@@ -91,6 +93,7 @@ export const runModelTurn = <Failure, Requirements>({
         messages,
         tools: kind.tools,
         trust,
+        callReview,
         stepLimit: stepsLeft,
       },
       tools: kind.tools,
@@ -119,6 +122,7 @@ export const runModelTurn = <Failure, Requirements>({
       refusedOutcomeTools: decided.refusedOutcomeTools,
       rejectedStubReplies: decided.rejectedStubReplies,
       trustLevelChange: Option.getOrUndefined(trust.change()),
+      reviews: callReview.records(),
     };
     const recordTrace = (delivered: boolean) =>
       traces.recordModelTurn({
@@ -213,7 +217,9 @@ export const runModelTurn = <Failure, Requirements>({
       return yield* endFailed(stepsNotKeptReason, Option.none());
     }
     const steps = kept.value;
-    const text = preparation.lateText(redactor.redact(outcome.reply.text));
+    const text = preparation.lateText(
+      callReview.shownText(redactor.redact(outcome.reply.text))
+    );
     const delivery = yield* deliverTurnOutcome({
       event,
       text,
